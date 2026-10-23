@@ -82,6 +82,14 @@ in {
 
 **Silent install**: `java -jar $WLS_INSTALLER -silent -responseFile scripts/wls-response.rsp -invPtrLoc scripts/oraInst.loc`. The response file sets `ORACLE_HOME` and `INSTALL_TYPE=WebLogic Server`.
 
+**NixOS findings from Phase 0 (Oct 23 2026, WLS 14.1.2.0.0, Temurin 21).** Three things the sketch above got wrong; the scripts already handle them, so this is here so nobody removes the workarounds. Details in `docs/environment-notes.md`.
+
+1. **Oracle tooling needs a minimal FHS shim.** The OUI launcher (`com.oracle.cie.common.util.Chmod`) and WLST both exec `/bin/chmod` by absolute path; NixOS only has `/bin/sh`. `devenv.nix` defines `wls-fhs-run`, a bubblewrap wrapper that mounts coreutils over `/bin` and `/usr/bin` and leaves everything else as-is. `scripts/lib.sh` exposes it as `oracle_run`; the installer and WLST go through it, the running server does not need it. Symptoms without it: "Unable to change access permissions on the temporary directory", or non-executable `$DOMAIN_HOME/bin/*.sh`.
+2. **The installer rejects OpenJDK** with "The OpenJDK JVM is not supported on this platform". The launcher classifies the JVM by `java.vm.name` (Temurin: `OpenJDK 64-Bit Server VM`) and only accepts `VM_TYPES=HotSpot,IBM,JRockit` from its bundled `oraparam.ini`. `scripts/wls-oraparam.ini` is a copy with `OpenJDK` added, passed with `-paramFile`.
+3. **`INST-07004` rejects dot-prefixed path components**, so `.local/oracle` fails response-file validation. `wls-install.sh` passes `-novalidation`; nothing else in the response file depends on that check.
+
+Also: `-ignoreSysPrereqs` skips the certified-OS/`rpm` checks; `oui/.globalEnv.properties` and `setDomainEnv.sh` are pointed at the `.local/jdk` symlink (refreshed on `enterShell`) so a nixpkgs JDK bump cannot strand the install; `commBaseEnv.sh` only honours `JAVA_HOME` from the environment when `JAVA_VENDOR` is also set, which `lib.sh` does; the domain listens on `127.0.0.1` only because the dev credentials are defaults.
+
 **Domain creation**: a WLST script (`scripts/create-domain.py`) that reads the basic template, sets dev mode, admin user and port 7001, and writes `$DOMAIN_HOME`. Dev mode keeps the admin console and auto-deploy available; Secured Production Mode (the 14.1.2 default for production domains) is deliberately avoided.
 
 **Agent wiring**: `wls-start.sh` exports `JAVA_OPTIONS="$JAVA_OPTIONS -javaagent:$CAPTURE_AGENT_JAR=out=$CAPTURE_OUT"` and `JAVA_TOOL_OPTIONS` with the `--add-opens` flags the serializer needs on JDK 9+ (omit them on a JDK 8 domain) (`java.base/java.util`, `java.base/java.lang`, `java.base/java.time`, `java.sql/java.sql`), then runs `$DOMAIN_HOME/bin/startWebLogic.sh`.
@@ -218,7 +226,7 @@ The awkward types are not optional. They are the test fixtures for Phase 2, and 
 
 Done when the agent loads into WebLogic and logs one line per EJB method call, with bean class, method and thread, and the server behaves exactly as before.
 
-1. Create `capture-agent` with `premain(String args, Instrumentation inst)`. Parse `key=value,key=value` args: `out`, `enabled` (default `false`), `include`/`exclude` package globs, `hook` (`annotation` | `container`, default `annotation`).
+1. Create `capture-agent` with `premain(String args, Instrumentation inst)`. Parse `key=value,key=value` args: `out`, `enabled` (default `false`), `include`/`exclude` package globs, `hook` (`annotation` | `container`, default `annotation`). **The parent POM is `--release 21`; this module must set `<maven.compiler.release>${agent.compiler.release}</maven.compiler.release>` (= 8) so the same jar loads on the 12.2.1 / JDK 8 servers.** No `var`, records, text blocks or `java.lang.Module` in agent code.
 2. Add the Maven Shade plugin: relocate `net.bytebuddy` and `com.fasterxml.jackson` under `io.capture.shaded`, set the manifest attributes, produce `capture-agent.jar`.
 3. Implement `EjbAnnotationHook` with ByteBuddy's `AgentBuilder`:
    - Match types annotated with `javax.ejb.Stateless`, `Stateful`, `Singleton` or `MessageDriven` **by annotation name** (`isAnnotatedWith(named("javax.ejb.Stateless"))`), never by class literal.

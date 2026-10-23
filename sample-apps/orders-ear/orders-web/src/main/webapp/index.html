@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Orders</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; }
+    button { font-size: 1rem; padding: .5rem 1rem; margin-right: .5rem; }
+    label { display: block; margin: .5rem 0; }
+    input { font-size: 1rem; padding: .25rem; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; min-height: 6rem; }
+    #orderId { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Orders</h1>
+
+  <label>Customer name <input id="customerName" value="Ada Lovelace"></label>
+  <label>SKU <input id="sku" value="WIDGET-1"> quantity <input id="quantity" type="number" value="3" min="1"></label>
+
+  <p>
+    <button id="create">Create order</button>
+    <button id="confirm" disabled>Confirm order</button>
+    <span>Last order id: <span id="orderId">none</span></span>
+  </p>
+
+  <pre id="output">Click "Create order" to start.</pre>
+
+  <script>
+    const output = document.getElementById('output');
+    const orderIdEl = document.getElementById('orderId');
+    const confirmBtn = document.getElementById('confirm');
+    let orderId = null;
+
+    async function call(method, path, body) {
+      const response = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const text = await response.text();
+      output.textContent = method + ' ' + path + ' -> ' + response.status + '\n' + text;
+      return response.ok ? JSON.parse(text) : null;
+    }
+
+    document.getElementById('create').addEventListener('click', async () => {
+      const result = await call('POST', 'api/orders', {
+        customer: {
+          name: document.getElementById('customerName').value,
+          email: 'ada@example.com',
+          loyaltyTier: 'GOLD',
+          address: { street: 'Keizersgracht 1', city: 'Amsterdam', region: 'NH', postalCode: '1015 CC', country: 'NL' }
+        },
+        lines: [
+          { sku: document.getElementById('sku').value, quantity: Number(document.getElementById('quantity').value) },
+          { sku: 'GADGET-2', quantity: 1 }
+        ],
+        attributes: { channel: 'web', campaign: 'autumn-2026' },
+        deliveryDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+      });
+      if (result) {
+        orderId = result.id;
+        orderIdEl.textContent = orderId;
+        confirmBtn.disabled = false;
+      }
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+      if (orderId === null) return;
+      await call('POST', 'api/orders/' + orderId + '/confirm', { confirmedBy: 'ada', notes: 'please gift-wrap' });
+    });
+  </script>
+</body>
+</html>

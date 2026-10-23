@@ -19,6 +19,7 @@
     Phase 7: trace-tools/*, replay-check
   -->
   <modules>
+    <module>sample-apps</module>
   </modules>
 
   <properties>
@@ -90,6 +91,34 @@
         <artifactId>common-dto</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.capture.samples</groupId>
+        <artifactId>orders-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.capture.samples</groupId>
+        <artifactId>tax-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.capture.samples</groupId>
+        <artifactId>orders-ejb</artifactId>
+        <version>${project.version}</version>
+        <type>ejb</type>
+      </dependency>
+      <dependency>
+        <groupId>io.capture.samples</groupId>
+        <artifactId>orders-web</artifactId>
+        <version>${project.version}</version>
+        <type>war</type>
+      </dependency>
+      <dependency>
+        <groupId>io.capture.samples</groupId>
+        <artifactId>tax-ejb</artifactId>
+        <version>${project.version}</version>
+        <type>ejb</type>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -140,7 +169,11 @@
           <artifactId>maven-ear-plugin</artifactId>
           <version>${maven-ear-plugin.version}</version>
           <configuration>
-            <version>8</version>
+            <!-- Java EE 7 descriptor: accepted by both 12.2.1 and 14.1.2. -->
+            <version>7</version>
+            <defaultLibBundleDir>lib</defaultLibBundleDir>
+            <!-- Module file names become java:global module names, keep them version-free. -->
+            <outputFileNameMapping>@{artifactId}@.@{extension}@</outputFileNameMapping>
           </configuration>
         </plugin>
       </plugins>

@@ -64,7 +64,10 @@ in
 
     CAPTURE_AGENT_JAR = "${root}/capture-agent/target/capture-agent.jar";
     CAPTURE_OUT = "${localDir}/captures";
+
+    # Embedded H2 for the sample apps; the driver is copied into $DOMAIN_HOME/lib by wls-domain.
     H2_DIR = "${localDir}/h2";
+    H2_VERSION = "2.3.232";
 
     MAVEN_OPTS = "-Dmaven.repo.local=${localDir}/m2";
   };

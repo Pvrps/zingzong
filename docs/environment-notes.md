@@ -35,12 +35,30 @@ current `JAVA_HOME` from nixpkgs, so a JDK bump does not strand the install.
 `commBaseEnv.sh` only honours `JAVA_HOME` from the environment when `JAVA_VENDOR` is also
 set; `lib.sh` exports `JAVA_VENDOR=Oracle` (plain HotSpot settings).
 
+## Sample applications
+
+- `@EJB` injection into a Jersey resource is null unless the war is a CDI archive.
+  `orders-web/WEB-INF/beans.xml` (`bean-discovery-mode="all"`) makes Jersey hand the
+  resource to CDI; no code change needed.
+- EclipseLink 2.7.15 (bundled with 14.1.2) emits `BIGINT IDENTITY` DDL for H2, which
+  H2 2.x rejects outside `MODE=LEGACY`. The data-source URL carries that flag.
+- Cross-EAR remote lookup from `PricingServiceBean` uses
+  `java:global/tax-ear/tax-ejb/TaxService!com.acme.tax.api.TaxService`; the module name
+  is the EJB jar file name, hence the version-free `outputFileNameMapping` in the EAR
+  plugin config. `weblogic-ejb-jar.xml` also maps `tax/TaxService` and
+  `orders/OrderService` for T3 clients.
+- `REST → OrderService.createOrder → InventoryService.reserve → PricingService.price →
+  TaxService.computeTax` shows up as consecutive `INFO:` lines in
+  `.local/logs/wls-start.out`; that is the Phase 0 smoke test.
+
 ## Domain
 
 - Created from the "Basic WebLogic Server Domain" template, dev mode, `AdminServer` on
   `127.0.0.1:7001`. Loopback only because the credentials are the defaults from
   `devenv.nix` (`weblogic` / `welcome1`).
 - `boot.properties` is written by `wls-domain.sh` so `startWebLogic.sh` never prompts.
+- `OrdersDS` (`jdbc/OrdersDS`) is an embedded H2 file database under `.local/h2/`; the
+  driver jar is fetched by Maven into `$DOMAIN_HOME/lib` by `wls-domain.sh`.
 - `wls-start -b` backgrounds the server, writes `.local/logs/wls.pid`, and waits for
   `RUNNING mode` in `.local/logs/wls-start.out`. `wls-stop` uses `stopWebLogic.sh` and
   falls back to the pid.

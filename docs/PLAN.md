@@ -220,6 +220,8 @@ Done when a developer can clone the repo, run `devenv shell`, and have a WebLogi
 
 **Acceptance**: `wls-start` then `wls-deploy` from a fresh shell works end-to-end, and the two-button scenario completes.
 
+**Status (Oct 23 2026): done.** Layout deviates slightly from the sketch: the business interfaces live in `sample-apps/orders-api` and `sample-apps/tax-api` (the jars a T3 client and `replay-check` need), DTOs and the JPA entities in `common-dto`. `InventoryService` is a `@Singleton` so stock survives across calls. Two things to keep: `orders-web/WEB-INF/beans.xml` (without CDI, Jersey does not honour `@EJB`) and `MODE=LEGACY` on the H2 URL (EclipseLink emits `BIGINT IDENTITY`). See `docs/environment-notes.md`.
+
 The awkward types are not optional. They are the test fixtures for Phase 2, and adding them later means re-testing serialization.
 
 ## Phase 1: agent skeleton

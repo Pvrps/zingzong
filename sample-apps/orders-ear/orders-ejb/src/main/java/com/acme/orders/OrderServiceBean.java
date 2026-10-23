@@ -39,6 +39,7 @@ public class OrderServiceBean implements OrderServiceLocal, OrderServiceRemote {
     @Override
     public Order createOrder(CreateOrderRequest request) throws InsufficientStockException {
         LOG.info("OrderService.createOrder for " + request.getCustomer().getName());
+        pauseIfRequested(request);
 
         for (OrderLineRequest line : request.getLines()) {
             inventory.reserve(line.getSku(), line.getQuantity());
@@ -84,6 +85,20 @@ public class OrderServiceBean implements OrderServiceLocal, OrderServiceRemote {
             messages.add("Notes: " + request.getNotes());
         }
         return new ConfirmResult(order.getId(), order.getStatus(), Instant.now(), messages);
+    }
+
+    /** attributes.delayMillis holds the call open inside the bean, for thread dumps of the EJB container. */
+    private static void pauseIfRequested(CreateOrderRequest request) {
+        String delay = request.getAttributes() == null ? null : request.getAttributes().get("delayMillis");
+        if (delay != null) {
+            try {
+                Thread.sleep(Math.min(Long.parseLong(delay), 30_000L));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (NumberFormatException ignored) {
+                // not a number: no pause
+            }
+        }
     }
 
     @Override

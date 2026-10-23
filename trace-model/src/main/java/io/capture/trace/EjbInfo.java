@@ -25,6 +25,6 @@ public class EjbInfo {
     public String method;
     /** Java-style signature: "ReturnType name(ParamType, ...)" with fully qualified names. */
     public String signature;
-    /** Transaction attribute or status, e.g. REQUIRED, when known. */
-    public String transaction;
+    /** The declared transaction attribute (REQUIRED, REQUIRES_NEW, ..., BEAN for BMT), when known. */
+    public String transactionAttribute;
 }

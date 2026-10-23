@@ -12,6 +12,9 @@ public interface InstrumentationHook {
 
     boolean isInstalled();
 
+    /** "annotation" or "container": what recording.json reports as the hook in force. */
+    String name();
+
     InstrumentationHook NONE = new InstrumentationHook() {
         @Override
         public void install() {
@@ -24,6 +27,11 @@ public interface InstrumentationHook {
         @Override
         public boolean isInstalled() {
             return false;
+        }
+
+        @Override
+        public String name() {
+            return "none";
         }
     };
 }

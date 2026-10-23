@@ -18,9 +18,11 @@ public class TraceInfo {
     public String parentTraceId;
     public List<Deployment> deployments;
 
+    /** An application deployed on the server, from the domain configuration: where its EAR/WAR lives. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Deployment {
         public String name;
         public String sourcePath;
+        public String moduleType;
     }
 }

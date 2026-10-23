@@ -38,7 +38,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "properties": { "name": { "type": "string" }, "sourcePath": { "type": "string" } }
+            "properties": { "name": { "type": "string" }, "sourcePath": { "type": "string" }, "moduleType": { "type": "string" } }
           }
         }
       }
@@ -114,7 +114,7 @@
         "jndiNames": { "type": "array", "items": { "type": "string" } },
         "method": { "type": "string" },
         "signature": { "type": "string" },
-        "transaction": { "type": "string" }
+        "transactionAttribute": { "type": "string" }
       }
     },
     "valueCapture": {

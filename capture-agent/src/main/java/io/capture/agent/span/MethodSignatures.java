@@ -94,16 +94,41 @@ final class MethodSignatures {
         return 'C';
     }
 
+    /**
+     * The bean's own method matching an interface method (same name and parameter types), so
+     * that both hooks describe the same declaration; the interface method when the bean has none.
+     */
+    static MethodInfo resolve(Class<?> beanClass, Method interfaceMethod) {
+        if (beanClass == null) {
+            return MethodInfo.of(interfaceMethod);
+        }
+        Map<String, MethodInfo> methods = CACHE.get(beanClass);
+        String key = interfaceMethod.getName() + descriptorOf(interfaceMethod);
+        MethodInfo info = methods.get(key);
+        if (info == null) {
+            try {
+                info = MethodInfo.of(beanClass.getMethod(interfaceMethod.getName(), interfaceMethod.getParameterTypes()));
+            } catch (Throwable t) {
+                info = MethodInfo.of(interfaceMethod);
+            }
+            methods.put(key, info);
+        }
+        return info;
+    }
+
     static final class MethodInfo {
         final String name;
+        /** The resolved method, null when unresolved. */
+        final Method method;
         final Class<?>[] parameterTypes;
         final Type[] genericParameterTypes;
         final Class<?> returnType;
         /** "ReturnType name(ParamType, ...)" with fully qualified names; descriptor when unresolved. */
         final String signature;
 
-        private MethodInfo(String name, Class<?>[] parameterTypes, Type[] genericParameterTypes, Class<?> returnType, String signature) {
+        private MethodInfo(String name, Method method, Class<?>[] parameterTypes, Type[] genericParameterTypes, Class<?> returnType, String signature) {
             this.name = name;
+            this.method = method;
             this.parameterTypes = parameterTypes;
             this.genericParameterTypes = genericParameterTypes;
             this.returnType = returnType;
@@ -120,11 +145,11 @@ final class MethodSignatures {
                 sig.append(params[i].getTypeName());
             }
             sig.append(')');
-            return new MethodInfo(m.getName(), params, m.getGenericParameterTypes(), m.getReturnType(), sig.toString());
+            return new MethodInfo(m.getName(), m, params, m.getGenericParameterTypes(), m.getReturnType(), sig.toString());
         }
 
         static MethodInfo unknown(String name, String descriptor) {
-            return new MethodInfo(name, null, null, null, name + descriptor);
+            return new MethodInfo(name, null, null, null, null, name + descriptor);
         }
 
         boolean resolved() {

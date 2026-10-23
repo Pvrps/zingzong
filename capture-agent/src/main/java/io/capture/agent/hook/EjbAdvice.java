@@ -20,10 +20,11 @@ public final class EjbAdvice {
     }
 
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static long enter(@Advice.Origin("#t") String beanClass,
+    public static long enter(@Advice.This(optional = true) Object self,
+                             @Advice.Origin("#t") String beanClass,
                              @Advice.Origin("#m") String method,
-                             @Advice.Origin("#s") String signature) {
-        return Recorder.enter(beanClass, method, signature);
+                             @Advice.Origin("#d") String descriptor) {
+        return Recorder.enter(self, beanClass, method, descriptor);
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)

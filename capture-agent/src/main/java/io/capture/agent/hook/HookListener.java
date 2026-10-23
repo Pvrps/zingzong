@@ -12,11 +12,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class HookListener extends AgentBuilder.Listener.Adapter {
 
     private final AtomicInteger count = new AtomicInteger();
+    private final java.util.Set<String> transformedNames = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
 
     @Override
     public void onTransformation(TypeDescription typeDescription, ClassLoader classLoader, JavaModule module,
                                  boolean loaded, DynamicType dynamicType) {
         count.incrementAndGet();
+        transformedNames.add(typeDescription.getName());
         AgentLog.info("instrumented " + typeDescription.getName()
                 + (loaded ? " (retransformed)" : "")
                 + " loader=" + describe(classLoader));
@@ -27,12 +29,32 @@ final class HookListener extends AgentBuilder.Listener.Adapter {
         AgentLog.error("failed to instrument " + typeName + " loader=" + describe(classLoader), throwable);
     }
 
+    /** The named server targets must never be skipped silently: say so when they are. */
+    @Override
+    public void onIgnored(TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, boolean loaded) {
+        if (CaptureHook.isNamedTarget(typeDescription.getName())) {
+            AgentLog.warn("hook target ignored by the matcher: " + typeDescription.getName() + " loader=" + describe(classLoader));
+        }
+    }
+
+    @Override
+    public void onDiscovery(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded) {
+        if (CaptureHook.isNamedTarget(typeName)) {
+            AgentLog.info("hook target discovered: " + typeName + (loaded ? " (loaded)" : " (loading)") + " loader=" + describe(classLoader));
+        }
+    }
+
     int count() {
         return count.get();
     }
 
     void resetCount() {
         count.set(0);
+        transformedNames.clear();
+    }
+
+    boolean transformed(String className) {
+        return transformedNames.contains(className);
     }
 
     private static String describe(ClassLoader classLoader) {

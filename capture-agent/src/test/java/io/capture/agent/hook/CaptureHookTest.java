@@ -33,13 +33,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class EjbAnnotationHookTest {
+class CaptureHookTest {
 
     @TempDir
     static File out;
 
     private static Instrumentation instrumentation;
-    private static EjbAnnotationHook hook;
+    private static CaptureHook hook;
 
     @BeforeAll
     static void installHook() {
@@ -53,8 +53,8 @@ class EjbAnnotationHookTest {
         AgentConfig config = AgentConfig.parse("out=" + out.getAbsolutePath());
         AgentLog.init(config.outDir);
         Recorder.configure(config);
-        hook = new EjbAnnotationHook(instrumentation, config);
-        Recorder.hook(hook, "annotation");
+        hook = new CaptureHook(instrumentation, config, CaptureHook.EjbStrategy.ANNOTATION);
+        Recorder.hook(hook);
     }
 
     @AfterAll

@@ -11,6 +11,7 @@ import com.acme.common.dto.TaxResult;
 import com.acme.common.model.AuditTrail;
 import com.acme.common.model.Order;
 import com.acme.common.model.OrderStatus;
+import io.capture.trace.EjbInfo;
 import io.capture.trace.Span;
 import io.capture.trace.Trace;
 import io.capture.trace.TraceJson;
@@ -30,9 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Traces captured on the real WebLogic server (recording rec-20261023-161102: one Create
- * order, one Confirm order), deserialized against common-dto. The acceptance check that a
- * captured trace round-trips.
+ * Traces captured on the real WebLogic server (recording rec-20261023-174243, annotation hook:
+ * one Create order, one Confirm order), deserialized against common-dto. The acceptance check
+ * that a captured trace round-trips, and that every EJB span carries its Phase 6 metadata.
  */
 class CapturedSpanFixtureTest {
 
@@ -44,24 +45,46 @@ class CapturedSpanFixtureTest {
         Trace trace = load("captures/create-order-trace.json");
         assertEquals("AdminServer", trace.trace.serverName);
         assertNull(trace.trace.principal, "anonymous REST call");
+        assertEquals("ear", trace.trace.deployments.get(0).moduleType);
+        assertTrue(trace.trace.deployments.get(1).sourcePath.endsWith("/orders-ear.ear"), "SourcePath from the domain config");
         List<Span> spans = trace.spans;
-        assertEquals(9, spans.size());
-        assertEquals(Arrays.asList("createOrder", "reserve", "reserve", "price", "unitPrice", "unitPrice", "computeTax", "unitPrice", "unitPrice"), methods(spans));
-        assertNull(spans.get(0).parentId);
-        assertEquals("s1", spans.get(3).parentId);
-        assertEquals("s4", spans.get(6).parentId, "computeTax is a child of price despite living in tax-ear");
-        assertEquals(2, spans.get(6).depth);
-        assertEquals(Boolean.TRUE, spans.get(4).selfInvocation);
-        assertNull(spans.get(7).selfInvocation, "unitPrice called by OrderService is a real EJB call");
-        assertEquals("ACTIVE", spans.get(0).ejb.transaction);
-        for (Span span : spans) {
+        assertEquals(11, spans.size());
+        assertEquals("POST", spans.get(0).http.method);
+        assertEquals("create", spans.get(1).http.resourceMethod);
+        List<Span> ejb = spans.subList(2, spans.size());
+        assertEquals(Arrays.asList("createOrder", "reserve", "reserve", "price", "unitPrice", "unitPrice", "computeTax", "unitPrice", "unitPrice"), methods(ejb));
+        assertEquals("s2", ejb.get(0).parentId);
+        assertEquals("s3", ejb.get(3).parentId);
+        assertEquals("s6", ejb.get(6).parentId, "computeTax is a child of price despite living in tax-ear");
+        assertEquals(4, ejb.get(6).depth);
+        assertEquals(Boolean.TRUE, ejb.get(4).selfInvocation);
+        assertNull(ejb.get(4).ejb.interfaceName, "a self-invocation comes through no business interface");
+        assertNull(ejb.get(7).selfInvocation, "unitPrice called by OrderService is a real EJB call");
+        for (Span span : ejb) {
             assertNull(span.serializationWarnings, "no warnings expected in " + span.id);
+            assertEquals("REQUIRED", span.ejb.transactionAttribute);
+            assertNotNull(span.ejb.app, span.id);
+            assertNotNull(span.ejb.module, span.id);
+            assertNotNull(span.ejb.beanName, span.id);
+            assertTrue(span.ejb.jndiNames.size() >= 2, span.id);
         }
+        Span root = ejb.get(0);
+        assertEquals("orders-ear", root.ejb.app);
+        assertEquals("orders-ejb", root.ejb.module);
+        assertEquals("OrderService", root.ejb.beanName);
+        assertEquals("com.acme.orders.api.OrderServiceLocal", root.ejb.interfaceName);
+        assertEquals(EjbInfo.INVOCATION_LOCAL, root.ejb.invocation);
+        assertEquals("java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", root.ejb.jndiNames.get(0), "the invoked view first");
+        assertTrue(root.ejb.jndiNames.contains("orders/OrderService"), "weblogic-ejb-jar.xml mapping");
+        Span tax = ejb.get(6);
+        assertEquals("tax-ear", tax.ejb.app);
+        assertEquals(EjbInfo.INVOCATION_REMOTE, tax.ejb.invocation);
+        assertTrue(tax.ejb.jndiNames.contains("tax/TaxService"));
     }
 
     @Test
     void createOrderRootSpanDeserializesArgumentAndResult() throws Exception {
-        Span span = load("captures/create-order-trace.json").spans.get(0);
+        Span span = load("captures/create-order-trace.json").spans.get(2);
         assertEquals("com.acme.orders.OrderServiceBean", span.ejb.beanClass);
         assertEquals("com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)", span.ejb.signature);
 
@@ -94,7 +117,7 @@ class CapturedSpanFixtureTest {
 
     @Test
     void computeTaxSpanDeserializesAcrossTheEarBoundary() throws Exception {
-        Span span = load("captures/create-order-trace.json").spans.get(6);
+        Span span = load("captures/create-order-trace.json").spans.get(8);
         assertEquals("com.acme.tax.TaxServiceBean", span.ejb.beanClass);
 
         TaxRequest request = (TaxRequest) serializer.deserialize(span.args.get(0).value, TaxRequest.class, loader);
@@ -111,13 +134,13 @@ class CapturedSpanFixtureTest {
     void confirmOrderTraceLinksToTheCreatedOrderId() throws Exception {
         Trace create = load("captures/create-order-trace.json");
         Trace confirm = load("captures/confirm-order-trace.json");
-        assertEquals(Arrays.asList("confirmOrder", "findOrder"), methods(confirm.spans));
-        assertEquals(Boolean.TRUE, confirm.spans.get(1).selfInvocation);
+        assertEquals(Arrays.asList("confirmOrder", "findOrder"), methods(confirm.spans.subList(2, 4)));
+        assertEquals(Boolean.TRUE, confirm.spans.get(3).selfInvocation);
 
-        long createdId = create.spans.get(0).result.value.get("id").asLong();
-        ConfirmRequest request = (ConfirmRequest) serializer.deserialize(confirm.spans.get(0).args.get(0).value, ConfirmRequest.class, loader);
+        long createdId = create.spans.get(2).result.value.get("id").asLong();
+        ConfirmRequest request = (ConfirmRequest) serializer.deserialize(confirm.spans.get(2).args.get(0).value, ConfirmRequest.class, loader);
         assertEquals(createdId, request.getOrderId(), "the id typed into Confirm came from Create: Phase 4 lineage material");
-        ConfirmResult result = (ConfirmResult) serializer.deserialize(confirm.spans.get(0).result.value, ConfirmResult.class, loader);
+        ConfirmResult result = (ConfirmResult) serializer.deserialize(confirm.spans.get(2).result.value, ConfirmResult.class, loader);
         assertEquals(OrderStatus.CONFIRMED, result.getStatus());
         assertEquals(2, result.getMessages().size());
     }

@@ -53,13 +53,14 @@ final class SpanStack {
         return trace;
     }
 
-    OpenSpan push(Recording recording, String beanClass, String method, long nowNanos,
-                  String transaction, TracePropagation propagation) {
-        return push(recording, io.capture.trace.Span.KIND_EJB, null, beanClass, method, nowNanos, transaction, null, propagation);
+    OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
+                  Object http, TracePropagation propagation) {
+        return push(recording, kind, layer, beanClass, method, nowNanos, http, null, null, null, null, null, propagation);
     }
 
     OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
-                  String transaction, Object http, TracePropagation propagation) {
+                  Object http, Object container, io.capture.agent.meta.BeanMeta meta, String interfaceName,
+                  String invocation, String transactionAttribute, TracePropagation propagation) {
         if (open.isEmpty() || trace == null || trace.recording != recording) {
             // New trace: either nothing is open, or the recording changed under an open stack
             // (start/stop mid-call); the stale spans are abandoned.
@@ -74,7 +75,7 @@ final class SpanStack {
         OpenSpan parent = open.peek();
         int order = trace.nextOrder();
         OpenSpan span = new OpenSpan(trace.spanId(order), parent, order, kind, layer, beanClass, method,
-                nowNanos - trace.startNanos, nowNanos, transaction, http);
+                nowNanos - trace.startNanos, nowNanos, http, container, meta, interfaceName, invocation, transactionAttribute);
         open.push(span);
         return span;
     }

@@ -69,16 +69,82 @@ created by `POST /orders/api/orders/session`.
 → `getPrincipals()`; the `weblogic.security.principal.WLSUserImpl` entry is the user name.
 Public API, listed here because the class name is matched as a string.
 
-### Transaction status (`WlsRuntime.transactionStatus`)
+### EJB container choke point (Phase 6, `ContainerAdvice` / `ContainerInvocation`)
 
-JNDI `java:comp/TransactionSynchronizationRegistry` → `getTransactionStatus()`; standard JTA,
-nothing WebLogic-specific, registry cached per thread.
+Where the `container` hook opens EJB spans: one static method per view that every
+business-interface call into a session bean (stateless and singleton alike; MDBs take another
+path and are out of scope) passes through. No patches installed (`OPatch`: none; `weblogic.version`
+reports 14.1.2.0.0 build 2171472). Found with `jcmd <pid> Thread.print` while
+`OrderServiceBean.createOrder` slept on `attributes.delayMillis`, once called locally from the
+REST resource and once remotely from a `wlthint3client` program. Innermost first, interceptor
+frames (`com.bea.core.repackaged.springframework.aop`, `com.oracle.pitchfork`, `org.jboss.weld`)
+elided:
 
-### Container hook (Phase 6)
+```
+local (REST → @EJB OrderServiceLocal)
+com.acme.orders.OrderServiceBean.createOrder(OrderServiceBean.java:42)
+jdk.proxy8.$Proxy325.createOrder
+com.acme.orders.OrderService_wdu466_OrderServiceLocalImpl.__WL_invoke
+weblogic.ejb.container.internal.SessionLocalMethodInvoker.invoke(SessionLocalMethodInvoker.java:33)   <- hooked
+com.acme.orders.OrderService_wdu466_OrderServiceLocalImpl.createOrder
+com.acme.orders.web.OrdersResource.create(OrdersResource.java:53)
 
-Not yet located. Candidates in 14.x: `weblogic.ejb.container.internal.SessionLocalMethodInvoker`,
-`SessionRemoteMethodInvoker`, `BaseLocalObject.__WL_preInvoke/__WL_postInvoke`,
-`InvocationWrapper`. To be confirmed with a thread dump in Phase 6.
+remote (T3 → OrderServiceRemote)
+com.acme.orders.OrderServiceBean.createOrder(OrderServiceBean.java:42)
+jdk.proxy8.$Proxy325.createOrder
+com.acme.orders.OrderService_wdu466_OrderServiceRemoteImpl.__WL_invoke
+weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invokeInternal(SessionRemoteMethodInvoker.java:54)
+weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invoke(SessionRemoteMethodInvoker.java:21)  <- hooked
+com.acme.orders.OrderService_wdu466_OrderServiceRemoteImpl.createOrder
+com.acme.orders.OrderService_wdu466_OrderServiceRemoteImpl_WLSkel.invoke
+weblogic.rmi.internal.BasicServerRef.invoke(BasicServerRef.java:694)
+```
+
+| Hook | Class / method (`com.oracle.weblogic.ejb.jar`) |
+| --- | --- |
+| local | `public static Object weblogic.ejb.container.internal.SessionLocalMethodInvoker.invoke(Invokable, BaseLocalObject, InvocationWrapper, Object[], int) throws Throwable` |
+| remote | `public static Object weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invoke(Invokable, BaseRemoteObject, InvocationWrapper, Object[], int) throws Throwable` |
+
+These are the only `*MethodInvoker` classes in the jar besides `WSOMethodInvoker` (web service
+objects). The advice matches `invoke`, static, five arguments. What it reads from the arguments,
+all by name:
+
+| Argument | Member | Gives |
+| --- | --- | --- |
+| 0 `Invokable` (generated `<pkg>.<EjbName>_<hash>_<Iface>Impl`) | its interfaces | the invoked business interface: implemented directly for a local view; for a remote view the impl implements a generated `<pkg>.<EjbName>_<hash>_<Iface>RIntf extends java.rmi.Remote` and the name is resolved against the bean's known interfaces |
+| 1 `BaseLocalObject` / `BaseRemoteObject` | protected field `beanInfo` (`weblogic.ejb.container.interfaces.BeanInfo`) → `getBeanClassName()` | the bean implementation class |
+| 2 `InvocationWrapper` | `getMethodDescriptor()` → `MethodDescriptor.getApplicationName()`, `getModuleId()`, `getEjbName()`, `getMethod()`, `getTransactionPolicy().getTxAttribute()` (a `javax.ejb.TransactionAttributeType`); `isLocal()` | application, module, EJB name, the interface `Method`, the effective transaction attribute, local/remote |
+| 3 `Object[]` | | the call arguments (serialized at exit, like the annotation hook) |
+
+Startup self-check (`FallbackHook`): after installation, if either invoker class is loaded but
+was not transformed, the agent warns and switches to the annotation hook. A class that is loaded
+*during* installation (a loaded target described reflectively pulls in the classes its methods
+mention) is skipped by Byte Buddy's circularity lock; `CaptureHook` retransforms such named
+targets explicitly afterwards (observed for `FilterChainImpl` on the first recording after a
+restart).
+
+### EJB metadata (Phase 6, `WlsMetadata`)
+
+Application, module and JNDI names per bean class, resolved once per class (`ClassValue`).
+
+| Step | Source | Notes |
+| --- | --- | --- |
+| 1 | the bean class's `@Stateless/@Stateful/@Singleton(name=)` and `@Local/@Remote` annotations, by name | EJB name, business interfaces |
+| 2 | runtime MBeans `com.bea:Type=StatelessEJBRuntime|SingletonEJBRuntime|…,Name=<ejbName>,ApplicationRuntime=<app>,EJBComponentRuntime=<moduleId>,*` | application, module id (`orders-ejb.jar`; the `java:global` module is the id without its extension). The MBeans carry no implementation class and no JNDI names. |
+| 3 | in-process `InitialContext().lookup("java:global/<app>/<module>/<ejb>[!<iface>]")` | the container's client object for the bean; a lookup needs no credentials from inside the server |
+| 4 | that object → `beanInfo` (bounded field search: local view `Impl.__WL_localObject.beanInfo`; remote view `Proxy` → `RemoteBusinessIntfProxy.ejbObject` (`Impl_CBV`) → `Impl.__WL_remoteObject.beanInfo`) → `SessionBeanInfo.getBusinessJNDINames()` (`Map<Class, Set<String>>`), `getBeanClassName()` | every name the container bound per interface, descriptor mappings (`weblogic-ejb-jar.xml`, e.g. `orders/OrderService`) included, and the check that the candidate is this bean class |
+
+Which MBeanServer (verified in-process, no credentials): the platform MBeanServer holds no
+`com.bea` MBeans on this domain (`PlatformMBeanServerUsed` is off by default);
+`MBeanServerFactory.findMBeanServer(null)` lists one server, without them either; the runtime
+MBeanServer is reachable through JNDI as `java:comp/jmx/runtime` from any thread, while
+`java:comp/env/jmx/runtime` needs a component context (fails on the agent's JMX control thread).
+`WlsMetadata.server()` tries them in that order and logs the answer once. The MBeanServer
+wrapper asserts a context class loader, which control threads lack; the agent sets one for the
+duration of its calls.
+
+Deployments: `com.bea:Name=RuntimeService,Type=weblogic.management.mbeanservers.runtime.RuntimeServiceMBean`
+→ attribute `DomainConfiguration` → `AppDeployments` → `Name`, `SourcePath`, `ModuleType`.
 
 ## WebLogic Server 12.2.1.4 / JDK 8
 

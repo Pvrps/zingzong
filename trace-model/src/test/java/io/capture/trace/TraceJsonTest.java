@@ -95,7 +95,7 @@ class TraceJsonTest {
                 "orders/OrderService");
         ejb.ejb.method = "confirmOrder";
         ejb.ejb.signature = "com.acme.common.dto.ConfirmResult confirmOrder(com.acme.common.dto.ConfirmRequest)";
-        ejb.ejb.transaction = "REQUIRED";
+        ejb.ejb.transactionAttribute = "REQUIRED";
         ValueCapture arg = new ValueCapture();
         arg.declaredType = "com.acme.common.dto.ConfirmRequest";
         arg.value = TraceJson.mapper().readTree("{\"@type\":\"com.acme.common.dto.ConfirmRequest\",\"orderId\":42}");

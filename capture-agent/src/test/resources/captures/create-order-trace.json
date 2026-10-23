@@ -1,27 +1,351 @@
 {
   "formatVersion" : 1,
   "recording" : {
-    "id" : "rec-20261023-161102",
-    "name" : "phase3-acceptance",
+    "id" : "rec-20261023-174243",
+    "name" : "fixtures-phase6",
     "seq" : 1
   },
   "trace" : {
-    "id" : "t-8d03bd6c",
-    "startedAt" : "2026-10-23T20:11:02.872Z",
-    "durationMs" : 11,
-    "serverName" : "AdminServer"
+    "id" : "t-5c3c2166",
+    "startedAt" : "2026-10-23T21:42:43.775Z",
+    "durationMs" : 199,
+    "serverName" : "AdminServer",
+    "deployments" : [ {
+      "name" : "tax-ear",
+      "sourcePath" : "/home/purps/Development/ejb/sample-apps/tax-ear/tax-ear/target/tax-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "orders-ear",
+      "sourcePath" : "/home/purps/Development/ejb/sample-apps/orders-ear/orders-ear/target/orders-ear.ear",
+      "moduleType" : "ear"
+    } ]
   },
   "spans" : [ {
     "id" : "s1",
     "depth" : 0,
     "order" : 0,
+    "kind" : "HTTP",
+    "http" : {
+      "method" : "POST",
+      "path" : "/orders/api/orders",
+      "contextPath" : "/orders",
+      "servletPath" : "/api",
+      "pathInfo" : "/orders",
+      "protocol" : "HTTP/1.1",
+      "scheme" : "http",
+      "serverName" : "localhost",
+      "serverPort" : 7001,
+      "remoteAddr" : "127.0.0.1",
+      "status" : 201,
+      "contentType" : "application/json",
+      "responseContentType" : "application/json",
+      "requestHeaders" : {
+        "Host" : [ "localhost:7001" ],
+        "User-Agent" : [ "curl/8.22.0" ],
+        "Accept" : [ "*/*" ],
+        "Content-Type" : [ "application/json" ],
+        "Content-Length" : [ "420" ]
+      },
+      "responseHeaders" : {
+        "Date" : [ "Fri, 23 Oct 2026 21:42:43 GMT" ],
+        "Content-Length" : [ "237" ],
+        "Content-Type" : [ "application/json" ],
+        "X-ORACLE-DMS-ECID" : [ "d99fc93b-875f-408b-a031-1ed9073e4f83-00000012" ],
+        "X-ORACLE-DMS-RID" : [ "0" ]
+      },
+      "requestBody" : "{\"customer\":{\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\",\"loyaltyTier\":\"GOLD\",\"address\":{\"street\":\"Keizersgracht 1\",\"city\":\"Amsterdam\",\"region\":\"NH\",\"postalCode\":\"1015 CC\",\"country\":\"NL\"}},\"lines\":[{\"sku\":\"WIDGET-1\",\"quantity\":3},{\"sku\":\"GADGET-2\",\"quantity\":1}],\"attributes\":{\"channel\":\"web\",\"campaign\":\"autumn-2026\"},\"deliveryDate\":\"2026-10-30\",\"paymentMethod\":{\"type\":\"CARD\",\"lastFour\":\"4242\",\"expiry\":\"2028-06\"}}",
+      "requestBodyEncoding" : "UTF-8 (assumed)",
+      "requestBodyLength" : 420,
+      "responseBody" : "{\"id\":98662,\"status\":\"CREATED\",\"customerName\":\"Ada Lovelace\",\"currency\":\"EUR\",\"subtotal\":123.74,\"tax\":25.99,\"total\":149.73,\"createdAt\":\"2026-10-23T17:42:43.862313\",\"deliveryDate\":\"2026-10-30\",\"paymentSummary\":\"card ****4242 exp 2028-06\"}",
+      "responseBodyEncoding" : "UTF-8 (assumed)",
+      "responseBodyLength" : 237
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "startNs" : 0,
+    "durationNs" : 199222589
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "HTTP",
+    "layer" : "jaxrs",
+    "http" : {
+      "resourceClass" : "com.acme.orders.web.OrdersResource",
+      "resourceMethod" : "create",
+      "resourceSignature" : "javax.ws.rs.core.Response create(java.lang.String)"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "{\"customer\":{\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\",\"loyaltyTier\":\"GOLD\",\"address\":{\"street\":\"Keizersgracht 1\",\"city\":\"Amsterdam\",\"region\":\"NH\",\"postalCode\":\"1015 CC\",\"country\":\"NL\"}},\"lines\":[{\"sku\":\"WIDGET-1\",\"quantity\":3},{\"sku\":\"GADGET-2\",\"quantity\":1}],\"attributes\":{\"channel\":\"web\",\"campaign\":\"autumn-2026\"},\"deliveryDate\":\"2026-10-30\",\"paymentMethod\":{\"type\":\"CARD\",\"lastFour\":\"4242\",\"expiry\":\"2028-06\"}}"
+    } ],
+    "result" : {
+      "declaredType" : "javax.ws.rs.core.Response",
+      "value" : {
+        "@type" : "org.glassfish.jersey.message.internal.OutboundJaxrsResponse",
+        "@serializable" : false,
+        "context" : {
+          "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext",
+          "@serializable" : false,
+          "runtimeDelegateDecorator" : {
+            "@type" : "org.glassfish.jersey.internal.RuntimeDelegateDecorator$ConfigurableRuntimeDelegate",
+            "@serializable" : false,
+            "runtimeDelegate" : {
+              "@type" : "org.glassfish.jersey.server.internal.RuntimeDelegateImpl",
+              "@serializable" : false,
+              "hps" : [ {
+                "@type" : "org.glassfish.jersey.message.internal.StringHeaderProvider",
+                "@serializable" : false,
+                "@id" : 3
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.NewCookieProvider",
+                "@serializable" : false,
+                "@id" : 6
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.UriProvider",
+                "@serializable" : false,
+                "@id" : 4
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.CacheControlProvider",
+                "@serializable" : false,
+                "@id" : 7
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LinkProvider",
+                "@serializable" : false
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LocaleProvider",
+                "@serializable" : false
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.CookieProvider",
+                "@serializable" : false,
+                "@id" : 5
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.EntityTagProvider",
+                "@serializable" : false,
+                "@id" : 1
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.DateProvider",
+                "@serializable" : false,
+                "@id" : 2
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.MediaTypeProvider",
+                "@serializable" : false,
+                "@id" : 8
+              } ],
+              "map" : {
+                "@type" : "java.util.WeakHashMap",
+                "@entries" : [ {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@3c36388f",
+                    "toString" : "class javax.ws.rs.core.EntityTag"
+                  },
+                  "value" : {
+                    "@ref" : 1
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@12aba8be",
+                    "toString" : "class java.util.Date"
+                  },
+                  "value" : {
+                    "@ref" : 2
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@6d6f6e28",
+                    "toString" : "class java.lang.String"
+                  },
+                  "value" : {
+                    "@ref" : 3
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@baf1bb3",
+                    "toString" : "class java.net.URI"
+                  },
+                  "value" : {
+                    "@ref" : 4
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@7dee78d7",
+                    "toString" : "class javax.ws.rs.core.Cookie"
+                  },
+                  "value" : {
+                    "@ref" : 5
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@389615c5",
+                    "toString" : "class javax.ws.rs.core.NewCookie"
+                  },
+                  "value" : {
+                    "@ref" : 6
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@50b675d1",
+                    "toString" : "class javax.ws.rs.core.CacheControl"
+                  },
+                  "value" : {
+                    "@ref" : 7
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@2ad9882b",
+                    "toString" : "class javax.ws.rs.core.MediaType"
+                  },
+                  "value" : {
+                    "@ref" : 8
+                  }
+                } ]
+              }
+            },
+            "configuration" : null
+          },
+          "headers" : { },
+          "committingOutputStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@2a10d6fd",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@2a10d6fd"
+          },
+          "configuration" : null,
+          "mediaTypeCache" : {
+            "@type" : "org.glassfish.jersey.internal.util.collection.Values$LazyValueImpl",
+            "@serializable" : false,
+            "lock" : {
+              "@type" : "java.lang.Object",
+              "@serializable" : false
+            },
+            "delegate" : {
+              "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext$$Lambda/0x00007a01a5427298",
+              "@serializable" : false,
+              "@skipped" : [ {
+                "field" : "arg$1",
+                "reason" : "compiler-injected (synthetic)"
+              } ]
+            },
+            "value" : null
+          },
+          "entity" : "{\"id\":98662,\"status\":\"CREATED\",\"customerName\":\"Ada Lovelace\",\"currency\":\"EUR\",\"subtotal\":123.74,\"tax\":25.99,\"total\":149.73,\"createdAt\":\"2026-10-23T17:42:43.862313\",\"deliveryDate\":\"2026-10-30\",\"paymentSummary\":\"card ****4242 exp 2028-06\"}",
+          "entityType" : {
+            "@type" : "javax.ws.rs.core.GenericType",
+            "@serializable" : false,
+            "type" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            },
+            "rawType" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            }
+          },
+          "entityAnnotations" : [ ],
+          "entityStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@2a10d6fd",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@2a10d6fd"
+          }
+        },
+        "status" : "CREATED",
+        "closed" : false,
+        "buffered" : false
+      }
+    },
+    "serializationWarnings" : [ {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[0].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[1].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[2].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[3].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[4].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[5].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[6].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[7].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.committingOutputStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    }, {
+      "path" : "$.result.context.entityType.type",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityType.rawType",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    } ],
+    "startNs" : 21071379,
+    "durationNs" : 171623331
+  }, {
+    "id" : "s3",
+    "parentId" : "s2",
+    "depth" : 2,
+    "order" : 2,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "OrderService",
       "beanClass" : "com.acme.orders.OrderServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:module/OrderService!com.acme.orders.api.OrderServiceLocal", "java:module/OrderService!com.acme.orders.api.OrderServiceRemote", "orders/OrderService" ],
       "method" : "createOrder",
       "signature" : "com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.api.OrderServiceLocal"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "com.acme.common.dto.CreateOrderRequest",
@@ -55,7 +379,7 @@
           "campaign" : "autumn-2026"
         },
         "requestedDeliveryDate" : "2026-10-30",
-        "requestedAt" : "2026-10-23T20:11:02.868760338Z",
+        "requestedAt" : "2026-10-23T21:42:43.801076316Z",
         "paymentMethod" : {
           "@type" : "com.acme.common.dto.CardPayment",
           "lastFourDigits" : "4242",
@@ -67,11 +391,11 @@
       "declaredType" : "com.acme.common.model.Order",
       "value" : {
         "@type" : "com.acme.common.model.Order",
-        "id" : 65577,
+        "id" : 98662,
         "customerName" : "Ada Lovelace",
         "customerEmail" : "ada@example.com",
         "status" : "CREATED",
-        "createdAt" : "2026-10-23T16:11:02.880002",
+        "createdAt" : "2026-10-23T17:42:43.862313",
         "deliveryDate" : "2026-10-30",
         "currency" : "EUR",
         "subtotal" : "123.74",
@@ -90,25 +414,61 @@
             "@type" : "java.lang.Object",
             "@serializable" : false
           },
-          "openedAt" : "2026-10-23T20:11:02.880586657Z",
+          "openedAt" : "2026-10-23T21:42:43.957339582Z",
           "entryCount" : 0
-        }
+        },
+        "@skipped" : [ {
+          "field" : "_persistence_primaryKey",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_cacheKey",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_listener",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_fetchGroup",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_shouldRefreshFetchGroup",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_session",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_relationshipInfo",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_href",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_links",
+          "reason" : "weaver-injected (EclipseLink)"
+        } ]
       }
     },
-    "startNs" : 0,
-    "durationNs" : 11365782
+    "startNs" : 59129155,
+    "durationNs" : 123511754
   }, {
-    "id" : "s2",
-    "parentId" : "s1",
-    "depth" : 1,
-    "order" : 1,
+    "id" : "s4",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 3,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "InventoryService",
       "beanClass" : "com.acme.orders.InventoryServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:app/orders-ejb/InventoryService", "java:app/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:global/orders-ear/orders-ejb/InventoryService", "java:module/InventoryService", "java:module/InventoryService!com.acme.orders.InventoryService" ],
       "method" : "reserve",
       "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.InventoryService"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "java.lang.String",
@@ -121,27 +481,35 @@
       "declaredType" : "com.acme.common.dto.Reservation",
       "value" : {
         "@type" : "com.acme.common.dto.Reservation",
-        "reservationId" : "5ab69ddd-b31e-43c8-8444-3d92da0f7df5",
+        "reservationId" : "e39b8cc5-dfba-4208-8b97-e097a5f0ca9c",
         "sku" : "WIDGET-1",
         "quantity" : 3,
         "warehouse" : "WH-AMS",
-        "reservedUntil" : "2026-10-23T18:11:02.872747294"
+        "reservedUntil" : "2026-10-23T19:42:43.838837494"
       }
     },
-    "startNs" : 3382880,
-    "durationNs" : 138299
+    "startNs" : 63361754,
+    "durationNs" : 363149
   }, {
-    "id" : "s3",
-    "parentId" : "s1",
-    "depth" : 1,
-    "order" : 2,
+    "id" : "s5",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 4,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "InventoryService",
       "beanClass" : "com.acme.orders.InventoryServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:app/orders-ejb/InventoryService", "java:app/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:global/orders-ear/orders-ejb/InventoryService", "java:module/InventoryService", "java:module/InventoryService!com.acme.orders.InventoryService" ],
       "method" : "reserve",
       "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.InventoryService"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "java.lang.String",
@@ -154,27 +522,35 @@
       "declaredType" : "com.acme.common.dto.Reservation",
       "value" : {
         "@type" : "com.acme.common.dto.Reservation",
-        "reservationId" : "d2e01f94-f93a-4d20-9e35-15aac08c4019",
+        "reservationId" : "546b3ebc-1be9-4fcc-ad31-02804db1e228",
         "sku" : "GADGET-2",
         "quantity" : 1,
         "warehouse" : "WH-AMS",
-        "reservedUntil" : "2026-10-23T18:11:02.877305877"
+        "reservedUntil" : "2026-10-23T19:42:43.841646350"
       }
     },
-    "startNs" : 8014592,
-    "durationNs" : 55970
+    "startNs" : 66308110,
+    "durationNs" : 209029
   }, {
-    "id" : "s4",
-    "parentId" : "s1",
-    "depth" : 1,
-    "order" : 3,
+    "id" : "s6",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 5,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "PricingService",
       "beanClass" : "com.acme.orders.PricingServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/PricingService!com.acme.orders.PricingService", "java:app/orders-ejb/PricingService", "java:app/orders-ejb/PricingService!com.acme.orders.PricingService", "java:global/orders-ear/orders-ejb/PricingService", "java:module/PricingService", "java:module/PricingService!com.acme.orders.PricingService" ],
       "method" : "price",
       "signature" : "com.acme.common.dto.PriceQuote price(com.acme.common.dto.CreateOrderRequest)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.PricingService"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "com.acme.common.dto.CreateOrderRequest",
@@ -208,7 +584,7 @@
           "campaign" : "autumn-2026"
         },
         "requestedDeliveryDate" : "2026-10-30",
-        "requestedAt" : "2026-10-23T20:11:02.868760338Z",
+        "requestedAt" : "2026-10-23T21:42:43.801076316Z",
         "paymentMethod" : {
           "@type" : "com.acme.common.dto.CardPayment",
           "lastFourDigits" : "4242",
@@ -231,25 +607,31 @@
           "jurisdiction" : "NL-NH",
           "rate" : "0.21",
           "tax" : "25.99",
-          "computedAt" : "2026-10-23T20:11:02.878628529Z"
+          "computedAt" : "2026-10-23T21:42:43.859525084Z"
         },
         "total" : "149.73"
       }
     },
-    "startNs" : 8113471,
-    "durationNs" : 1709850
+    "startNs" : 68504430,
+    "durationNs" : 17330266
   }, {
-    "id" : "s5",
-    "parentId" : "s4",
-    "depth" : 2,
-    "order" : 4,
+    "id" : "s7",
+    "parentId" : "s6",
+    "depth" : 4,
+    "order" : 6,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "PricingService",
       "beanClass" : "com.acme.orders.PricingServiceBean",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/PricingService", "java:app/orders-ejb/PricingService", "java:app/orders-ejb/PricingService!com.acme.orders.PricingService", "java:global/orders-ear/orders-ejb/PricingService!com.acme.orders.PricingService", "java:module/PricingService", "java:module/PricingService!com.acme.orders.PricingService" ],
       "method" : "unitPrice",
       "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "java.lang.String",
@@ -260,20 +642,26 @@
       "value" : "12.50"
     },
     "selfInvocation" : true,
-    "startNs" : 8215351,
-    "durationNs" : 9160
+    "startNs" : 68857918,
+    "durationNs" : 5720
   }, {
-    "id" : "s6",
-    "parentId" : "s4",
-    "depth" : 2,
-    "order" : 5,
+    "id" : "s8",
+    "parentId" : "s6",
+    "depth" : 4,
+    "order" : 7,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "PricingService",
       "beanClass" : "com.acme.orders.PricingServiceBean",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/PricingService", "java:app/orders-ejb/PricingService", "java:app/orders-ejb/PricingService!com.acme.orders.PricingService", "java:global/orders-ear/orders-ejb/PricingService!com.acme.orders.PricingService", "java:module/PricingService", "java:module/PricingService!com.acme.orders.PricingService" ],
       "method" : "unitPrice",
       "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "java.lang.String",
@@ -284,20 +672,28 @@
       "value" : "99.99"
     },
     "selfInvocation" : true,
-    "startNs" : 8287120,
-    "durationNs" : 2820
+    "startNs" : 68941908,
+    "durationNs" : 2350
   }, {
-    "id" : "s7",
-    "parentId" : "s4",
-    "depth" : 2,
-    "order" : 6,
+    "id" : "s9",
+    "parentId" : "s6",
+    "depth" : 4,
+    "order" : 8,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "tax-ear",
+      "module" : "tax-ejb",
+      "beanName" : "TaxService",
       "beanClass" : "com.acme.tax.TaxServiceBean",
+      "invocation" : "REMOTE",
+      "jndiNames" : [ "java:global/tax-ear/tax-ejb/TaxService!com.acme.tax.api.TaxService", "java:app/tax-ejb/TaxService", "java:app/tax-ejb/TaxService!com.acme.tax.api.TaxService", "java:global/tax-ear/tax-ejb/TaxService", "java:module/TaxService", "java:module/TaxService!com.acme.tax.api.TaxService", "tax/TaxService" ],
       "method" : "computeTax",
       "signature" : "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.tax.api.TaxService"
     },
+    "app" : "tax-ear",
+    "module" : "tax-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "com.acme.common.dto.TaxRequest",
@@ -316,23 +712,31 @@
         "jurisdiction" : "NL-NH",
         "rate" : "0.21",
         "tax" : "25.99",
-        "computedAt" : "2026-10-23T20:11:02.878628529Z"
+        "computedAt" : "2026-10-23T21:42:43.859525084Z"
       }
     },
-    "startNs" : 9167145,
-    "durationNs" : 248329
+    "startNs" : 83842336,
+    "durationNs" : 554227
   }, {
-    "id" : "s8",
-    "parentId" : "s1",
-    "depth" : 1,
-    "order" : 7,
+    "id" : "s10",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 9,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "PricingService",
       "beanClass" : "com.acme.orders.PricingServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/PricingService!com.acme.orders.PricingService", "java:app/orders-ejb/PricingService", "java:app/orders-ejb/PricingService!com.acme.orders.PricingService", "java:global/orders-ear/orders-ejb/PricingService", "java:module/PricingService", "java:module/PricingService!com.acme.orders.PricingService" ],
       "method" : "unitPrice",
       "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.PricingService"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "java.lang.String",
@@ -342,20 +746,28 @@
       "declaredType" : "java.math.BigDecimal",
       "value" : "12.50"
     },
-    "startNs" : 10787995,
-    "durationNs" : 5790
+    "startNs" : 87317419,
+    "durationNs" : 2610
   }, {
-    "id" : "s9",
-    "parentId" : "s1",
-    "depth" : 1,
-    "order" : 8,
+    "id" : "s11",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 10,
     "kind" : "EJB",
     "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "PricingService",
       "beanClass" : "com.acme.orders.PricingServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/PricingService!com.acme.orders.PricingService", "java:app/orders-ejb/PricingService", "java:app/orders-ejb/PricingService!com.acme.orders.PricingService", "java:global/orders-ear/orders-ejb/PricingService", "java:module/PricingService", "java:module/PricingService!com.acme.orders.PricingService" ],
       "method" : "unitPrice",
       "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
-      "transaction" : "ACTIVE"
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.PricingService"
     },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
       "declaredType" : "java.lang.String",
@@ -365,7 +777,7 @@
       "declaredType" : "java.math.BigDecimal",
       "value" : "99.99"
     },
-    "startNs" : 10806535,
-    "durationNs" : 2940
+    "startNs" : 90063436,
+    "durationNs" : 2880
   } ]
 }

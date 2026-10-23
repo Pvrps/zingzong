@@ -44,7 +44,8 @@ if [ "${CAPTURE_AGENT:-1}" != "0" ] && [ -f "$CAPTURE_AGENT_JAR" ]; then
   agent_jar="$LOG_DIR/capture-agent.running.jar"
   cp "$CAPTURE_AGENT_JAR" "$agent_jar"
   log "attaching agent $agent_jar (copy of $CAPTURE_AGENT_JAR)"
-  java_options="$java_options -javaagent:$agent_jar=out=$CAPTURE_OUT"
+  # CAPTURE_AGENT_ARGS appends extra agent options (e.g. hook=annotation for hook-equivalence runs).
+  java_options="$java_options -javaagent:$agent_jar=out=$CAPTURE_OUT${CAPTURE_AGENT_ARGS:+,$CAPTURE_AGENT_ARGS}"
 else
   log "starting without capture agent"
 fi

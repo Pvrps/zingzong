@@ -3,6 +3,7 @@ package io.capture.agent.span;
 import io.capture.trace.RecordingRef;
 import io.capture.trace.Span;
 import io.capture.trace.Trace;
+import io.capture.agent.meta.WlsMetadata;
 import io.capture.trace.TraceInfo;
 
 import java.text.SimpleDateFormat;
@@ -74,6 +75,8 @@ final class TraceBuilder {
         trace.trace.httpSessionId = httpSessionId;
         trace.trace.serverName = WlsRuntime.serverName();
         trace.trace.parentTraceId = parentTraceId;
+        List<TraceInfo.Deployment> deployments = WlsMetadata.deployments();
+        trace.trace.deployments = deployments.isEmpty() ? null : new ArrayList<TraceInfo.Deployment>(deployments);
         List<Span> ordered = new ArrayList<Span>(spans);
         Collections.sort(ordered, new Comparator<Span>() {
             @Override

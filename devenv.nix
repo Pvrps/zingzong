@@ -93,5 +93,7 @@ in
     capture-status.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" status "$@"'';
     trace-reader.exec = ''exec java -jar "$DEVENV_ROOT/trace-tools/trace-reader/target/trace-reader.jar" "$@"'';
     soap-tax.exec = ''bash "$DEVENV_ROOT/scripts/soap-tax.sh" "$@"'';
+    hook-diff.exec = ''bash "$DEVENV_ROOT/scripts/hook-diff.sh" "$@"'';
+    jndi-proof.exec = ''bash "$DEVENV_ROOT/scripts/jndi-proof.sh" "$@"'';
   };
 }

@@ -1,8 +1,8 @@
 package io.capture.agent;
 
 /**
- * Which application server the agent was started in. Decides the hook: the container hook
- * (Phase 6) on WebLogic once it exists, the portable annotation hook everywhere else.
+ * Which application server the agent was started in. Decides the hook: the container hook on
+ * WebLogic when its invoker classes are present, the portable annotation hook everywhere else.
  */
 public final class ServerDetection {
 

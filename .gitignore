@@ -1,0 +1,19 @@
+# WebLogic install, domain, H2 files, captures, Maven cache
+.local/
+
+# devenv / direnv
+.devenv/
+.devenv.flake.nix
+.direnv/
+devenv.local.nix
+
+# Maven
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/

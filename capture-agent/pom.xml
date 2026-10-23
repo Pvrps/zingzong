@@ -18,6 +18,7 @@
   <properties>
     <!-- One jar for WebLogic 14.1.2 / JDK 21 and 12.2.1 / JDK 8. -->
     <maven.compiler.release>${agent.compiler.release}</maven.compiler.release>
+    <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
   </properties>
 
   <dependencies>
@@ -62,6 +63,13 @@
 
   <build>
     <finalName>capture-agent</finalName>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <!-- build.properties carries the version into recording.json -->
+        <filtering>true</filtering>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Drive the agent's RecordingControl MBean in the running server.
 #
-#   capture.sh start <name>   begin a recording window
+#   capture.sh start <name> [principal=<user>] [session=<httpSessionId>]
+#                             begin a recording window; the filters are for shared servers
 #   capture.sh stop           end it
 #   capture.sh status
 #

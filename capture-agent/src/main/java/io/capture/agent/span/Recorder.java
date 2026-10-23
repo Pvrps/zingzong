@@ -37,13 +37,15 @@ public final class Recorder {
     private static volatile TraceWriter writer;
     private static volatile TracePropagation propagation = TracePropagation.NONE;
     private static volatile InstrumentationHook hook = InstrumentationHook.NONE;
+    private static volatile String hookName = "none";
 
     private Recorder() {
     }
 
     /** The hook to install while recording. */
-    public static void hook(InstrumentationHook instrumentationHook) {
+    public static void hook(InstrumentationHook instrumentationHook, String name) {
         hook = instrumentationHook;
+        hookName = name;
     }
 
     public static void configure(AgentConfig agentConfig) {
@@ -87,12 +89,19 @@ public final class Recorder {
         return w == null ? 0 : w.queued();
     }
 
-    /** Instruments the bean classes, then opens the recording window. */
-    public static synchronized Recording start(String name) {
-        Recording recording = new Recording(name);
+    public static Recording start(String name) {
+        return start(name, null, null);
+    }
+
+    /**
+     * Instruments the bean classes, writes recording.json, then opens the recording window.
+     * Filters are optional and off when null: on a shared server they keep other traffic out.
+     */
+    public static synchronized Recording start(String name, String principalFilter, String httpSessionFilter) {
+        Recording recording = new Recording(name, principalFilter, httpSessionFilter);
         File dir = writer == null ? null : writer.recordingDir(recording);
         if (dir != null) {
-            dir.mkdirs();
+            ManifestWriter.write(dir, recording, hookName, null, null, null);
         }
         try {
             hook.install();
@@ -103,16 +112,22 @@ public final class Recorder {
         if (previous != null) {
             AgentLog.warn("recording " + previous.id + " replaced by " + recording.id);
         }
-        AgentLog.info("RECORDING START id=" + recording.id + " name=" + recording.name + " dir=" + dir);
+        AgentLog.info("RECORDING START id=" + recording.id + " name=" + recording.name + " dir=" + dir
+                + (recording.hasFilters() ? " filters: principal=" + recording.principalFilter
+                        + " httpSessionId=" + recording.httpSessionFilter : ""));
         return recording;
     }
 
-    /** Closes the window, waits (bounded) for queued traces to reach disk, restores the bytecode. */
+    /** Closes the window, waits (bounded) for queued traces, completes recording.json, restores the bytecode. */
     public static synchronized Recording stop() {
         Recording recording = ACTIVE.getAndSet(null);
         if (recording != null) {
             TraceWriter w = writer;
             boolean flushed = w == null || w.flush(5000);
+            if (w != null) {
+                ManifestWriter.write(w.recordingDir(recording), recording, hookName, System.currentTimeMillis(),
+                        recording.traceCount(), droppedTraces());
+            }
             AgentLog.info("RECORDING STOP id=" + recording.id + " name=" + recording.name
                     + " traces=" + recording.traceCount() + " dropped=" + droppedTraces()
                     + (flushed ? "" : " (writer still busy after 5s)"));
@@ -143,11 +158,21 @@ public final class Recorder {
         try {
             SpanStack stack = SpanStack.current();
             boolean root = stack.isEmpty();
+            String principal = null;
+            String httpSessionId = null;
+            if (root) {
+                principal = WlsRuntime.principal();
+                httpSessionId = WlsRuntime.httpSessionId();
+                if (!recording.accepts(principal, httpSessionId)) {
+                    return 0L;
+                }
+            }
             long now = System.nanoTime();
             String transaction = WlsRuntime.transactionStatus();
             stack.push(recording, beanClass, method, now, transaction, propagation);
             if (root) {
-                stack.trace().principal(WlsRuntime.principal());
+                stack.trace().principal(principal);
+                stack.trace().httpSessionId(httpSessionId);
             }
             return now == 0L ? 1L : now;
         } catch (Throwable t) {

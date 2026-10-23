@@ -1,0 +1,372 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261023-162921",
+    "name" : "create-and-confirm",
+    "seq" : 1
+  },
+  "trace" : {
+    "id" : "t-216f831a",
+    "startedAt" : "2026-10-23T20:29:22.121Z",
+    "durationMs" : 28,
+    "httpSessionId" : "twtqdC7RbCYy6DRtAWbUGtWTBdz68GCKfCCVgd49EL6rEsmuB1JA!357112069!1792787361489",
+    "serverName" : "AdminServer"
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.OrderServiceBean",
+      "method" : "createOrder",
+      "signature" : "com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.CreateOrderRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.CreateOrderRequest",
+        "customer" : {
+          "@type" : "com.acme.common.dto.Customer",
+          "name" : "Ada Lovelace",
+          "email" : "ada@example.com",
+          "loyaltyTier" : "GOLD",
+          "address" : {
+            "@type" : "com.acme.common.dto.Address",
+            "street" : "Keizersgracht 1",
+            "city" : "Amsterdam",
+            "region" : "NH",
+            "postalCode" : "1015 CC",
+            "country" : "NL"
+          }
+        },
+        "lines" : [ {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "WIDGET-1",
+          "quantity" : 3
+        }, {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "GADGET-2",
+          "quantity" : 1
+        } ],
+        "attributes" : {
+          "channel" : "web",
+          "campaign" : "autumn-2026"
+        },
+        "requestedDeliveryDate" : "2026-10-30",
+        "requestedAt" : "2026-10-23T20:29:22.115680070Z",
+        "paymentMethod" : {
+          "@type" : "com.acme.common.dto.CardPayment",
+          "lastFourDigits" : "4242",
+          "expiry" : "2028-06"
+        }
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.model.Order",
+      "value" : {
+        "@type" : "com.acme.common.model.Order",
+        "id" : 65633,
+        "customerName" : "Ada Lovelace",
+        "customerEmail" : "ada@example.com",
+        "status" : "CREATED",
+        "createdAt" : "2026-10-23T16:29:22.132601",
+        "deliveryDate" : "2026-10-30",
+        "currency" : "EUR",
+        "subtotal" : "123.74",
+        "tax" : "25.99",
+        "total" : "149.73",
+        "paymentSummary" : "card ****4242 exp 2028-06",
+        "lines" : {
+          "@lazy" : true,
+          "loaded" : false
+        },
+        "audit" : {
+          "@type" : "com.acme.common.model.AuditTrail",
+          "@serializable" : false,
+          "entries" : "",
+          "lock" : {
+            "@type" : "java.lang.Object",
+            "@serializable" : false
+          },
+          "openedAt" : "2026-10-23T20:29:22.149056317Z",
+          "entryCount" : 0
+        }
+      }
+    },
+    "startNs" : 0,
+    "durationNs" : 28477325
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.InventoryServiceBean",
+      "method" : "reserve",
+      "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "WIDGET-1"
+    }, {
+      "declaredType" : "int",
+      "value" : 3
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.Reservation",
+      "value" : {
+        "@type" : "com.acme.common.dto.Reservation",
+        "reservationId" : "41eba558-8167-490b-9b4e-39f859c016f4",
+        "sku" : "WIDGET-1",
+        "quantity" : 3,
+        "warehouse" : "WH-AMS",
+        "reservedUntil" : "2026-10-23T18:29:22.123524067"
+      }
+    },
+    "startNs" : 2618816,
+    "durationNs" : 298959
+  }, {
+    "id" : "s3",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 2,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.InventoryServiceBean",
+      "method" : "reserve",
+      "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "GADGET-2"
+    }, {
+      "declaredType" : "int",
+      "value" : 1
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.Reservation",
+      "value" : {
+        "@type" : "com.acme.common.dto.Reservation",
+        "reservationId" : "668f4557-5c4a-4397-a375-8ed729060fe5",
+        "sku" : "GADGET-2",
+        "quantity" : 1,
+        "warehouse" : "WH-AMS",
+        "reservedUntil" : "2026-10-23T18:29:22.123911164"
+      }
+    },
+    "startNs" : 3128283,
+    "durationNs" : 165879
+  }, {
+    "id" : "s4",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 3,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "price",
+      "signature" : "com.acme.common.dto.PriceQuote price(com.acme.common.dto.CreateOrderRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.CreateOrderRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.CreateOrderRequest",
+        "customer" : {
+          "@type" : "com.acme.common.dto.Customer",
+          "name" : "Ada Lovelace",
+          "email" : "ada@example.com",
+          "loyaltyTier" : "GOLD",
+          "address" : {
+            "@type" : "com.acme.common.dto.Address",
+            "street" : "Keizersgracht 1",
+            "city" : "Amsterdam",
+            "region" : "NH",
+            "postalCode" : "1015 CC",
+            "country" : "NL"
+          }
+        },
+        "lines" : [ {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "WIDGET-1",
+          "quantity" : 3
+        }, {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "GADGET-2",
+          "quantity" : 1
+        } ],
+        "attributes" : {
+          "channel" : "web",
+          "campaign" : "autumn-2026"
+        },
+        "requestedDeliveryDate" : "2026-10-30",
+        "requestedAt" : "2026-10-23T20:29:22.115680070Z",
+        "paymentMethod" : {
+          "@type" : "com.acme.common.dto.CardPayment",
+          "lastFourDigits" : "4242",
+          "expiry" : "2028-06"
+        }
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.PriceQuote",
+      "value" : {
+        "@type" : "com.acme.common.dto.PriceQuote",
+        "currency" : "EUR",
+        "lineTotals" : {
+          "WIDGET-1" : "37.50",
+          "GADGET-2" : "99.99"
+        },
+        "subtotal" : "123.74",
+        "tax" : {
+          "@type" : "com.acme.common.dto.TaxResult",
+          "jurisdiction" : "NL-NH",
+          "rate" : "0.21",
+          "tax" : "25.99",
+          "computedAt" : "2026-10-23T20:29:22.130946416Z"
+        },
+        "total" : "149.73"
+      }
+    },
+    "startNs" : 4378056,
+    "durationNs" : 6785793
+  }, {
+    "id" : "s5",
+    "parentId" : "s4",
+    "depth" : 2,
+    "order" : 4,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "WIDGET-1"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "12.50"
+    },
+    "selfInvocation" : true,
+    "startNs" : 4570385,
+    "durationNs" : 8230
+  }, {
+    "id" : "s6",
+    "parentId" : "s4",
+    "depth" : 2,
+    "order" : 5,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "GADGET-2"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "99.99"
+    },
+    "selfInvocation" : true,
+    "startNs" : 4637765,
+    "durationNs" : 4210
+  }, {
+    "id" : "s7",
+    "parentId" : "s4",
+    "depth" : 2,
+    "order" : 6,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.tax.TaxServiceBean",
+      "method" : "computeTax",
+      "signature" : "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.TaxRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.TaxRequest",
+        "country" : "NL",
+        "region" : "NH",
+        "category" : "GOODS",
+        "amount" : "123.74"
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.TaxResult",
+      "value" : {
+        "@type" : "com.acme.common.dto.TaxResult",
+        "jurisdiction" : "NL-NH",
+        "rate" : "0.21",
+        "tax" : "25.99",
+        "computedAt" : "2026-10-23T20:29:22.130946416Z"
+      }
+    },
+    "startNs" : 10026586,
+    "durationNs" : 304148
+  }, {
+    "id" : "s8",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 7,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "WIDGET-1"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "12.50"
+    },
+    "startNs" : 12076724,
+    "durationNs" : 7930
+  }, {
+    "id" : "s9",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 8,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "GADGET-2"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "99.99"
+    },
+    "startNs" : 13845925,
+    "durationNs" : 5450
+  } ]
+}

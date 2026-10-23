@@ -23,7 +23,8 @@ public final class AgentBootstrap {
     public static void start(String args, Instrumentation inst, String mode, File jar) {
         AgentConfig config = AgentConfig.parse(args);
         AgentLog.init(config.outDir);
-        AgentLog.info("capture-agent " + mode + " (" + config + ") jar=" + jar
+        AgentLog.info("capture-agent " + AgentVersion.VERSION + " (" + AgentVersion.BUILD + ") " + mode
+                + " (" + config + ") jar=" + jar
                 + " jvm=" + System.getProperty("java.version")
                 + " loader=" + describe(AgentBootstrap.class.getClassLoader()));
 
@@ -40,7 +41,7 @@ public final class AgentBootstrap {
             AgentLog.warn("hook=container is not implemented yet (Phase 6); using the annotation hook");
         }
         // Installed by Recorder.start and removed by Recorder.stop: no advice without a recording.
-        Recorder.hook(new EjbAnnotationHook(inst, config));
+        Recorder.hook(new EjbAnnotationHook(inst, config), AgentConfig.HOOK_ANNOTATION);
 
         if (config.enabled) {
             Recorder.start("startup");

@@ -30,6 +30,23 @@ public final class RecordingControl implements RecordingControlMBean {
     }
 
     @Override
+    public String start(String name, String principal, String httpSessionId) {
+        return Recorder.start(name, principal, httpSessionId).id;
+    }
+
+    @Override
+    public String getPrincipalFilter() {
+        Recording recording = Recorder.active();
+        return recording == null ? null : recording.principalFilter;
+    }
+
+    @Override
+    public String getHttpSessionFilter() {
+        Recording recording = Recorder.active();
+        return recording == null ? null : recording.httpSessionFilter;
+    }
+
+    @Override
     public String stop() {
         Recording recording = Recorder.stop();
         return recording == null ? null : recording.id;

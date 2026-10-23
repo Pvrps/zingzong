@@ -21,6 +21,7 @@
   <modules>
     <module>trace-model</module>
     <module>capture-agent</module>
+    <module>trace-tools</module>
     <module>sample-apps</module>
   </modules>
 
@@ -40,6 +41,7 @@
     <h2.version>2.3.232</h2.version>
     <!-- Same EclipseLink as bundled with WebLogic 14.1.2; test scope only, for lazy-collection fixtures. -->
     <eclipselink.version>2.7.15</eclipselink.version>
+    <json-schema-validator.version>1.5.9</json-schema-validator.version>
 
     <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>

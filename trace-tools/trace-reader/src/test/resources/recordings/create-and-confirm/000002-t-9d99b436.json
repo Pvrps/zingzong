@@ -1,0 +1,102 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261023-162921",
+    "name" : "create-and-confirm",
+    "seq" : 2
+  },
+  "trace" : {
+    "id" : "t-9d99b436",
+    "startedAt" : "2026-10-23T20:29:22.163Z",
+    "durationMs" : 1,
+    "httpSessionId" : "twtqdC7RbCYy6DRtAWbUGtWTBdz68GCKfCCVgd49EL6rEsmuB1JA!357112069!1792787361489",
+    "serverName" : "AdminServer"
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.OrderServiceBean",
+      "method" : "confirmOrder",
+      "signature" : "com.acme.common.dto.ConfirmResult confirmOrder(com.acme.common.dto.ConfirmRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '3' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.ConfirmRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.ConfirmRequest",
+        "orderId" : 65633,
+        "confirmedBy" : "ada",
+        "confirmedAt" : "2026-10-23T20:29:22.163Z",
+        "notes" : "please gift-wrap"
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.ConfirmResult",
+      "value" : {
+        "@type" : "com.acme.common.dto.ConfirmResult",
+        "orderId" : 65633,
+        "status" : "CONFIRMED",
+        "confirmedAt" : "2026-10-23T20:29:22.164769651Z",
+        "messages" : [ "Confirmed by ada", "Notes: please gift-wrap" ]
+      }
+    },
+    "startNs" : 0,
+    "durationNs" : 1394232
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.OrderServiceBean",
+      "method" : "findOrder",
+      "signature" : "com.acme.common.model.Order findOrder(long)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '3' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "long",
+      "value" : 65633
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.model.Order",
+      "value" : {
+        "@type" : "com.acme.common.model.Order",
+        "id" : 65633,
+        "customerName" : "Ada Lovelace",
+        "customerEmail" : "ada@example.com",
+        "status" : "CREATED",
+        "createdAt" : "2026-10-23T16:29:22.132601",
+        "deliveryDate" : "2026-10-30",
+        "currency" : "EUR",
+        "subtotal" : "123.74",
+        "tax" : "25.99",
+        "total" : "149.73",
+        "paymentSummary" : "card ****4242 exp 2028-06",
+        "lines" : {
+          "@lazy" : true,
+          "loaded" : false
+        },
+        "audit" : {
+          "@type" : "com.acme.common.model.AuditTrail",
+          "@serializable" : false,
+          "entries" : "",
+          "lock" : {
+            "@type" : "java.lang.Object",
+            "@serializable" : false
+          },
+          "openedAt" : "2026-10-23T20:29:22.164464003Z",
+          "entryCount" : 0
+        }
+      }
+    },
+    "selfInvocation" : true,
+    "startNs" : 504287,
+    "durationNs" : 692256
+  } ]
+}

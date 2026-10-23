@@ -25,6 +25,7 @@ final class TraceBuilder {
     private final List<Span> spans = new ArrayList<Span>();
     private int nextOrder;
     private String principal;
+    private String httpSessionId;
     private long endNs;
 
     TraceBuilder(Recording recording, long startNanos, String parentTraceId) {
@@ -49,6 +50,12 @@ final class TraceBuilder {
         }
     }
 
+    void httpSessionId(String value) {
+        if (httpSessionId == null) {
+            httpSessionId = value;
+        }
+    }
+
     void add(Span span) {
         spans.add(span);
         endNs = Math.max(endNs, span.startNs + span.durationNs);
@@ -64,6 +71,7 @@ final class TraceBuilder {
         trace.trace.startedAt = iso(startedAtMillis);
         trace.trace.durationMs = endNs / 1000000L;
         trace.trace.principal = principal;
+        trace.trace.httpSessionId = httpSessionId;
         trace.trace.serverName = WlsRuntime.serverName();
         trace.trace.parentTraceId = parentTraceId;
         List<Span> ordered = new ArrayList<Span>(spans);

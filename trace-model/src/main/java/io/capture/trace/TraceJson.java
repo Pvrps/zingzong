@@ -48,4 +48,12 @@ public final class TraceJson {
     public static Trace fromJson(String json) throws IOException {
         return MAPPER.readValue(json, Trace.class);
     }
+
+    public static <T> T read(InputStream in, Class<T> type) throws IOException {
+        return MAPPER.readValue(in, type);
+    }
+
+    public static void write(Object document, OutputStream out) throws IOException {
+        MAPPER.writeValue(out, document);
+    }
 }

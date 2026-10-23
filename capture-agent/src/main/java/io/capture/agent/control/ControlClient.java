@@ -10,7 +10,8 @@ import javax.management.remote.JMXServiceURL;
 
 /**
  * Tiny command-line JMX client for {@link RecordingControl}, driven by scripts/capture.sh:
- * <pre>java -cp capture-agent.jar io.capture.agent.control.ControlClient URL start NAME | stop | status</pre>
+ * <pre>java -cp capture-agent.jar io.capture.agent.control.ControlClient URL start NAME [principal=P] [session=S] | stop | status</pre>
+ * The optional filters restrict the recording to one user or one HTTP session (shared servers).
  * The URL is a JMX service URL, typically the local connector address printed by
  * {@code jcmd PID ManagementAgent.status}.
  */
@@ -37,9 +38,23 @@ public final class ControlClient {
                 System.exit(3);
             }
             if (command.equals("start")) {
-                String name = args.length > 2 ? args[2] : "unnamed";
-                Object id = server.invoke(control, "start", new Object[]{name}, new String[]{String.class.getName()});
-                System.out.println("recording started: " + id + " (" + name + ")");
+                String name = args.length > 2 && !args[2].contains("=") ? args[2] : "unnamed";
+                String principal = null;
+                String session = null;
+                for (int i = 2; i < args.length; i++) {
+                    if (args[i].startsWith("principal=")) {
+                        principal = args[i].substring("principal=".length());
+                    } else if (args[i].startsWith("session=")) {
+                        session = args[i].substring("session=".length());
+                    }
+                }
+                Object id = principal == null && session == null
+                        ? server.invoke(control, "start", new Object[]{name}, new String[]{String.class.getName()})
+                        : server.invoke(control, "start", new Object[]{name, principal, session},
+                                new String[]{String.class.getName(), String.class.getName(), String.class.getName()});
+                System.out.println("recording started: " + id + " (" + name + ")"
+                        + (principal != null ? " principal=" + principal : "")
+                        + (session != null ? " session=" + session : ""));
             } else if (command.equals("stop")) {
                 Object id = server.invoke(control, "stop", new Object[0], new String[0]);
                 System.out.println(id == null ? "no recording was active" : "recording stopped: " + id

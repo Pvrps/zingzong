@@ -128,6 +128,64 @@ final class WlsRuntime {
         }
     }
 
+    private static final AtomicBoolean sessionUnavailable = new AtomicBoolean();
+    private static final AtomicBoolean sessionWarned = new AtomicBoolean();
+
+    /**
+     * Id of the HTTP session the current thread's request belongs to, or null (no request,
+     * no session yet, not WebLogic). Phase 4 stopgap through WebLogic internals, recorded in
+     * docs/container-hook.md; Phase 5's servlet hook replaces it. Never creates a session.
+     *
+     * Path (14.1.2.0.0): ExecuteThread.getCurrentWork() → WlsRequestExecutor.connectionHandler
+     * → AbstractHttpConnectionHandler.getServletRequest() → HttpServletRequest.getSession(false).
+     */
+    static String httpSessionId() {
+        if (sessionUnavailable.get()) {
+            return null;
+        }
+        try {
+            Thread thread = Thread.currentThread();
+            if (!thread.getClass().getName().equals("weblogic.work.ExecuteThread")) {
+                return null;
+            }
+            Method getCurrentWork = thread.getClass().getMethod("getCurrentWork");
+            Object work = getCurrentWork.invoke(thread);
+            if (work == null || !work.getClass().getName().endsWith("WlsRequestExecutor")) {
+                return null;
+            }
+            java.lang.reflect.Field handlerField = work.getClass().getDeclaredField("connectionHandler");
+            handlerField.setAccessible(true);
+            Object handler = handlerField.get(work);
+            if (handler == null) {
+                return null;
+            }
+            Method getServletRequest = handler.getClass().getMethod("getServletRequest");
+            getServletRequest.setAccessible(true);
+            Object request = getServletRequest.invoke(handler);
+            if (request == null) {
+                return null;
+            }
+            Method getSession = request.getClass().getMethod("getSession", boolean.class);
+            getSession.setAccessible(true);
+            Object session = getSession.invoke(request, false);
+            if (session == null) {
+                return null;
+            }
+            Method getId = session.getClass().getMethod("getId");
+            getId.setAccessible(true);
+            return (String) getId.invoke(session);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            // The server objected to this particular request (recycled, upgraded, ...): just no id.
+            return null;
+        } catch (Throwable t) {
+            sessionUnavailable.set(true);
+            if (sessionWarned.compareAndSet(false, true)) {
+                AgentLog.warn("HTTP session id unavailable through WebLogic internals: " + t + "; recording null from now on");
+            }
+            return null;
+        }
+    }
+
     private static ClassLoader loader() {
         ClassLoader context = Thread.currentThread().getContextClassLoader();
         return context != null ? context : ClassLoader.getSystemClassLoader();

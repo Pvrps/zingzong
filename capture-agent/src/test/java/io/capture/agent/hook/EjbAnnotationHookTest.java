@@ -54,7 +54,7 @@ class EjbAnnotationHookTest {
         AgentLog.init(config.outDir);
         Recorder.configure(config);
         hook = new EjbAnnotationHook(instrumentation, config);
-        Recorder.hook(hook);
+        Recorder.hook(hook, "annotation");
     }
 
     @AfterAll
@@ -98,6 +98,40 @@ class EjbAnnotationHookTest {
         assertEquals("a", traces(first).get(0).spans.get(0).args.get(0).value.asText());
         assertEquals(1, traces(second).size());
         assertEquals("b", traces(second).get(0).spans.get(0).args.get(0).value.asText());
+
+        io.capture.trace.RecordingManifest manifest;
+        try (FileInputStream in = new FileInputStream(new File(new File(out, second.id), "recording.json"))) {
+            manifest = TraceJson.read(in, io.capture.trace.RecordingManifest.class);
+        }
+        assertEquals(second.id, manifest.id);
+        assertEquals("lifecycle-2", manifest.name);
+        assertTrue(manifest.startedAt != null && manifest.endedAt != null, "start and end time");
+        assertEquals(Long.valueOf(1), manifest.traceCount);
+        assertEquals(Long.valueOf(0), manifest.droppedTraces);
+        assertEquals("annotation", manifest.agent.hook);
+        assertFalse("unknown".equals(manifest.agent.version), "version comes from build.properties: " + manifest.agent.version);
+        assertNull(manifest.filters, "no filters unless given");
+    }
+
+    @Test
+    void principalFilterKeepsOtherTrafficOut() throws Exception {
+        // Outside WebLogic the principal resolves to null, so a filter for "weblogic" rejects every root span.
+        Recording filtered = Recorder.start("filtered", "weblogic", null);
+        new StatelessFixture().greet("ignored");
+        Recorder.stop();
+        Recording open = Recorder.start("open", null, null);
+        new StatelessFixture().greet("kept");
+        Recorder.stop();
+        assertTrue(Recorder.flush(5000));
+
+        assertEquals(0, traces(filtered).size());
+        assertEquals(1, traces(open).size());
+        io.capture.trace.RecordingManifest manifest;
+        try (FileInputStream in = new FileInputStream(new File(new File(out, filtered.id), "recording.json"))) {
+            manifest = TraceJson.read(in, io.capture.trace.RecordingManifest.class);
+        }
+        assertEquals("weblogic", manifest.filters.principal);
+        assertNull(manifest.filters.httpSessionId);
     }
 
     @Test
@@ -204,7 +238,7 @@ class EjbAnnotationHookTest {
     }
 
     private static List<Trace> traces(Recording recording) throws Exception {
-        File[] files = new File(out, recording.id).listFiles((d, name) -> name.endsWith(".json"));
+        File[] files = new File(out, recording.id).listFiles((d, name) -> name.matches("\\d{6}-t-.*\\.json"));
         assertTrue(files != null, "recording dir missing");
         Arrays.sort(files);
         List<Trace> traces = new ArrayList<>();

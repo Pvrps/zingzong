@@ -219,21 +219,25 @@ class AwkwardTypesTest {
     }
 
     @Test
-    void auditTrailBecomesPlaceholderWithWarning() throws Exception {
+    void nonSerializableAuditTrailIsCapturedAndFlaggedWithoutWarning() throws Exception {
         Order order = sampleOrder();
-        order.setStatus(OrderStatus.CONFIRMED);
+        order.setStatus(OrderStatus.CONFIRMED);   // records one audit entry
 
         Graphs.Result r = graphs.write(order);
         JsonNode audit = r.node.get("audit");
-        assertEquals(AuditTrail.class.getName(), audit.get("@unserializable").asText(), r.json());
-        assertTrue(audit.get("toString").asText().startsWith("AuditTrail[opened "), audit.toString());
-        assertTrue(r.hasWarning("$.audit", "not java.io.Serializable"), r.warnings());
-        assertEquals(1, r.warnings.size(), r.warnings());
-        assertEquals("CONFIRMED", r.node.get("status").asText());
+        assertEquals(AuditTrail.class.getName(), audit.get("@type").asText(), r.json());
+        assertFalse(audit.get("@serializable").asBoolean(), r.json());
+        assertEquals(1, audit.get("entryCount").asInt());
+        assertEquals(order.getAudit().getOpenedAt().toString(), audit.get("openedAt").asText());
+        assertTrue(audit.get("entries").asText().endsWith("status -> CONFIRMED\n"));
+        assertEquals("java.lang.Object", audit.get("lock").get("@type").asText(), "a bare monitor object is captured as an empty object");
+        assertTrue(r.warnings.isEmpty(), r.warnings());
+        assertFalse(r.node.has("@serializable"), "Order itself is Serializable");
 
         Order back = graphs.read(r.node, Order.class);
-        assertNotNull(back.getAudit(), "field initializer runs through the no-arg constructor");
         assertEquals(OrderStatus.CONFIRMED, back.getStatus());
+        assertEquals(1, back.getAudit().getEntryCount(), "rebuilt through the serialization constructor");
+        assertEquals(order.getAudit().getOpenedAt(), back.getAudit().getOpenedAt());
     }
 
     @Test

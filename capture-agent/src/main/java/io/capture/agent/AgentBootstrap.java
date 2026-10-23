@@ -14,6 +14,9 @@ import java.lang.instrument.Instrumentation;
  */
 public final class AgentBootstrap {
 
+    /** Flip when Phase 6 delivers WlsContainerHook. */
+    static final boolean CONTAINER_HOOK_AVAILABLE = false;
+
     private AgentBootstrap() {
     }
 
@@ -27,10 +30,17 @@ public final class AgentBootstrap {
         Recorder.configure(config);
         RecordingControl.register();
 
-        if (AgentConfig.HOOK_CONTAINER.equals(config.hook)) {
+        ServerDetection.Server server = ServerDetection.detect();
+        String hook = ServerDetection.chooseHook(config.hook, server, CONTAINER_HOOK_AVAILABLE);
+        AgentLog.info("server=" + server + " hook=" + hook
+                + (config.hook != null ? " (overridden)" : " (auto)")
+                + (server == ServerDetection.Server.WEBLOGIC && !CONTAINER_HOOK_AVAILABLE
+                        ? "; container hook not available until Phase 6" : ""));
+        if (AgentConfig.HOOK_CONTAINER.equals(hook)) {
             AgentLog.warn("hook=container is not implemented yet (Phase 6); using the annotation hook");
         }
-        EjbAnnotationHook.install(inst, config);
+        // Installed by Recorder.start and removed by Recorder.stop: no advice without a recording.
+        Recorder.hook(new EjbAnnotationHook(inst, config));
 
         if (config.enabled) {
             Recorder.start("startup");

@@ -8,6 +8,8 @@ final class Placeholders {
 
     static final String TYPE = "@type";
     static final String ID = "@id";
+    /** Present (false) on a captured object that is not java.io.Serializable: data kept, not T3-transportable. */
+    static final String SERIALIZABLE = "@serializable";
     static final String REF = "@ref";
     static final String LAZY = "@lazy";
     static final String LOADED = "loaded";

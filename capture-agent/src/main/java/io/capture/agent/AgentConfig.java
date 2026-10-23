@@ -13,13 +13,16 @@ import java.util.regex.Pattern;
  *   enabled=BOOL       start with a recording already active (default false)
  *   include=GLOB|GLOB  only instrument classes matching one of these (default: all)
  *   exclude=GLOB|GLOB  never instrument classes matching one of these
- *   hook=annotation|container   (default annotation)
  *   maxDepth=N         serializer nesting limit (default 12)
  *   maxElements=N      serializer per-collection limit (default 500)
  *   types=GLOB|GLOB    classes a deserializer may instantiate from "@type" (default: any application class)
  * </pre>
  * Globs match fully qualified class names; {@code *} matches any run of characters,
  * {@code ?} one character. Lists use {@code |} because {@code ,} separates arguments.
+ *
+ * None of these need setting for correct output; they exist for tests and diagnostics. The
+ * hook is chosen automatically (see {@link ServerDetection}); {@code hook=annotation|container}
+ * is an undocumented override for testing only.
  */
 public final class AgentConfig {
 
@@ -30,6 +33,7 @@ public final class AgentConfig {
     public final boolean enabled;
     public final List<Pattern> include;
     public final List<Pattern> exclude;
+    /** Null unless overridden: the hook is auto-detected. */
     public final String hook;
     public final int maxDepth;
     public final int maxElements;
@@ -52,7 +56,7 @@ public final class AgentConfig {
         boolean enabled = false;
         List<Pattern> include = Collections.emptyList();
         List<Pattern> exclude = Collections.emptyList();
-        String hook = HOOK_ANNOTATION;
+        String hook = null;
         int maxDepth = 12;
         int maxElements = 500;
         List<Pattern> types = Collections.emptyList();

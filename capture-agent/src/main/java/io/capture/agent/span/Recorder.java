@@ -3,15 +3,16 @@ package io.capture.agent.span;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.capture.agent.AgentConfig;
 import io.capture.agent.AgentLog;
+import io.capture.agent.hook.InstrumentationHook;
 import io.capture.agent.serialize.GraphSerializer;
 import io.capture.agent.serialize.JacksonGraphSerializer;
 import io.capture.agent.serialize.SerializationContext;
 import io.capture.agent.serialize.SerializerConfig;
 import io.capture.agent.serialize.TypeAllowList;
-import io.capture.trace.EjbInfo;
 import io.capture.trace.ExceptionInfo;
 import io.capture.trace.SerializationWarning;
 import io.capture.trace.Span;
+import io.capture.trace.Trace;
 import io.capture.trace.ValueCapture;
 
 import java.io.File;
@@ -23,9 +24,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * Static entry points called from inlined advice. Must be reachable from every application
  * class loader (the agent jar is on the bootstrap path) and must never throw.
  *
- * Phase 2: on method exit, serializes arguments and result (or exception) into a
- * {@link Span} and writes it, on the calling thread. Phase 3 adds the span tree and a
- * background writer.
+ * Enter pushes a span on the thread's {@link SpanStack}; exit serializes arguments and
+ * result (or exception) on the calling thread, pops, and when the stack empties hands the
+ * finished {@link Trace} to the {@link TraceWriter}'s queue.
  */
 public final class Recorder {
 
@@ -33,9 +34,16 @@ public final class Recorder {
     private static volatile AgentConfig config;
     private static volatile SerializerConfig serializerConfig = new SerializerConfig();
     private static volatile GraphSerializer serializer = new JacksonGraphSerializer(serializerConfig);
-    private static volatile SpanWriter writer;
+    private static volatile TraceWriter writer;
+    private static volatile TracePropagation propagation = TracePropagation.NONE;
+    private static volatile InstrumentationHook hook = InstrumentationHook.NONE;
 
     private Recorder() {
+    }
+
+    /** The hook to install while recording. */
+    public static void hook(InstrumentationHook instrumentationHook) {
+        hook = instrumentationHook;
     }
 
     public static void configure(AgentConfig agentConfig) {
@@ -45,7 +53,7 @@ public final class Recorder {
                 .withMaxElements(agentConfig.maxElements)
                 .withTypeAllowList(new TypeAllowList(agentConfig.types));
         serializer = new JacksonGraphSerializer(serializerConfig);
-        writer = new SpanWriter(agentConfig.outDir);
+        writer = new TraceWriter(agentConfig.outDir, TraceWriter.DEFAULT_CAPACITY);
     }
 
     public static AgentConfig config() {
@@ -64,41 +72,83 @@ public final class Recorder {
         return ACTIVE.get();
     }
 
-    public static Recording start(String name) {
+    public static long droppedTraces() {
+        TraceWriter w = writer;
+        return w == null ? 0L : w.dropped();
+    }
+
+    public static long writtenTraces() {
+        TraceWriter w = writer;
+        return w == null ? 0L : w.written();
+    }
+
+    public static int queuedTraces() {
+        TraceWriter w = writer;
+        return w == null ? 0 : w.queued();
+    }
+
+    /** Instruments the bean classes, then opens the recording window. */
+    public static synchronized Recording start(String name) {
         Recording recording = new Recording(name);
-        Recording previous = ACTIVE.getAndSet(recording);
-        if (previous != null) {
-            AgentLog.warn("recording " + previous.id + " replaced by " + recording.id);
-        }
         File dir = writer == null ? null : writer.recordingDir(recording);
         if (dir != null) {
             dir.mkdirs();
+        }
+        try {
+            hook.install();
+        } catch (Throwable t) {
+            AgentLog.error("hook installation failed; recording " + recording.id + " will see no calls", t);
+        }
+        Recording previous = ACTIVE.getAndSet(recording);
+        if (previous != null) {
+            AgentLog.warn("recording " + previous.id + " replaced by " + recording.id);
         }
         AgentLog.info("RECORDING START id=" + recording.id + " name=" + recording.name + " dir=" + dir);
         return recording;
     }
 
-    public static Recording stop() {
+    /** Closes the window, waits (bounded) for queued traces to reach disk, restores the bytecode. */
+    public static synchronized Recording stop() {
         Recording recording = ACTIVE.getAndSet(null);
         if (recording != null) {
+            TraceWriter w = writer;
+            boolean flushed = w == null || w.flush(5000);
             AgentLog.info("RECORDING STOP id=" + recording.id + " name=" + recording.name
-                    + " traces=" + recording.traceCount());
+                    + " traces=" + recording.traceCount() + " dropped=" + droppedTraces()
+                    + (flushed ? "" : " (writer still busy after 5s)"));
+            try {
+                hook.uninstall();
+            } catch (Throwable t) {
+                AgentLog.error("hook removal failed; advice stays in place until the next stop", t);
+            }
         }
         return recording;
     }
 
+    /** Waits for the writer queue to drain; for tests and the stop path. */
+    public static boolean flush(long timeoutMillis) {
+        TraceWriter w = writer;
+        return w == null || w.flush(timeoutMillis);
+    }
+
     /**
-     * Called on method entry. Returns a token for {@link #exit}: 0 when nothing is recorded,
-     * otherwise the entry time in nanoseconds (never 0).
+     * Called on method entry. Returns 0 when nothing is recorded, otherwise a non-zero token
+     * that {@link #exit} uses to find its span (the top of the thread's stack).
      */
     public static long enter(String beanClass, String method, String signature) {
-        if (ACTIVE.get() == null) {
+        Recording recording = ACTIVE.get();
+        if (recording == null) {
             return 0L;
         }
         try {
-            AgentLog.event("ENTER " + beanClass + "." + method + signature
-                    + " thread=\"" + Thread.currentThread().getName() + "\"");
+            SpanStack stack = SpanStack.current();
+            boolean root = stack.isEmpty();
             long now = System.nanoTime();
+            String transaction = WlsRuntime.transactionStatus();
+            stack.push(recording, beanClass, method, now, transaction, propagation);
+            if (root) {
+                stack.trace().principal(WlsRuntime.principal());
+            }
             return now == 0L ? 1L : now;
         } catch (Throwable t) {
             return 0L;
@@ -112,29 +162,28 @@ public final class Recorder {
             return;
         }
         try {
-            long durationNs = System.nanoTime() - token;
-            Recording recording = ACTIVE.get();
-            if (recording == null) {
+            SpanStack stack = SpanStack.current();
+            OpenSpan open = stack.top();
+            if (open == null || !open.beanClass.equals(beanClass) || !open.method.equals(method)) {
+                // Enter/exit mismatch (recording boundary crossed mid-trace): abandon this thread's state.
+                stack.reset();
                 return;
             }
-            Span span = buildSpan(self, beanClass, method, descriptor, args, result, thrown, durationNs);
-            File file = writer == null ? null : writer.write(recording, span, System.currentTimeMillis() - durationNs / 1000000L);
+            long durationNs = System.nanoTime() - open.enteredAtNanos;
+            Span span = open.toSpan(durationNs);
+            fill(span, self, beanClass, method, descriptor, args, result, thrown);
 
-            StringBuilder line = new StringBuilder(128)
-                    .append("EXIT  ").append(beanClass).append('.').append(method)
-                    .append(' ').append(durationNs / 1000 / 1000.0).append("ms");
-            if (thrown != null) {
-                line.append(" threw=").append(thrown.getClass().getName());
+            Recording recording = stack.trace().recording;
+            Trace finished = stack.pop(span, propagation);
+            if (finished != null) {
+                TraceWriter w = writer;
+                if (w != null) {
+                    w.offer(recording, finished);
+                }
             }
-            if (span.serializationWarnings != null) {
-                line.append(" warnings=").append(span.serializationWarnings.size());
-            }
-            if (file != null) {
-                line.append(" -> ").append(file.getName());
-            }
-            AgentLog.event(line.toString());
         } catch (Throwable t) {
             try {
+                SpanStack.current().reset();
                 AgentLog.error("exit handling failed for " + beanClass + "." + method, t);
             } catch (Throwable ignored) {
                 // never into the business call
@@ -142,22 +191,10 @@ public final class Recorder {
         }
     }
 
-    private static Span buildSpan(Object self, String beanClass, String method, String descriptor,
-                                  Object[] args, Object result, Throwable thrown, long durationNs) {
+    private static void fill(Span span, Object self, String beanClass, String method, String descriptor,
+                             Object[] args, Object result, Throwable thrown) {
         Class<?> bean = MethodSignatures.beanClass(self, beanClass);
         MethodSignatures.MethodInfo info = MethodSignatures.resolve(bean, method, descriptor);
-
-        Span span = new Span();
-        span.id = "s1";
-        span.depth = 0;
-        span.order = 0;
-        span.kind = Span.KIND_EJB;
-        span.thread = Thread.currentThread().getName();
-        span.startNs = 0;
-        span.durationNs = durationNs;
-        span.ejb = new EjbInfo();
-        span.ejb.beanClass = beanClass;
-        span.ejb.method = method;
         span.ejb.signature = info.signature;
 
         List<SerializationWarning> warnings = new ArrayList<SerializationWarning>();
@@ -178,7 +215,6 @@ public final class Recorder {
         if (!warnings.isEmpty()) {
             span.serializationWarnings = warnings;
         }
-        return span;
     }
 
     private static ValueCapture capture(Object value, Class<?> declaredType, String path, List<SerializationWarning> warnings) {

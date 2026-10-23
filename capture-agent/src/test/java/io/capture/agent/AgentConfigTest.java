@@ -6,6 +6,7 @@ import java.io.File;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,8 +16,17 @@ class AgentConfigTest {
     void defaultsWhenNoArguments() {
         AgentConfig config = AgentConfig.parse(null);
         assertFalse(config.enabled);
-        assertEquals(AgentConfig.HOOK_ANNOTATION, config.hook);
+        assertNull(config.hook, "hook is auto-detected unless overridden");
         assertTrue(config.accepts("com.acme.Anything"));
+    }
+
+    @Test
+    void hookIsChosenByServerUnlessOverridden() {
+        assertEquals(AgentConfig.HOOK_ANNOTATION, ServerDetection.chooseHook(null, ServerDetection.Server.UNKNOWN, true));
+        assertEquals(AgentConfig.HOOK_ANNOTATION, ServerDetection.chooseHook(null, ServerDetection.Server.WEBLOGIC, false));
+        assertEquals(AgentConfig.HOOK_CONTAINER, ServerDetection.chooseHook(null, ServerDetection.Server.WEBLOGIC, true));
+        assertEquals(AgentConfig.HOOK_ANNOTATION, ServerDetection.chooseHook("annotation", ServerDetection.Server.WEBLOGIC, true));
+        assertEquals(ServerDetection.Server.UNKNOWN, ServerDetection.detect(), "unit tests do not run inside WebLogic");
     }
 
     @Test

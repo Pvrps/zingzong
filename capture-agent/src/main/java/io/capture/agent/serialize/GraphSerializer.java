@@ -11,14 +11,17 @@ import java.lang.reflect.Type;
  * Conventions produced by {@link #serialize}:
  * <ul>
  *   <li>objects: {@code {"@type": "fqcn", field: value, ...}}, with {@code "@id"} on an
- *       object that is referenced again and {@code {"@ref": id}} at every later reference</li>
+ *       object that is referenced again and {@code {"@ref": id}} at every later reference;
+ *       {@code "@serializable": false} when the class is not java.io.Serializable (captured
+ *       anyway, but it could not cross a remote EJB boundary)</li>
  *   <li>scalars: numbers and booleans as JSON, strings, enums by name, {@code BigDecimal},
  *       {@code java.time} and {@code java.util.Date} as strings</li>
  *   <li>collections and arrays as JSON arrays; string-keyed maps as plain JSON objects,
  *       other maps as {@code {"@type": ..., "@entries": [{"key":..,"value":..}]}}</li>
  *   <li>{@code {"@lazy": true, "loaded": false}} for an un-instantiated lazy JPA value</li>
  *   <li>{@code {"@unserializable": "fqcn", "toString": "..."}} plus a warning for anything
- *       that could not or should not be serialized</li>
+ *       that failed, exceeded a limit, or is infrastructure (loggers, locks, executors,
+ *       streams, JDBC/JPA/JMS handles, container internals; see InfrastructureTypes)</li>
  * </ul>
  */
 public interface GraphSerializer {

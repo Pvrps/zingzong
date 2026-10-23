@@ -16,4 +16,11 @@ public interface RecordingControlMBean {
     String getRecordingName();
 
     long getTraceCount();
+
+    /** Traces discarded because the writer queue was full. Non-zero means data loss. */
+    long getDroppedTraces();
+
+    long getWrittenTraces();
+
+    int getQueuedTraces();
 }

@@ -26,8 +26,12 @@ import static net.bytebuddy.matcher.ElementMatchers.not;
  * by annotation <em>name</em> so the agent never links against javax.ejb. Container-generated
  * subclasses are not annotated and therefore not matched; the advice runs in the user's
  * class and reports it as the bean class.
+ *
+ * Installed only while a recording is active: {@link #install()} retransforms the matched
+ * classes that are already loaded and transforms later ones as they load; {@link #uninstall()}
+ * restores the original bytecode. With no recording, no advice exists in any class.
  */
-public final class EjbAnnotationHook {
+public final class EjbAnnotationHook implements InstrumentationHook {
 
     private static final String[] EJB_ANNOTATIONS = {
             "javax.ejb.Stateless",
@@ -43,10 +47,46 @@ public final class EjbAnnotationHook {
             "org.eclipse.persistence.", "org.glassfish.", "org.jboss.weld.",
     };
 
-    private EjbAnnotationHook() {
+    private final Instrumentation instrumentation;
+    private final AgentConfig config;
+    private final HookListener listener = new HookListener();
+    private ResettableClassFileTransformer transformer;
+
+    public EjbAnnotationHook(Instrumentation instrumentation, AgentConfig config) {
+        this.instrumentation = instrumentation;
+        this.config = config;
     }
 
-    public static ResettableClassFileTransformer install(Instrumentation inst, final AgentConfig config) {
+    @Override
+    public synchronized boolean isInstalled() {
+        return transformer != null;
+    }
+
+    @Override
+    public synchronized void install() {
+        if (transformer != null) {
+            return;
+        }
+        long start = System.nanoTime();
+        listener.resetCount();
+        transformer = builder().installOn(instrumentation);
+        AgentLog.info("annotation hook installed: " + listener.count() + " classes instrumented in "
+                + (System.nanoTime() - start) / 1000000L + "ms");
+    }
+
+    @Override
+    public synchronized void uninstall() {
+        if (transformer == null) {
+            return;
+        }
+        long start = System.nanoTime();
+        boolean reset = transformer.reset(instrumentation, AgentBuilder.RedefinitionStrategy.RETRANSFORMATION);
+        transformer = null;
+        AgentLog.info("annotation hook removed (" + (reset ? "bytecode restored" : "nothing to restore") + ") in "
+                + (System.nanoTime() - start) / 1000000L + "ms");
+    }
+
+    private AgentBuilder builder() {
         ElementMatcher.Junction<TypeDescription> ejbTypes = ElementMatchers.none();
         for (String annotation : EJB_ANNOTATIONS) {
             ejbTypes = ejbTypes.or(isAnnotatedWith(named(annotation)));
@@ -70,23 +110,19 @@ public final class EjbAnnotationHook {
                 .and(not(isSynthetic()))
                 .and(not(isBridge()));
 
-        ResettableClassFileTransformer transformer = new AgentBuilder.Default()
-                // No new fields or methods, so already-loaded classes can be retransformed.
+        return new AgentBuilder.Default()
+                // No new fields or methods, so loaded classes can be retransformed and restored.
                 .disableClassFormatChanges()
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
                 .with(AgentBuilder.InitializationStrategy.NoOp.INSTANCE)
                 .with(AgentBuilder.TypeStrategy.Default.REDEFINE)
-                .with(new HookListener())
+                .with(listener)
                 .ignore(ignored)
                 .type(ejbTypes.and(configured))
                 .transform(new AgentBuilder.Transformer.ForAdvice()
                         // The agent jar is on the system class path (-javaagent) and on the
                         // bootstrap path; locate the advice class file through the former.
                         .include(ClassLoader.getSystemClassLoader())
-                        .advice(businessMethods, EjbAdvice.class.getName()))
-                .installOn(inst);
-
-        AgentLog.info("annotation hook installed (" + EJB_ANNOTATIONS.length + " annotation names)");
-        return transformer;
+                        .advice(businessMethods, EjbAdvice.class.getName()));
     }
 }

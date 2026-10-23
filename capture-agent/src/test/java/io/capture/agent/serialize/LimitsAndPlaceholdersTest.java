@@ -97,27 +97,62 @@ class LimitsAndPlaceholdersTest {
         assertFalse(m.node.has("k3"));
     }
 
+    static class PlainData {
+        String label = "not serializable but plain data";
+        int count = 3;
+    }
+
+    static class WithInfrastructure implements Serializable {
+        private static final long serialVersionUID = 1L;
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.concurrent.locks.Lock lock = new java.util.concurrent.locks.ReentrantLock();
+        Thread thread = Thread.currentThread();
+        ClassLoader loader = getClass().getClassLoader();
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(new byte[0]);
+        PlainData data = new PlainData();
+    }
+
     @Test
-    void opaqueTypesBecomePlaceholders() {
+    void loggersBecomePlaceholdersByTypeHeuristic() {
         Graphs graphs = new Graphs();
         Graphs.Result r = graphs.write(new WithLogger());
         assertEquals("java.util.logging.Logger", r.node.get("logger").get("@unserializable").asText(), r.json());
         assertEquals("x", r.node.get("name").asText());
-        assertTrue(r.hasWarning("$.logger", "opaque type"), r.warnings());
+        assertTrue(r.hasWarning("$.logger", "infrastructure type"), r.warnings());
     }
 
     @Test
-    void nonSerializableApplicationObjectsBecomePlaceholdersUnlessAllowed() {
+    void infrastructureTypesBecomePlaceholdersAndNonSerializableDataIsCapturedFlagged() throws Exception {
+        WithInfrastructure value = new WithInfrastructure();
+        try {
+            Graphs.Result r = new Graphs().write(value);
+            for (String field : new String[]{"executor", "lock", "thread", "loader", "stream"}) {
+                assertTrue(r.node.get(field).has("@unserializable"), field + ": " + r.json());
+                assertTrue(r.hasWarning("$." + field, "infrastructure type"), r.warnings());
+            }
+            JsonNode data = r.node.get("data");
+            assertEquals(PlainData.class.getName(), data.get("@type").asText(), r.json());
+            assertFalse(data.get("@serializable").asBoolean());
+            assertEquals("not serializable but plain data", data.get("label").asText());
+            assertEquals(3, data.get("count").asInt());
+            assertEquals(5, r.warnings.size(), r.warnings());
+
+            WithInfrastructure back = new Graphs().read(r.node, WithInfrastructure.class);
+            assertEquals(3, back.data.count);
+            assertNotNull(back.executor, "placeholder keeps the constructor default");
+        } finally {
+            value.executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void vendorInternalsBecomePlaceholdersByPackage() {
         Holder holder = new Holder();
-        holder.payload = new Object();
-
-        Graphs.Result strict = new Graphs().write(holder);
-        assertEquals("java.lang.Object", strict.node.get("payload").get("@unserializable").asText(), strict.json());
-        assertTrue(strict.hasWarning("$.payload", "not java.io.Serializable"));
-
-        Graphs.Result lenient = new Graphs(new SerializerConfig().withRequireSerializable(false)).write(holder);
-        assertEquals("java.lang.Object", lenient.node.get("payload").get("@type").asText(), lenient.json());
-        assertTrue(lenient.warnings.isEmpty(), lenient.warnings());
+        holder.payload = new org.eclipse.persistence.internal.helper.DatabaseField("X");
+        Graphs.Result r = new Graphs().write(holder);
+        assertEquals("org.eclipse.persistence.internal.helper.DatabaseField",
+                r.node.get("payload").get("@unserializable").asText(), r.json());
+        assertTrue(r.hasWarning("$.payload", "infrastructure type"), r.warnings());
     }
 
     @Test

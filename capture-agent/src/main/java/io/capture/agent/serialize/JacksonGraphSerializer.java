@@ -101,8 +101,8 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             }
         }
 
-        if (info.opaque) {
-            ctx.warn("opaque type", info.type.getName());
+        if (info.infrastructure) {
+            ctx.warn("infrastructure type, not captured", info.type.getName());
             return Placeholders.unserializable(value, identity(value));
         }
 
@@ -143,16 +143,16 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         if (value instanceof Map) {
             return writeMap((Map<?, ?>) value, info, ctx);
         }
-        if (config.requireSerializable && !info.serializable) {
-            ctx.warn("not java.io.Serializable", info.type.getName());
-            return Placeholders.unserializable(value, safeToString(value, info));
-        }
         return writeObject(value, info, ctx);
     }
 
     private ObjectNode writeObject(Object value, TypeInfo info, SerializationContext ctx) {
         ObjectNode node = NODES.objectNode();
         node.put(Placeholders.TYPE, info.type.getName());
+        if (!info.serializable) {
+            // Captured all the same; the exporter and replay need to know it cannot cross T3.
+            node.put(Placeholders.SERIALIZABLE, false);
+        }
         SerializationContext.Tracked tracked = ctx.track(value, node);
         ctx.enter();
         try {

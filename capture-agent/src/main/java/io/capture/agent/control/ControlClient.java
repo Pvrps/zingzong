@@ -42,15 +42,20 @@ public final class ControlClient {
                 System.out.println("recording started: " + id + " (" + name + ")");
             } else if (command.equals("stop")) {
                 Object id = server.invoke(control, "stop", new Object[0], new String[0]);
-                System.out.println(id == null ? "no recording was active" : "recording stopped: " + id);
+                System.out.println(id == null ? "no recording was active" : "recording stopped: " + id
+                        + " written=" + server.getAttribute(control, "WrittenTraces")
+                        + " dropped=" + server.getAttribute(control, "DroppedTraces"));
             } else if (command.equals("status")) {
                 boolean enabled = (Boolean) server.getAttribute(control, "Enabled");
+                String counters = " written=" + server.getAttribute(control, "WrittenTraces")
+                        + " queued=" + server.getAttribute(control, "QueuedTraces")
+                        + " dropped=" + server.getAttribute(control, "DroppedTraces");
                 if (enabled) {
                     System.out.println("recording ON: " + server.getAttribute(control, "RecordingId")
                             + " (" + server.getAttribute(control, "RecordingName") + "), traces="
-                            + server.getAttribute(control, "TraceCount"));
+                            + server.getAttribute(control, "TraceCount") + counters);
                 } else {
-                    System.out.println("recording off");
+                    System.out.println("recording off" + counters);
                 }
             } else {
                 System.err.println("unknown command: " + command);

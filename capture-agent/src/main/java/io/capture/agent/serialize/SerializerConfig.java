@@ -1,6 +1,9 @@
 package io.capture.agent.serialize;
 
-/** Limits and policies. Immutable; build with the fluent {@code with*} methods. */
+/**
+ * Limits. Immutable; build with the fluent {@code with*} methods. The defaults are the
+ * product: nothing here needs setting per application.
+ */
 public final class SerializerConfig {
 
     public static final int DEFAULT_MAX_DEPTH = 12;
@@ -14,49 +17,37 @@ public final class SerializerConfig {
     public final int maxElements;
     public final int maxStringLength;
     public final int maxBytes;
-    /**
-     * Application objects that are not {@link java.io.Serializable} become placeholders.
-     * They could not cross an EJB remote boundary either, and this rule is what keeps
-     * loggers, locks, sessions and data sources out of the capture.
-     */
-    public final boolean requireSerializable;
     public final TypeAllowList typeAllowList;
 
     public SerializerConfig() {
-        this(DEFAULT_MAX_DEPTH, DEFAULT_MAX_ELEMENTS, DEFAULT_MAX_STRING_LENGTH, DEFAULT_MAX_BYTES, true, TypeAllowList.allowAll());
+        this(DEFAULT_MAX_DEPTH, DEFAULT_MAX_ELEMENTS, DEFAULT_MAX_STRING_LENGTH, DEFAULT_MAX_BYTES, TypeAllowList.allowAll());
     }
 
-    private SerializerConfig(int maxDepth, int maxElements, int maxStringLength, int maxBytes,
-                             boolean requireSerializable, TypeAllowList typeAllowList) {
+    private SerializerConfig(int maxDepth, int maxElements, int maxStringLength, int maxBytes, TypeAllowList typeAllowList) {
         this.maxDepth = maxDepth;
         this.maxElements = maxElements;
         this.maxStringLength = maxStringLength;
         this.maxBytes = maxBytes;
-        this.requireSerializable = requireSerializable;
         this.typeAllowList = typeAllowList;
     }
 
     public SerializerConfig withMaxDepth(int value) {
-        return new SerializerConfig(value, maxElements, maxStringLength, maxBytes, requireSerializable, typeAllowList);
+        return new SerializerConfig(value, maxElements, maxStringLength, maxBytes, typeAllowList);
     }
 
     public SerializerConfig withMaxElements(int value) {
-        return new SerializerConfig(maxDepth, value, maxStringLength, maxBytes, requireSerializable, typeAllowList);
+        return new SerializerConfig(maxDepth, value, maxStringLength, maxBytes, typeAllowList);
     }
 
     public SerializerConfig withMaxStringLength(int value) {
-        return new SerializerConfig(maxDepth, maxElements, value, maxBytes, requireSerializable, typeAllowList);
+        return new SerializerConfig(maxDepth, maxElements, value, maxBytes, typeAllowList);
     }
 
     public SerializerConfig withMaxBytes(int value) {
-        return new SerializerConfig(maxDepth, maxElements, maxStringLength, value, requireSerializable, typeAllowList);
-    }
-
-    public SerializerConfig withRequireSerializable(boolean value) {
-        return new SerializerConfig(maxDepth, maxElements, maxStringLength, maxBytes, value, typeAllowList);
+        return new SerializerConfig(maxDepth, maxElements, maxStringLength, value, typeAllowList);
     }
 
     public SerializerConfig withTypeAllowList(TypeAllowList value) {
-        return new SerializerConfig(maxDepth, maxElements, maxStringLength, maxBytes, requireSerializable, value);
+        return new SerializerConfig(maxDepth, maxElements, maxStringLength, maxBytes, value);
     }
 }

@@ -6,12 +6,17 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.utility.JavaModule;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 /** Writes transformations and errors to agent.log, never to stdout. */
 final class HookListener extends AgentBuilder.Listener.Adapter {
+
+    private final AtomicInteger count = new AtomicInteger();
 
     @Override
     public void onTransformation(TypeDescription typeDescription, ClassLoader classLoader, JavaModule module,
                                  boolean loaded, DynamicType dynamicType) {
+        count.incrementAndGet();
         AgentLog.info("instrumented " + typeDescription.getName()
                 + (loaded ? " (retransformed)" : "")
                 + " loader=" + describe(classLoader));
@@ -20,6 +25,14 @@ final class HookListener extends AgentBuilder.Listener.Adapter {
     @Override
     public void onError(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded, Throwable throwable) {
         AgentLog.error("failed to instrument " + typeName + " loader=" + describe(classLoader), throwable);
+    }
+
+    int count() {
+        return count.get();
+    }
+
+    void resetCount() {
+        count.set(0);
     }
 
     private static String describe(ClassLoader classLoader) {

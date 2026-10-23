@@ -24,8 +24,9 @@ public class InventoryServiceBean implements InventoryService {
     private final Map<String, Integer> stock = new ConcurrentHashMap<>();
 
     public InventoryServiceBean() {
-        stock.put("WIDGET-1", 1000);
-        stock.put("GADGET-2", 500);
+        // Plenty for load tests; GIZMO-3 stays scarce so InsufficientStockException is reachable.
+        stock.put("WIDGET-1", 1_000_000);
+        stock.put("GADGET-2", 1_000_000);
         stock.put("GIZMO-3", 5);
     }
 

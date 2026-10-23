@@ -15,7 +15,7 @@ import java.util.Set;
 
 /**
  * What the serializer needs to know about a class: its instance fields, whether it is a
- * JPA entity, opaque, serializable, or one of the known lazy wrappers.
+ * JPA entity, infrastructure, serializable, or one of the known lazy wrappers.
  *
  * Cached through {@link ClassValue}, i.e. keyed by the {@link Class} object itself. Two
  * loaders defining the same class name get two entries, and an entry is unloaded together
@@ -38,30 +38,16 @@ final class TypeInfo {
     private static final String ECLIPSELINK_FIELD_PREFIX = "_persistence_";
     private static final String ECLIPSELINK_HOLDER_SUFFIX = "_vh";
 
-    /** Types whose contents are never useful in a capture. Matched against the whole hierarchy. */
-    private static final String[] OPAQUE_TYPE_NAMES = {
-            "java.lang.Class", "java.lang.ClassLoader", "java.lang.Thread", "java.lang.ThreadGroup",
-            "java.lang.reflect.Method", "java.lang.reflect.Field", "java.lang.reflect.Constructor",
-            "java.util.logging.Logger", "org.slf4j.Logger", "org.apache.logging.log4j.Logger", "org.apache.log4j.Logger",
-            "javax.sql.DataSource", "java.sql.Connection", "java.sql.Statement", "java.sql.ResultSet",
-            "javax.persistence.EntityManager", "javax.persistence.EntityManagerFactory", "javax.persistence.Query",
-            "javax.naming.Context", "javax.ejb.EJBContext", "javax.ejb.SessionContext", "javax.ejb.MessageDrivenContext",
-            "javax.transaction.UserTransaction", "javax.transaction.TransactionManager",
-            "javax.servlet.ServletRequest", "javax.servlet.ServletResponse", "javax.servlet.http.HttpSession",
-            "javax.servlet.ServletContext",
-            "java.io.InputStream", "java.io.OutputStream", "java.io.Reader", "java.io.Writer",
-            "java.util.concurrent.Executor", "java.util.concurrent.locks.Lock", "java.util.concurrent.Future",
-            "java.nio.channels.Channel", "java.net.Socket", "java.net.ServerSocket",
-    };
-
     enum LazyKind { NONE, ECLIPSELINK_CONTAINER, ECLIPSELINK_VALUE_HOLDER, HIBERNATE_COLLECTION, HIBERNATE_PROXY }
 
     final Class<?> type;
     final List<FieldInfo> fields;
     final Map<String, FieldInfo> fieldsByName;
+    /** Transport concern only: captured either way, flagged with "@serializable": false when not. */
     final boolean serializable;
     final boolean entity;
-    final boolean opaque;
+    /** Plumbing rather than data; see {@link InfrastructureTypes}. */
+    final boolean infrastructure;
     final LazyKind lazyKind;
     /** isInstantiated() / wasInitialized() / getHibernateLazyInitializer(), per kind. */
     final Method lazyStateMethod;
@@ -77,7 +63,7 @@ final class TypeInfo {
         Set<Class<?>> hierarchy = hierarchyOf(type);
         this.serializable = Serializable.class.isAssignableFrom(type);
         this.entity = hasAnnotationNamed(type, "javax.persistence.Entity") || hasAnnotationNamed(type, "jakarta.persistence.Entity");
-        this.opaque = matchesAny(hierarchy, OPAQUE_TYPE_NAMES);
+        this.infrastructure = InfrastructureTypes.isInfrastructure(type, hierarchy);
 
         Class<?> lazyInterface;
         if ((lazyInterface = find(hierarchy, ECLIPSELINK_CONTAINER)) != null) {
@@ -182,18 +168,6 @@ final class TypeInfo {
             }
         }
         return null;
-    }
-
-    private static boolean matchesAny(Set<Class<?>> hierarchy, String[] names) {
-        for (Class<?> c : hierarchy) {
-            String n = c.getName();
-            for (String name : names) {
-                if (n.equals(name)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private static boolean hasAnnotationNamed(Class<?> type, String name) {

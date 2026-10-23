@@ -14,6 +14,7 @@ Full plan: docs/PLAN.md. Work phase by phase; each phase has an acceptance check
 - WebLogic loads every application class in more than one loader (analysis loader, app loader, again on redeploy). Any per-type cache (field lists, method lookups, resolved `@type` classes, bean descriptors) is keyed by the `Class` object (`ClassValue`) or by name + `ClassLoader`, never by class name alone, and must not pin a loader: no strong `Class` references held outside the class's own reachability graph. Resolve classes through the loader of the object at hand, never the agent's.
 - `trace-model` depends on Jackson only. Everything reads it; the exporter is a thin mapping over it.
 - Applications are never modified. Only the domain start script changes.
+- The agent requires no per-application, per-model or per-type configuration. The only user actions are `capture-start` and `capture-stop`. Everything else (which hook, what is infrastructure vs. data, limits) is auto-detected or decided by a built-in heuristic with sane defaults. Agent arguments exist for tests and diagnostics, never as something a user must set to get correct output.
 
 ## Environment (NixOS)
 - Everything runs inside `devenv shell`; no containers.

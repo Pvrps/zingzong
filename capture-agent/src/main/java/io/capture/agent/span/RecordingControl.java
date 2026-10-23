@@ -57,4 +57,19 @@ public final class RecordingControl implements RecordingControlMBean {
         Recording recording = Recorder.active();
         return recording == null ? 0L : recording.traceCount();
     }
+
+    @Override
+    public long getDroppedTraces() {
+        return Recorder.droppedTraces();
+    }
+
+    @Override
+    public long getWrittenTraces() {
+        return Recorder.writtenTraces();
+    }
+
+    @Override
+    public int getQueuedTraces() {
+        return Recorder.queuedTraces();
+    }
 }

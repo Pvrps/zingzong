@@ -90,5 +90,6 @@ in
     wls-deploy.exec = ''bash "$DEVENV_ROOT/scripts/wls-deploy.sh" "$@"'';
     capture-start.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" start "$@"'';
     capture-stop.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" stop "$@"'';
+    capture-status.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" status "$@"'';
   };
 }

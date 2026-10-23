@@ -19,6 +19,8 @@
     Phase 7: trace-tools/*, replay-check
   -->
   <modules>
+    <module>trace-model</module>
+    <module>capture-agent</module>
     <module>sample-apps</module>
   </modules>
 
@@ -26,7 +28,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-    <!-- Server, sample apps and tooling. capture-agent overrides this with 8. -->
+    <!-- Server, sample apps and tooling. capture-agent and trace-model (shaded into it) override this with 8. -->
     <maven.compiler.release>21</maven.compiler.release>
     <agent.compiler.release>8</agent.compiler.release>
 
@@ -72,6 +74,11 @@
       <dependency>
         <groupId>net.bytebuddy</groupId>
         <artifactId>byte-buddy</artifactId>
+        <version>${bytebuddy.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy-agent</artifactId>
         <version>${bytebuddy.version}</version>
       </dependency>
       <dependency>

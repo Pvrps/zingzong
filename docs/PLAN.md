@@ -246,6 +246,15 @@ Done when the agent loads into WebLogic and logs one line per EJB method call, w
 
 **Acceptance**: with the agent on and `capture-start`, clicking **Create order** logs `OrderServiceBean.createOrder`, `InventoryServiceBean.reserve`, `PricingServiceBean.price`, and `TaxServiceBean.computeTax` in that order. With the agent on and recording off, nothing is logged and response times are unchanged.
 
+**Status (Oct 23 2026): done.** Notes for the next phases:
+
+- `trace-model` is compiled with `--release 8` as well, since the agent shades it. Its classes are plain public-field records; `TraceJson` is the shared mapper (public fields only, nulls omitted, unknown fields tolerated). The JSON key `interface` maps to `EjbInfo.interfaceName`.
+- `Agent` (system loader) only touches `AgentBootstrap` (bootstrap loader, public) after `appendToBootstrapClassLoaderSearch`; everything else resolves through the bootstrap loader, so advice inlined into application classes and the agent share one `Recorder`.
+- The hook ignores `io.capture.*`, so test fixtures live in `com.acme.fixtures`. `ForAdvice` locates the advice class through the system class loader.
+- `capture.sh` uses `jcmd PID ManagementAgent.start_local` + `ManagementAgent.status` to get a same-user local JMX URL; no JMX flags on the server. `capture-status` was added next to start/stop.
+- WebLogic loads each bean class twice (an analysis loader, then the application loader), so `agent.log` shows two `instrumented` lines per bean. Self-invocations (`confirmOrder → findOrder`, `price → unitPrice`) are logged as plain entries; Phase 3 marks them.
+- Observed overhead with recording off: none measurable (6–10 ms per REST call before and after).
+
 **Gotchas to expect**
 
 - WebLogic's generated EJB wrappers and `_Impl` classes will match some patterns; the annotation matcher avoids them, but `beanClass` should always be the user's class, not a subclass.

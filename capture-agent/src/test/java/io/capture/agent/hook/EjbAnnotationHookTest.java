@@ -88,6 +88,26 @@ class EjbAnnotationHookTest {
     }
 
     @Test
+    void writesOneTraceFilePerSpanWithArgsAndResult() throws Exception {
+        io.capture.agent.span.Recording recording = Recorder.start("files");
+        new StatelessFixture().greet("world");
+
+        File dir = new File(out, recording.id);
+        File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
+        assertTrue(files != null && files.length >= 1, "expected a trace file in " + dir);
+        io.capture.trace.Trace trace = io.capture.trace.TraceJson.read(new java.io.FileInputStream(files[files.length - 1]));
+        io.capture.trace.Span span = trace.spans.get(0);
+        assertEquals("EJB", span.kind);
+        assertEquals(StatelessFixture.class.getName(), span.ejb.beanClass);
+        assertEquals("greet", span.ejb.method);
+        assertEquals("java.lang.String greet(java.lang.String)", span.ejb.signature);
+        assertEquals("world", span.args.get(0).value.asText());
+        assertEquals("java.lang.String", span.args.get(0).declaredType);
+        assertEquals("hello world", span.result.value.asText());
+        assertEquals(recording.id, trace.recording.id);
+    }
+
+    @Test
     void exceptionsPassThroughAndAreNoted() throws Exception {
         Recorder.start("test");
         int before = eventLines().size();

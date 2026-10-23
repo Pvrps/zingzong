@@ -38,6 +38,8 @@
     <jackson.version>2.19.0</jackson.version>
     <junit.version>5.12.2</junit.version>
     <h2.version>2.3.232</h2.version>
+    <!-- Same EclipseLink as bundled with WebLogic 14.1.2; test scope only, for lazy-collection fixtures. -->
+    <eclipselink.version>2.7.15</eclipselink.version>
 
     <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
@@ -85,6 +87,11 @@
         <groupId>com.h2database</groupId>
         <artifactId>h2</artifactId>
         <version>${h2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.persistence</groupId>
+        <artifactId>eclipselink</artifactId>
+        <version>${eclipselink.version}</version>
       </dependency>
 
       <!-- In-repo modules -->

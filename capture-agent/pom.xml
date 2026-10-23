@@ -46,6 +46,18 @@
       <artifactId>javaee-api</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Test scope only: the awkward types are the serializer's fixtures. -->
+    <dependency>
+      <groupId>io.capture.samples</groupId>
+      <artifactId>common-dto</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Test scope only: real IndirectList/ValueHolder for the lazy-detection tests. -->
+    <dependency>
+      <groupId>org.eclipse.persistence</groupId>
+      <artifactId>eclipselink</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

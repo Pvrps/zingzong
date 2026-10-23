@@ -14,6 +14,9 @@ import java.util.regex.Pattern;
  *   include=GLOB|GLOB  only instrument classes matching one of these (default: all)
  *   exclude=GLOB|GLOB  never instrument classes matching one of these
  *   hook=annotation|container   (default annotation)
+ *   maxDepth=N         serializer nesting limit (default 12)
+ *   maxElements=N      serializer per-collection limit (default 500)
+ *   types=GLOB|GLOB    classes a deserializer may instantiate from "@type" (default: any application class)
  * </pre>
  * Globs match fully qualified class names; {@code *} matches any run of characters,
  * {@code ?} one character. Lists use {@code |} because {@code ,} separates arguments.
@@ -28,13 +31,20 @@ public final class AgentConfig {
     public final List<Pattern> include;
     public final List<Pattern> exclude;
     public final String hook;
+    public final int maxDepth;
+    public final int maxElements;
+    public final List<Pattern> types;
 
-    private AgentConfig(File outDir, boolean enabled, List<Pattern> include, List<Pattern> exclude, String hook) {
+    private AgentConfig(File outDir, boolean enabled, List<Pattern> include, List<Pattern> exclude, String hook,
+                        int maxDepth, int maxElements, List<Pattern> types) {
         this.outDir = outDir;
         this.enabled = enabled;
         this.include = include;
         this.exclude = exclude;
         this.hook = hook;
+        this.maxDepth = maxDepth;
+        this.maxElements = maxElements;
+        this.types = types;
     }
 
     public static AgentConfig parse(String args) {
@@ -43,6 +53,9 @@ public final class AgentConfig {
         List<Pattern> include = Collections.emptyList();
         List<Pattern> exclude = Collections.emptyList();
         String hook = HOOK_ANNOTATION;
+        int maxDepth = 12;
+        int maxElements = 500;
+        List<Pattern> types = Collections.emptyList();
 
         if (args != null) {
             for (String pair : args.split(",")) {
@@ -66,12 +79,18 @@ public final class AgentConfig {
                         throw new IllegalArgumentException("hook must be annotation or container, got: " + value);
                     }
                     hook = value;
+                } else if (key.equals("maxDepth")) {
+                    maxDepth = Integer.parseInt(value);
+                } else if (key.equals("maxElements")) {
+                    maxElements = Integer.parseInt(value);
+                } else if (key.equals("types")) {
+                    types = globs(value);
                 } else {
                     throw new IllegalArgumentException("unknown agent argument: " + key);
                 }
             }
         }
-        return new AgentConfig(outDir, enabled, include, exclude, hook);
+        return new AgentConfig(outDir, enabled, include, exclude, hook, maxDepth, maxElements, types);
     }
 
     /** True when the class name passes the include list (if any) and no exclude matches. */
@@ -91,7 +110,7 @@ public final class AgentConfig {
         return false;
     }
 
-    static List<Pattern> globs(String list) {
+    public static List<Pattern> globs(String list) {
         List<Pattern> patterns = new ArrayList<Pattern>();
         for (String glob : list.split("\\|")) {
             String g = glob.trim();
@@ -120,6 +139,7 @@ public final class AgentConfig {
     @Override
     public String toString() {
         return "out=" + outDir + ", enabled=" + enabled + ", include=" + include
-                + ", exclude=" + exclude + ", hook=" + hook;
+                + ", exclude=" + exclude + ", hook=" + hook + ", maxDepth=" + maxDepth
+                + ", maxElements=" + maxElements + ", types=" + types;
     }
 }

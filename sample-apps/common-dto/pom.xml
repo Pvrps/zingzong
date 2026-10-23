@@ -14,4 +14,10 @@
   <packaging>jar</packaging>
   <name>common-dto</name>
   <description>DTOs and JPA entities shared by the sample applications. Deliberately awkward types.</description>
+
+  <properties>
+    <!-- Release 8: capture-agent's tests (release 8) use these types as fixtures, and the
+         12.2.1 / JDK 8 production servers run the same DTOs. -->
+    <maven.compiler.release>${agent.compiler.release}</maven.compiler.release>
+  </properties>
 </project>

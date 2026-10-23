@@ -17,6 +17,7 @@ public class CreateOrderRequest implements Serializable {
     private Map<String, String> attributes = new LinkedHashMap<>();
     private LocalDate requestedDeliveryDate;
     private Instant requestedAt;
+    private PaymentMethod paymentMethod;
 
     public Customer getCustomer() {
         return customer;
@@ -56,5 +57,13 @@ public class CreateOrderRequest implements Serializable {
 
     public void setRequestedAt(Instant requestedAt) {
         this.requestedAt = requestedAt;
+    }
+
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(PaymentMethod paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 }

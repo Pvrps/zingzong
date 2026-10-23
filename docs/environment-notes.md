@@ -50,6 +50,10 @@ set; `lib.sh` exports `JAVA_VENDOR=Oracle` (plain HotSpot settings).
 - `REST → OrderService.createOrder → InventoryService.reserve → PricingService.price →
   TaxService.computeTax` shows up as consecutive `INFO:` lines in
   `.local/logs/wls-start.out`; that is the Phase 0 smoke test.
+- T3 clients (Phase 7 `replay-check`): 14.1.2 rejects anonymous remote RMI
+  (`BEA-000582`), so pass `Context.SECURITY_PRINCIPAL`/`SECURITY_CREDENTIALS`. A client
+  that receives JPA entities needs `$ORACLE_HOME/oracle_common/modules/oracle.toplink/eclipselink.jar`
+  for `IndirectList`, next to `wlthint3client.jar`, `common-dto` and `orders-api`.
 
 ## Domain
 

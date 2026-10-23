@@ -1,12 +1,15 @@
 package com.acme.orders.web;
 
 import com.acme.common.dto.Address;
+import com.acme.common.dto.CardPayment;
 import com.acme.common.dto.ConfirmRequest;
 import com.acme.common.dto.ConfirmResult;
 import com.acme.common.dto.CreateOrderRequest;
 import com.acme.common.dto.Customer;
+import com.acme.common.dto.InvoicePayment;
 import com.acme.common.dto.LoyaltyTier;
 import com.acme.common.dto.OrderLineRequest;
+import com.acme.common.dto.PaymentMethod;
 import com.acme.common.model.Order;
 
 import javax.json.Json;
@@ -19,8 +22,8 @@ import javax.json.JsonValue;
 import java.io.StringReader;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.Date;
-import java.util.Map;
 
 /** JSON-P mapping between the REST payloads and the EJB DTOs. Only JSON-P 1.0 APIs. */
 final class OrderJson {
@@ -33,6 +36,9 @@ final class OrderJson {
         CreateOrderRequest request = new CreateOrderRequest();
         request.setRequestedAt(Instant.now());
         request.setCustomer(toCustomer(json.getJsonObject("customer")));
+        if (json.containsKey("paymentMethod") && !json.isNull("paymentMethod")) {
+            request.setPaymentMethod(toPaymentMethod(json.getJsonObject("paymentMethod")));
+        }
         if (json.containsKey("deliveryDate") && !json.isNull("deliveryDate")) {
             request.setRequestedDeliveryDate(LocalDate.parse(json.getString("deliveryDate")));
         }
@@ -75,6 +81,9 @@ final class OrderJson {
         if (order.getDeliveryDate() != null) {
             builder.add("deliveryDate", order.getDeliveryDate().toString());
         }
+        if (order.getPaymentSummary() != null) {
+            builder.add("paymentSummary", order.getPaymentSummary());
+        }
         return builder.build().toString();
     }
 
@@ -111,6 +120,19 @@ final class OrderJson {
                         address.getString("region", null),
                         address.getString("postalCode", null),
                         address.getString("country", null)));
+    }
+
+    /** {"type":"CARD","lastFour":"4242","expiry":"2028-06"} or {"type":"INVOICE","purchaseOrder":"PO-1","netDays":30}. */
+    private static PaymentMethod toPaymentMethod(JsonObject json) {
+        String type = json.getString("type");
+        switch (type) {
+            case "CARD":
+                return new CardPayment(json.getString("lastFour"), YearMonth.parse(json.getString("expiry")));
+            case "INVOICE":
+                return new InvoicePayment(json.getString("purchaseOrder"), json.getInt("netDays", 30));
+            default:
+                throw new IllegalArgumentException("Unknown paymentMethod.type: " + type);
+        }
     }
 
     private static JsonObject parse(String body) {

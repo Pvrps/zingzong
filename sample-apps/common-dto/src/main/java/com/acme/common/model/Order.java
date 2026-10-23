@@ -12,6 +12,10 @@ import javax.persistence.Id;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Transient;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamField;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -58,14 +62,48 @@ public class Order implements Serializable {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal total;
 
+    @Column(name = "PAYMENT_SUMMARY")
+    private String paymentSummary;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<OrderLine> lines = new ArrayList<>();
 
-    /** Not persisted, not Serializable; see {@link AuditTrail}. */
+    /**
+     * Not persisted (@Transient) and not Serializable, but deliberately not a Java
+     * {@code transient} field: reflection-based serializers must see it. Java
+     * serialization is handled explicitly below so remote EJB calls still work.
+     */
     @Transient
-    private transient AuditTrail audit = new AuditTrail(Instant.now());
+    private AuditTrail audit = new AuditTrail(Instant.now());
+
+    private static final ObjectStreamField[] serialPersistentFields = {
+            new ObjectStreamField("id", Long.class),
+            new ObjectStreamField("customerName", String.class),
+            new ObjectStreamField("customerEmail", String.class),
+            new ObjectStreamField("status", OrderStatus.class),
+            new ObjectStreamField("createdAt", LocalDateTime.class),
+            new ObjectStreamField("deliveryDate", LocalDate.class),
+            new ObjectStreamField("currency", String.class),
+            new ObjectStreamField("subtotal", BigDecimal.class),
+            new ObjectStreamField("tax", BigDecimal.class),
+            new ObjectStreamField("total", BigDecimal.class),
+            new ObjectStreamField("paymentSummary", String.class),
+            new ObjectStreamField("lines", List.class),
+    };
 
     public Order() {
+    }
+
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        out.defaultWriteObject();
+        out.writeObject(audit == null ? null : audit.getOpenedAt());
+    }
+
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        Instant openedAt = (Instant) in.readObject();
+        audit = new AuditTrail(openedAt == null ? Instant.now() : openedAt);
+        audit.record("deserialized");
     }
 
     public Long getId() {
@@ -145,6 +183,14 @@ public class Order implements Serializable {
 
     public void setTotal(BigDecimal total) {
         this.total = total;
+    }
+
+    public String getPaymentSummary() {
+        return paymentSummary;
+    }
+
+    public void setPaymentSummary(String paymentSummary) {
+        this.paymentSummary = paymentSummary;
     }
 
     /** Lazy; touching this outside a transaction triggers a load. */

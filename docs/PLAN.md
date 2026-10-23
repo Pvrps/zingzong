@@ -142,6 +142,11 @@ ejb-capture/
 
 **Sample apps**: the primary chain is **button → REST → EJB A → EJB B**. A static `index.html` in `orders-web` calls `OrdersResource` (JAX-RS) with `fetch`; the resource injects `OrderService` (EJB A) with `@EJB`; `OrderService` calls `PricingService` and `InventoryService` (EJB B, local). A second EAR, `tax-ear`, adds an optional third hop: `PricingService` looks up `TaxService` remotely by JNDI. It is written as if by another team and exists to exercise remote invocation and T3 replay. DTOs include nested objects, lists and maps, enums, `java.time` and `java.util.Date`, `BigDecimal`, a JPA entity with a lazy `@OneToMany`, and one field that is not `Serializable`.
 
+Two fixture details settled after the first build (Oct 23 2026):
+
+- **The non-`Serializable` field is not Java-`transient`.** `Order.audit` (`AuditTrail`: no no-arg constructor, holds a `StringBuilder` and a lock object) is `@Transient` for JPA but a plain field otherwise, because Jackson and any field-walking serializer skip `transient` fields and the placeholder-and-warn path would never run. `Order` declares `serialPersistentFields` without `audit` plus a `writeObject`/`readObject` pair that carries `openedAt` across and rebuilds the trail, so `OrderServiceRemote.createOrder` still works over T3 (verified with an authenticated `wlthint3client` call; the client needs `eclipselink.jar` for the lazy `IndirectList`).
+- **One polymorphic field for `@type` testing.** `CreateOrderRequest.paymentMethod` is a `PaymentMethod` interface with `CardPayment` (last four digits, `YearMonth` expiry) and `InvoicePayment` (purchase order number, net days), both `Serializable`. `index.html` alternates card and invoice on successive creates; the REST payload is `{"type":"CARD"|"INVOICE", ...}`; `OrderService` persists `PaymentMethod.summary()` as `Order.paymentSummary`.
+
 ## Trace model
 
 One JSON file per trace, written when its root span completes, under `$CAPTURE_OUT/<recordingId>/<seq>-<traceId>.json`. Spans are stored flat with `parentId`; tools rebuild the tree. Versioned from day one (`"formatVersion": 1`).

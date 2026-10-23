@@ -24,13 +24,21 @@
     <span>Last order id: <span id="orderId">none</span></span>
   </p>
 
-  <pre id="output">Click "Create order" to start.</pre>
+  <pre id="output">Click "Create order" to start. Odd clicks pay by card, even clicks by invoice.</pre>
 
   <script>
     const output = document.getElementById('output');
     const orderIdEl = document.getElementById('orderId');
     const confirmBtn = document.getElementById('confirm');
     let orderId = null;
+    let createCount = 0;
+
+    // Alternate payment types so successive orders exercise both PaymentMethod implementations.
+    function nextPaymentMethod() {
+      return createCount++ % 2 === 0
+        ? { type: 'CARD', lastFour: '4242', expiry: '2028-06' }
+        : { type: 'INVOICE', purchaseOrder: 'PO-' + Date.now().toString().slice(-6), netDays: 30 };
+    }
 
     async function call(method, path, body) {
       const response = await fetch(path, {
@@ -55,6 +63,7 @@
           { sku: document.getElementById('sku').value, quantity: Number(document.getElementById('quantity').value) },
           { sku: 'GADGET-2', quantity: 1 }
         ],
+        paymentMethod: nextPaymentMethod(),
         attributes: { channel: 'web', campaign: 'autumn-2026' },
         deliveryDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
       });

@@ -54,6 +54,9 @@ public class OrderServiceBean implements OrderServiceLocal, OrderServiceRemote {
         order.setSubtotal(quote.getSubtotal());
         order.setTax(quote.getTax().getTax());
         order.setTotal(quote.getTotal());
+        if (request.getPaymentMethod() != null) {
+            order.setPaymentSummary(request.getPaymentMethod().summary());
+        }
         for (OrderLineRequest line : request.getLines()) {
             order.addLine(line.getSku(), line.getQuantity(), pricing.unitPrice(line.getSku()));
         }

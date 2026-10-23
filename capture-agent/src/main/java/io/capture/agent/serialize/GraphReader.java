@@ -28,8 +28,8 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Rebuilds objects from the trees {@link JacksonGraphSerializer} writes. Classes come from
  * the supplied loader and must pass the {@link TypeAllowList}. A placeholder ({@code @lazy},
- * {@code @unserializable}) leaves the field at its constructor default, or reads as null at
- * the top level. {@code @ref} resolves against objects already created in the same call,
+ * {@code @handle}, {@code @unserializable}) leaves the field at its constructor default, or
+ * reads as null at the top level; {@code @skipped} fields likewise keep their defaults. {@code @ref} resolves against objects already created in the same call,
  * which works because an object is registered before its fields are filled.
  */
 final class GraphReader {
@@ -74,14 +74,25 @@ final class GraphReader {
                 }
                 return byId.get(id);
             }
-            if (node.has(Placeholders.LAZY) || node.has(Placeholders.UNSERIALIZABLE)) {
+            if (isPlaceholder(node)) {
                 return null;
             }
             if (node.has(Placeholders.BYTES)) {
                 return Base64.getDecoder().decode(node.get(Placeholders.BYTES).asText());
             }
+            if (node.has(Placeholders.TEXT)) {
+                // A string over the ceiling: what was kept, read as the declared type.
+                return Scalars.read(node.get(Placeholders.TEXT), raw == Object.class ? String.class : raw);
+            }
             JsonNode typeNode = node.get(Placeholders.TYPE);
             Class<?> type = typeNode == null ? null : resolve(typeNode.asText());
+            if (type == java.util.Optional.class) {
+                JsonNode present = node.get("present");
+                if (present == null || !present.asBoolean()) {
+                    return java.util.Optional.empty();
+                }
+                return java.util.Optional.ofNullable(read(node.get("value"), typeArgument(declaredType, 0)));
+            }
 
             if (node.has(Placeholders.ENTRIES)) {
                 return readEntriesMap(node, type, declaredType, raw);
@@ -95,9 +106,7 @@ final class GraphReader {
             if (Map.class.isAssignableFrom(type)) {
                 return readStringMap(node, declaredType, type);
             }
-            if (Throwable.class.isAssignableFrom(type)) {
-                return readThrowable(node, type);
-            }
+            // Throwables are written field by field like any object and read back the same way.
             return readBean(node, type);
         }
 
@@ -135,36 +144,6 @@ final class GraphReader {
                 }
             }
             return instance;
-        }
-
-        private Object readThrowable(JsonNode node, Class<?> type) throws GraphException {
-            String message = node.has("message") && !node.get("message").isNull() ? node.get("message").asText() : null;
-            Throwable cause = node.has("cause") ? (Throwable) read(node.get("cause"), Throwable.class) : null;
-            try {
-                try {
-                    return type.getConstructor(String.class, Throwable.class).newInstance(message, cause);
-                } catch (NoSuchMethodException ignored) {
-                    // fall through
-                }
-                try {
-                    Throwable t = (Throwable) type.getConstructor(String.class).newInstance(message);
-                    if (cause != null) {
-                        t.initCause(cause);
-                    }
-                    return t;
-                } catch (NoSuchMethodException ignored) {
-                    // fall through
-                }
-                Throwable t = (Throwable) Instantiator.newInstance(type);
-                if (cause != null) {
-                    t.initCause(cause);
-                }
-                return t;
-            } catch (GraphException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw new GraphException("cannot rebuild " + type.getName(), t);
-            }
         }
 
         @SuppressWarnings("unchecked")
@@ -267,9 +246,10 @@ final class GraphReader {
         return new LinkedHashMap<Object, Object>();
     }
 
+    /** Markers that stand for a value the reader cannot rebuild: lazy, handle, failure. */
     static boolean isPlaceholder(JsonNode node) {
         return node != null && node.isObject()
-                && (node.has(Placeholders.LAZY) || node.has(Placeholders.UNSERIALIZABLE));
+                && (node.has(Placeholders.LAZY) || node.has(Placeholders.UNSERIALIZABLE) || node.has(Placeholders.HANDLE));
     }
 
     static Class<?> rawClass(Type type) {

@@ -95,18 +95,118 @@ class LineageDetectorTest {
     }
 
     @Test
-    void valuesAppearingMoreThanFiveTimesAreIgnored() {
+    void valuesProducedByMoreTracesThanTheCapAreNotSourcesButStillClassified() {
         List<LoadedTrace> traces = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
+        // The value is system-originated: it first appears in a result, then flows into later inputs.
+        traces.add(trace(0, "t-0", span("s1", null, 0, "Catalog", "pick", "[]", "{\"sku\":\"GADGET-2000\"}")));
+        for (int i = 1; i < 8; i++) {
             traces.add(trace(i, "t-" + i,
                     span("s1", null, 0, "Catalog", "lookup", "[{\"sku\":\"GADGET-2000\"}]", "{\"sku\":\"GADGET-2000\",\"price\":\"99.99\"}")));
         }
         LineageFile lineage = detector.detect("rec-test", traces);
-        for (LineageEntry e : lineage.entries) {
-            assertTrue(!"GADGET-2000".equals(e.value), "8 occurrences > cap: " + describe(lineage));
-        }
-        // 99.99 occurs 4 times, only in results: no entries at all for it, and nothing links.
+
+        // Produced by 8 traces: too common to be a source anywhere in the recording.
         assertTrue(sourced(lineage).isEmpty(), describe(lineage));
+        // Classification is never capped: every trace's input is classified regardless.
+        int classified = 0;
+        for (LineageEntry e : lineage.entries) {
+            if ("GADGET-2000".equals(e.value)) {
+                assertEquals(LineageEntry.CLASS_USER_INPUT, e.classification);
+                classified++;
+            }
+        }
+        assertEquals(7, classified, describe(lineage));
+
+        // Produced by 4 traces: under the cap, so later traces link to the nearest earlier one.
+        LineageFile fewer = detector.detect("rec-test", traces.subList(0, 4));
+        assertEquals(3, sourced(fewer).size(), describe(fewer));
+        assertEquals("t-2", sourced(fewer).get(2).from.trace);
+    }
+
+    @Test
+    void userOriginatedValuesTypedAgainAreNotLinkedToTheirEchoes() {
+        LoadedTrace create1 = trace(0, "t-create-1",
+                span("s1", null, 0, "OrderService", "createOrder",
+                        "[{\"customer\":{\"name\":\"Ada Lovelace\"},\"lines\":[{\"sku\":\"WIDGET-1\"}]}]",
+                        "{\"id\":65639,\"customerName\":\"Ada Lovelace\"}"),
+                span("s2", "s1", 1, "InventoryService", "reserve", "[\"WIDGET-1\"]", "{\"sku\":\"WIDGET-1\"}"));
+        LoadedTrace confirm = trace(1, "t-confirm",
+                span("s1", null, 0, "OrderService", "confirmOrder", "[{\"orderId\":65639}]", "{\"orderId\":65639,\"customerName\":\"Ada Lovelace\"}"));
+        LoadedTrace create2 = trace(2, "t-create-2",
+                span("s1", null, 0, "OrderService", "createOrder",
+                        "[{\"customer\":{\"name\":\"Ada Lovelace\"},\"lines\":[{\"sku\":\"WIDGET-1\"}]}]",
+                        "{\"id\":65640,\"customerName\":\"Ada Lovelace\"}"),
+                span("s2", "s1", 1, "InventoryService", "reserve", "[\"WIDGET-1\"]", "{\"sku\":\"WIDGET-1\"}"));
+
+        LineageFile lineage = detector.detect("rec-test", Arrays.asList(create1, confirm, create2));
+
+        List<LineageEntry> links = sourced(lineage);
+        assertEquals(1, links.size(), describe(lineage));
+        assertEquals("t-confirm", links.get(0).to.trace, "confirm links to the first create");
+        assertEquals("t-create-1", links.get(0).from.trace);
+        assertEquals("65639", links.get(0).value);
+        for (LineageEntry e : lineage.entries) {
+            if ("t-create-2".equals(e.to.trace)) {
+                assertNull(e.from, "the second create links to nothing: " + describe(lineage));
+                assertEquals(LineageEntry.CLASS_USER_INPUT, e.classification);
+            }
+        }
+    }
+
+    @Test
+    void recomputedValuesThatMatchEarlierResultsAreLinkedButFlagged() {
+        LoadedTrace first = trace(0, "t-1",
+                span("s1", null, 0, "Pricing", "price", "[]", "{\"subtotal\":\"123.74\"}"),
+                span("s2", "s1", 1, "Tax", "computeTax", "[{\"amount\":\"123.74\"}]", "{\"tax\":\"25.99\"}"));
+        LoadedTrace second = trace(1, "t-2",
+                span("s1", null, 0, "Pricing", "price", "[]", "{\"subtotal\":\"123.74\"}"),
+                span("s2", "s1", 1, "Tax", "computeTax", "[{\"amount\":\"123.74\"}]", "{\"tax\":\"25.99\"}"));
+
+        LineageFile lineage = detector.detect("rec-test", Arrays.asList(first, second));
+        LineageEntry entry = sourced(lineage).get(0);
+        assertEquals("t-2", entry.to.trace);
+        assertEquals("t-1", entry.from.trace);
+        assertEquals(Boolean.TRUE, entry.alsoProducedHere, "the same trace produces 123.74 itself");
+    }
+
+    @Test
+    void valuesTypedOnceAndEchoedInManyResultsStillClassifyAsUserInput() {
+        List<LoadedTrace> traces = new ArrayList<>();
+        traces.add(trace(0, "t-create",
+                span("s1", null, 0, "OrderService", "createOrder",
+                        "[{\"customer\":{\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\"}}]",
+                        "{\"id\":9001,\"customerName\":\"Ada Lovelace\",\"customerEmail\":\"ada@example.com\"}"),
+                span("s2", "s1", 1, "PricingService", "price",
+                        "[{\"customer\":{\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\"}}]",
+                        "{\"customerName\":\"Ada Lovelace\",\"customerEmail\":\"ada@example.com\",\"total\":\"10.00\"}")));
+        for (int i = 1; i <= 6; i++) {
+            traces.add(trace(i, "t-get-" + i,
+                    span("s1", null, 0, "OrderService", "findOrder", "[9001]",
+                            "{\"id\":9001,\"customerName\":\"Ada Lovelace\",\"customerEmail\":\"ada@example.com\"}")));
+        }
+
+        LineageFile lineage = detector.detect("rec-test", traces);
+
+        assertEquals(LineageEntry.CLASS_USER_INPUT, classification(lineage, "Ada Lovelace"), describe(lineage));
+        assertEquals(LineageEntry.CLASS_USER_INPUT, classification(lineage, "ada@example.com"), describe(lineage));
+        assertEquals("t-create", entry(lineage, "Ada Lovelace").to.trace);
+        assertEquals("args[0].customer.name", entry(lineage, "Ada Lovelace").to.path);
+    }
+
+    @Test
+    void instantsInsideTheTraceWindowAreEnvironmentEvenInRootArgs() {
+        LoadedTrace create = trace(0, "t-create",
+                span("s1", null, 0, "OrderService", "createOrder",
+                        "[{\"requestedAt\":\"2026-10-23T18:00:00.500Z\",\"deliveryDate\":\"2026-10-30\",\"bookedAt\":\"2026-01-01T09:00:00Z\"}]",
+                        "{\"id\":9001}"));
+        create.trace.trace.startedAt = "2026-10-23T18:00:00.000Z";
+        create.trace.trace.durationMs = 40;
+
+        LineageFile lineage = detector.detect("rec-test", Arrays.asList(create));
+
+        assertEquals(LineageEntry.CLASS_ENVIRONMENT, classification(lineage, "2026-10-23T18:00:00.500Z"), "stamped during the call");
+        assertEquals(LineageEntry.CLASS_USER_INPUT, classification(lineage, "2026-10-30"), "a date typed by the user");
+        assertEquals(LineageEntry.CLASS_USER_INPUT, classification(lineage, "2026-01-01T09:00:00Z"), "an instant outside the window");
     }
 
     @Test

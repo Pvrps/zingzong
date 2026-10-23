@@ -8,20 +8,30 @@ import java.lang.reflect.Type;
  * Turns arbitrary object graphs into the JSON value conventions of the trace format and
  * back. An SPI so the Jackson-tree implementation can be swapped for another walker.
  *
- * Conventions produced by {@link #serialize}:
+ * Capture is raw: what crossed the boundary, as it was, every instance field of every object
+ * walked without getters. Conventions produced by {@link #serialize}:
  * <ul>
  *   <li>objects: {@code {"@type": "fqcn", field: value, ...}}, with {@code "@id"} on an
  *       object that is referenced again and {@code {"@ref": id}} at every later reference;
- *       {@code "@serializable": false} when the class is not java.io.Serializable (captured
- *       anyway, but it could not cross a remote EJB boundary)</li>
+ *       {@code "@serializable": false} when the class is not java.io.Serializable (walked
+ *       anyway, but it could not cross a remote EJB boundary); {@code "@skipped": [{field,
+ *       reason}]} listing any field not written (compiler- or weaver-injected, inaccessible)</li>
  *   <li>scalars: numbers and booleans as JSON, strings, enums by name, {@code BigDecimal},
- *       {@code java.time} and {@code java.util.Date} as strings</li>
+ *       {@code java.time}, {@code java.util.Date} and other JDK value types by their
+ *       canonical text (see Scalars)</li>
  *   <li>collections and arrays as JSON arrays; string-keyed maps as plain JSON objects,
- *       other maps as {@code {"@type": ..., "@entries": [{"key":..,"value":..}]}}</li>
- *   <li>{@code {"@lazy": true, "loaded": false}} for an un-instantiated lazy JPA value</li>
- *   <li>{@code {"@unserializable": "fqcn", "toString": "..."}} plus a warning for anything
- *       that failed, exceeded a limit, or is infrastructure (loggers, locks, executors,
- *       streams, JDBC/JPA/JMS handles, container internals; see InfrastructureTypes)</li>
+ *       other maps as {@code {"@type": ..., "@entries": [{"key":..,"value":..}]}};
+ *       {@code Optional} as {@code {"@type": "java.util.Optional", "present": .., "value": ..}}</li>
+ *   <li>{@code {"@lazy": true, "loaded": false}} for an un-instantiated lazy JPA value,
+ *       because loading it would change the call</li>
+ *   <li>{@code {"@handle": "fqcn", "kind": .., "identity": .., "toString": ..}} for a
+ *       non-walkable runtime handle (threads, class loaders, streams, sockets, JDBC
+ *       connections, locks, executors; see InfrastructureTypes), because it is not payload</li>
+ *   <li>{@code {"@truncated": n, "what": ..}} wherever a safety ceiling was hit, with the
+ *       count of what was dropped; strings over the ceiling become {@code {"@text", "length",
+ *       "@truncated"}}, byte arrays carry the same on their {@code @bytes} node</li>
+ *   <li>{@code {"@unserializable": "fqcn", "reason": .., "identity": .., "toString": ..}}
+ *       plus a warning when the walk itself failed</li>
  * </ul>
  */
 public interface GraphSerializer {

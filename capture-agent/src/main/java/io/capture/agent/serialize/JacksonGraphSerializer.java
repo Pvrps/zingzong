@@ -16,19 +16,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Builds Jackson {@link JsonNode} trees by walking object graphs field by field.
+ * Builds Jackson {@link JsonNode} trees by walking object graphs field by field, raw: what
+ * crossed the boundary, as it was. The only transformations are the structural rules in
+ * {@link Placeholders}, each marked in the output; the safety ceilings in
+ * {@link SerializerConfig} are never meant to be reached and leave counted markers when they are.
  *
  * This deliberately does <em>not</em> route objects through {@code ObjectMapper}'s bean
  * serialization: Jackson's serializer cache keys on {@code Class} strongly (pinning
  * redeployed loaders), getters would have to be suppressed per type, identity and depth
- * limits would need mixins and a wrapping generator, and lazy JPA wrappers must be
- * recognised before any collection method runs. Walking the graph here keeps every one of
- * those rules in one place; Jackson provides the tree model, the scalar nodes and the
- * output format. Per-type state lives in {@link TypeInfo} (a {@code ClassValue}).
+ * rules would need mixins and a wrapping generator, and lazy JPA wrappers must be
+ * recognised before any collection method runs. Jackson provides the tree model, the scalar
+ * nodes and the output format. Per-type state lives in {@link TypeInfo} (a {@code ClassValue}).
  *
- * Fields only, never getters. Static, transient, synthetic and EclipseLink weaving fields
- * are skipped. Nothing here throws into the caller: every failure becomes a placeholder
- * and a warning.
+ * Fields only, never getters. Nothing here throws into the caller: a failure becomes a
+ * marked {@code @unserializable} node and a warning.
  */
 public final class JacksonGraphSerializer implements GraphSerializer {
 
@@ -57,7 +58,7 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         } catch (Throwable t) {
             // Last line of defence; write() already catches per sub-tree.
             safeWarn(ctx, "serializer failure: " + t, value);
-            return Placeholders.unserializable(value, null);
+            return Placeholders.unserializable(value, "serializer failure: " + t, null);
         }
     }
 
@@ -79,8 +80,9 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             }
             return writeStructured(value, ctx);
         } catch (Throwable t) {
-            ctx.warn(describeFailure(t), value.getClass().getName());
-            return Placeholders.unserializable(value, safeToString(value));
+            String reason = describeFailure(t);
+            ctx.warn(reason, value.getClass().getName());
+            return Placeholders.unserializable(value, reason, safeToString(value));
         }
     }
 
@@ -101,14 +103,15 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             }
         }
 
-        if (info.infrastructure) {
-            ctx.warn("infrastructure type, not captured", info.type.getName());
-            return Placeholders.unserializable(value, identity(value));
+        if (info.handleKind != null) {
+            ctx.warn("runtime handle (" + info.handleKind + "), recorded as reference", info.type.getName());
+            return Placeholders.handle(value, info.handleKind, safeToString(value, info));
         }
 
         if (ctx.depth() >= config.maxDepth) {
-            ctx.warn("depth limit " + config.maxDepth, info.type.getName());
-            return Placeholders.unserializable(value, safeToString(value, info));
+            String reason = "depth ceiling " + config.maxDepth + " reached; subtree dropped";
+            ctx.warn(reason, info.type.getName());
+            return Placeholders.unserializable(value, reason, safeToString(value, info));
         }
 
         SerializationContext.Tracked seen = ctx.seen(value);
@@ -121,18 +124,15 @@ public final class JacksonGraphSerializer implements GraphSerializer {
                 return Placeholders.ref(id);
             }
             if (seen.inProgress) {
-                ctx.warn("cyclic collection reference", info.type.getName());
-                return Placeholders.unserializable(value, identity(value));
+                String reason = "cyclic reference to a container being written";
+                ctx.warn(reason, info.type.getName());
+                return Placeholders.unserializable(value, reason, null);
             }
-            // A collection seen before but complete: serialize it again, duplicates are fine.
+            // A container seen before but complete: written again in full, duplicates are fine.
         }
 
-        if (value instanceof Throwable) {
-            return writeThrowable((Throwable) value, ctx);
-        }
         if (value instanceof Optional) {
-            Optional<?> optional = (Optional<?>) value;
-            return optional.isPresent() ? write(optional.get(), ctx) : NullNode.getInstance();
+            return writeOptional((Optional<?>) value, ctx);
         }
         if (info.type.isArray()) {
             return writeArray(value, ctx);
@@ -143,6 +143,9 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         if (value instanceof Map) {
             return writeMap((Map<?, ?>) value, info, ctx);
         }
+        if (value instanceof Throwable) {
+            return writeThrowable((Throwable) value, info, ctx);
+        }
         return writeObject(value, info, ctx);
     }
 
@@ -150,28 +153,37 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         ObjectNode node = NODES.objectNode();
         node.put(Placeholders.TYPE, info.type.getName());
         if (!info.serializable) {
-            // Captured all the same; the exporter and replay need to know it cannot cross T3.
+            // Walked all the same; the exporter and replay need to know it cannot cross T3.
             node.put(Placeholders.SERIALIZABLE, false);
         }
         SerializationContext.Tracked tracked = ctx.track(value, node);
         ctx.enter();
         try {
-            for (TypeInfo.FieldInfo field : info.fields) {
-                ctx.pushField(field.name);
-                try {
-                    node.set(field.name, writeField(value, field, ctx));
-                } catch (Throwable t) {
-                    ctx.warn(describeFailure(t), field.field.getType().getName());
-                    node.set(field.name, Placeholders.unserializable(null, null));
-                } finally {
-                    ctx.pop();
-                }
-            }
+            writeFields(value, info, node, ctx);
         } finally {
             ctx.leave();
             tracked.inProgress = false;
         }
         return node;
+    }
+
+    private void writeFields(Object value, TypeInfo info, ObjectNode node, SerializationContext ctx) {
+        for (TypeInfo.FieldInfo field : info.fields) {
+            if (!field.walked()) {
+                Placeholders.skipped(node, field.name, field.skipReason);
+                continue;
+            }
+            ctx.pushField(field.name);
+            try {
+                node.set(field.name, writeField(value, field, ctx));
+            } catch (Throwable t) {
+                String reason = describeFailure(t);
+                ctx.warn(reason, field.field.getType().getName());
+                node.set(field.name, Placeholders.unserializable(null, reason, null));
+            } finally {
+                ctx.pop();
+            }
+        }
     }
 
     private JsonNode writeField(Object owner, TypeInfo.FieldInfo field, SerializationContext ctx) throws IllegalAccessException {
@@ -188,18 +200,36 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         return write(field.field.get(owner), ctx);
     }
 
+    private JsonNode writeOptional(Optional<?> optional, SerializationContext ctx) {
+        ObjectNode node = NODES.objectNode();
+        node.put(Placeholders.TYPE, Optional.class.getName());
+        node.put("present", optional.isPresent());
+        if (optional.isPresent()) {
+            ctx.pushField("value");
+            ctx.enter();
+            try {
+                node.set("value", write(optional.get(), ctx));
+            } finally {
+                ctx.leave();
+                ctx.pop();
+            }
+        }
+        return node;
+    }
+
     private JsonNode writeArray(Object array, SerializationContext ctx) {
         if (array instanceof byte[]) {
             byte[] bytes = (byte[]) array;
-            boolean truncated = bytes.length > config.maxBytes;
-            byte[] shown = truncated ? java.util.Arrays.copyOf(bytes, config.maxBytes) : bytes;
-            if (truncated) {
-                ctx.warn("byte[] truncated from " + bytes.length + " to " + config.maxBytes + " bytes", "byte[]");
+            int kept = Math.min(bytes.length, config.maxBytes);
+            byte[] shown = kept == bytes.length ? bytes : java.util.Arrays.copyOf(bytes, kept);
+            int dropped = bytes.length - kept;
+            if (dropped > 0) {
+                ctx.warn("byte[] ceiling " + config.maxBytes + " reached; " + dropped + " of " + bytes.length + " bytes dropped", "byte[]");
             }
-            return Placeholders.bytes(Base64.getEncoder().encodeToString(shown), bytes.length, truncated);
+            return Placeholders.bytes(Base64.getEncoder().encodeToString(shown), bytes.length, dropped);
         }
         if (array instanceof char[]) {
-            return TextNode.valueOf(new String((char[]) array));
+            return Scalars.write(new String((char[]) array), ctx);
         }
         ArrayNode node = NODES.arrayNode();
         SerializationContext.Tracked tracked = ctx.track(array, null);
@@ -208,8 +238,9 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             int length = Array.getLength(array);
             for (int i = 0; i < length; i++) {
                 if (i >= config.maxElements) {
-                    ctx.warn("array truncated at " + config.maxElements + " of " + length + " elements", array.getClass().getName());
-                    node.add(Placeholders.truncated(length - i));
+                    int dropped = length - i;
+                    ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + length + " elements dropped", array.getClass().getName());
+                    node.add(Placeholders.truncatedElements("elements", dropped));
                     break;
                 }
                 ctx.pushIndex(i);
@@ -236,8 +267,9 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             for (Iterator<?> it = collection.iterator(); it.hasNext(); i++) {
                 Object element = it.next();
                 if (i >= config.maxElements) {
-                    ctx.warn("collection truncated at " + config.maxElements + " of " + size + " elements", collection.getClass().getName());
-                    node.add(Placeholders.truncated(size - i));
+                    int dropped = size - i;
+                    ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + size + " elements dropped", collection.getClass().getName());
+                    node.add(Placeholders.truncatedElements("elements", dropped));
                     break;
                 }
                 ctx.pushIndex(i);
@@ -270,8 +302,10 @@ public final class JacksonGraphSerializer implements GraphSerializer {
                 int i = 0;
                 for (Map.Entry<?, ?> entry : map.entrySet()) {
                     if (i++ >= config.maxElements) {
-                        ctx.warn("map truncated at " + config.maxElements + " of " + map.size() + " entries", info.type.getName());
-                        node.set(Placeholders.TRUNCATED, NODES.numberNode(map.size() - config.maxElements));
+                        int dropped = map.size() - config.maxElements;
+                        ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + map.size() + " entries dropped", info.type.getName());
+                        node.set(Placeholders.TRUNCATED, NODES.numberNode(dropped));
+                        node.put(Placeholders.WHAT, "entries");
                         break;
                     }
                     String key = entry.getKey() instanceof Enum ? ((Enum<?>) entry.getKey()).name() : String.valueOf(entry.getKey());
@@ -290,8 +324,9 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             int i = 0;
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (i >= config.maxElements) {
-                    ctx.warn("map truncated at " + config.maxElements + " of " + map.size() + " entries", info.type.getName());
-                    entries.add(Placeholders.truncated(map.size() - i));
+                    int dropped = map.size() - i;
+                    ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + map.size() + " entries dropped", info.type.getName());
+                    entries.add(Placeholders.truncatedElements("entries", dropped));
                     break;
                 }
                 ctx.pushIndex(i++);
@@ -314,28 +349,55 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         }
     }
 
-    private JsonNode writeThrowable(Throwable t, SerializationContext ctx) {
+    /**
+     * A Throwable is walked like any object (its own fields included: application exceptions
+     * carry data), plus the stack trace in full. Two JVM-internal fields of Throwable itself
+     * are listed as skipped: {@code backtrace} (native frame data behind {@code stackTrace})
+     * and {@code depth}. The {@code cause == this} sentinel reads as "no cause".
+     */
+    private ObjectNode writeThrowable(Throwable t, TypeInfo info, SerializationContext ctx) {
         ObjectNode node = NODES.objectNode();
-        node.put(Placeholders.TYPE, t.getClass().getName());
-        ctx.track(t, node).inProgress = false;
-        node.put("message", t.getMessage());
-        ArrayNode frames = node.putArray("stackTrace");
-        StackTraceElement[] trace = t.getStackTrace();
-        for (int i = 0; i < trace.length && i < 10; i++) {
-            frames.add(trace[i].toString());
-        }
-        Throwable cause = t.getCause();
-        if (cause != null && cause != t) {
-            ctx.pushField("cause");
-            ctx.enter();
+        node.put(Placeholders.TYPE, info.type.getName());
+        SerializationContext.Tracked tracked = ctx.track(t, node);
+        ctx.enter();
+        try {
+            for (TypeInfo.FieldInfo field : info.fields) {
+                if (!field.walked()) {
+                    Placeholders.skipped(node, field.name, field.skipReason);
+                    continue;
+                }
+                boolean declaredByThrowable = field.field.getDeclaringClass() == Throwable.class;
+                if (declaredByThrowable && (field.name.equals("backtrace") || field.name.equals("depth"))) {
+                    Placeholders.skipped(node, field.name, "JVM-internal frame data; see stackTrace");
+                    continue;
+                }
+                if (declaredByThrowable && field.name.equals("stackTrace")) {
+                    continue; // written below from getStackTrace(), which materialises it
+                }
+                ctx.pushField(field.name);
+                try {
+                    Object value = field.field.get(t);
+                    if (declaredByThrowable && field.name.equals("cause") && value == t) {
+                        value = null;
+                    }
+                    node.set(field.name, write(value, ctx));
+                } catch (Throwable e) {
+                    String reason = describeFailure(e);
+                    ctx.warn(reason, field.field.getType().getName());
+                    node.set(field.name, Placeholders.unserializable(null, reason, null));
+                } finally {
+                    ctx.pop();
+                }
+            }
+            ctx.pushField("stackTrace");
             try {
-                node.set("cause", ctx.depth() >= config.maxDepth
-                        ? Placeholders.unserializable(cause, cause.toString())
-                        : write(cause, ctx));
+                node.set("stackTrace", write(t.getStackTrace(), ctx));
             } finally {
-                ctx.leave();
                 ctx.pop();
             }
+        } finally {
+            ctx.leave();
+            tracked.inProgress = false;
         }
         return node;
     }
@@ -347,23 +409,18 @@ public final class JacksonGraphSerializer implements GraphSerializer {
     }
 
     /**
-     * toString() for placeholders, except on JPA entities and lazy wrappers, whose toString
-     * may touch lazy state. Those get the identity form instead.
+     * toString() for markers, except on JPA entities and lazy wrappers, whose toString may
+     * touch lazy state: those get null (the marker's identity still names the object).
      */
     private static String safeToString(Object value, TypeInfo info) {
         if (info.entity || info.lazyKind != TypeInfo.LazyKind.NONE) {
-            return identity(value);
+            return null;
         }
         try {
-            String s = String.valueOf(value);
-            return s.length() > 512 ? s.substring(0, 512) + "..." : s;
+            return String.valueOf(value);
         } catch (Throwable t) {
-            return identity(value);
+            return null;
         }
-    }
-
-    private static String identity(Object value) {
-        return value.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(value));
     }
 
     private static String describeFailure(Throwable t) {

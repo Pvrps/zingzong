@@ -22,6 +22,14 @@ public final class ValueFlattener {
             if (span.result != null) {
                 flatten(loaded, span, "result", span.result.value, refs);
             }
+            if (span.http != null && span.http.responseBody != null) {
+                JsonNode body = parseJson(span.http.responseBody);
+                if (body != null) {
+                    flatten(loaded, span, "http.responseBody", body, refs);
+                } else {
+                    add(loaded, span, "http.responseBody", span.http.responseBody, refs);
+                }
+            }
         }
         return refs;
     }
@@ -54,10 +62,13 @@ public final class ValueFlattener {
             return;
         }
         if (node.isObject()) {
+            if (isMarker(node)) {
+                return; // @ref, @lazy, @handle, @unserializable, @truncated, @text, @bytes: annotation, not payload
+            }
             Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> e = fields.next();
-                if (e.getKey().startsWith("@") || e.getKey().equals("toString")) {
+                if (e.getKey().startsWith("@")) {
                     continue;
                 }
                 flatten(loaded, span, path + "." + e.getKey(), e.getValue(), into);
@@ -74,6 +85,19 @@ public final class ValueFlattener {
         if (normalized != null) {
             into.add(new ValueRef(loaded.index, loaded.id(), loaded.seq(), span.id, span.order, path, normalized, span.parentId == null));
         }
+    }
+
+    /** A marker object stands for a value that is not written as it was; its fields describe the marker. */
+    static boolean isMarker(JsonNode node) {
+        Iterator<String> names = node.fieldNames();
+        while (names.hasNext()) {
+            String n = names.next();
+            if (n.equals("@ref") || n.equals("@lazy") || n.equals("@handle") || n.equals("@unserializable")
+                    || n.equals("@truncated") || n.equals("@text") || n.equals("@bytes")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void add(LoadedTrace loaded, Span span, String path, String text, List<ValueRef> into) {

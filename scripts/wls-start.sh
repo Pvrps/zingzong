@@ -36,6 +36,7 @@ java_options="$java_options --add-opens=java.base/java.lang=ALL-UNNAMED"
 java_options="$java_options --add-opens=java.base/java.util=ALL-UNNAMED"
 java_options="$java_options --add-opens=java.base/java.time=ALL-UNNAMED"
 java_options="$java_options --add-opens=java.sql/java.sql=ALL-UNNAMED"
+java_options="$java_options --add-opens=java.logging/java.util.logging=ALL-UNNAMED"
 
 if [ "${CAPTURE_AGENT:-1}" != "0" ] && [ -f "$CAPTURE_AGENT_JAR" ]; then
   log "attaching agent $CAPTURE_AGENT_JAR"

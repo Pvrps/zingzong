@@ -19,4 +19,6 @@ public class LineageEntry {
     public List<LineageRef> alternatives;
     /** For values without a source: userInput or environment. */
     public String classification;
+    /** The same value is also produced by this trace's own results: possibly recomputed, not flowed. */
+    public Boolean alsoProducedHere;
 }

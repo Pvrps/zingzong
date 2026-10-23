@@ -122,7 +122,8 @@ public final class Main {
                 sourced++;
                 System.out.println(describe(recording, entry.to) + " \u2190 " + describe(recording, entry.from)
                         + "   [" + entry.value + "]"
-                        + (entry.alternatives == null ? "" : "  alternatives=" + entry.alternatives.size()));
+                        + (entry.alternatives == null ? "" : "  alternatives=" + entry.alternatives.size())
+                        + (Boolean.TRUE.equals(entry.alsoProducedHere) ? "  (also in this trace's own results)" : ""));
                 if (entry.alternatives != null) {
                     for (LineageRef alt : entry.alternatives) {
                         System.out.println("    also from " + describe(recording, alt));

@@ -16,7 +16,6 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,11 +42,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Leaf values: written as JSON scalars, read back by declared type. Enums by name,
- * BigDecimal/BigInteger as strings (no precision loss), java.time and java.util.Date as
- * ISO-8601 strings.
+ * Leaf values: written as JSON scalars, read back by declared type. Each form is lossless
+ * for the value itself; the Java type is recovered from the declared type on the way back:
+ * enums by name, BigDecimal/BigInteger as plain strings, java.time by its ISO-8601
+ * toString, java.util.Date as an ISO instant (millisecond precision, same as Date),
+ * java.sql.Timestamp with its nanoseconds, Calendar as a zoned date-time (keeps the zone),
+ * UUID/URI/URL/File/Path/Locale/Currency/StackTraceElement by their canonical text.
  */
 final class Scalars {
+
+    private static final String SQL_TIMESTAMP = "java.sql.Timestamp";
 
     private Scalars() {
     }
@@ -73,10 +77,26 @@ final class Scalars {
             return text(value.toString(), ctx);
         }
         if (value instanceof Date) {
-            return TextNode.valueOf(Instant.ofEpochMilli(((Date) value).getTime()).toString());
+            // java.sql.Timestamp carries nanoseconds. java.sql lives in the platform loader, which the
+            // bootstrap-loaded agent cannot see, so it is recognised by name and read reflectively.
+            Date date = (Date) value;
+            long millis = date.getTime();
+            if (value.getClass().getName().equals(SQL_TIMESTAMP)) {
+                try {
+                    int nanos = (Integer) value.getClass().getMethod("getNanos").invoke(value);
+                    return TextNode.valueOf(Instant.ofEpochSecond(Math.floorDiv(millis, 1000L), nanos).toString());
+                } catch (Throwable ignored) {
+                    // fall back to millisecond precision below
+                }
+            }
+            return TextNode.valueOf(Instant.ofEpochMilli(millis).toString());
         }
         if (value instanceof Calendar) {
-            return TextNode.valueOf(Instant.ofEpochMilli(((Calendar) value).getTimeInMillis()).toString());
+            Calendar c = (Calendar) value;
+            return TextNode.valueOf(ZonedDateTime.ofInstant(Instant.ofEpochMilli(c.getTimeInMillis()), c.getTimeZone().toZoneId()).toString());
+        }
+        if (value instanceof StackTraceElement) {
+            return TextNode.valueOf(value.toString());
         }
         if (value instanceof Temporal || value instanceof TemporalAmount || value instanceof ZoneId) {
             return TextNode.valueOf(value.toString());
@@ -99,14 +119,15 @@ final class Scalars {
                 || TemporalAmount.class.isAssignableFrom(type) || ZoneId.class.isAssignableFrom(type)
                 || type == UUID.class || type == URI.class || type == URL.class || type == File.class
                 || Path.class.isAssignableFrom(type) || type == Locale.class || type == Currency.class
-                || type == AtomicBoolean.class;
+                || type == AtomicBoolean.class || type == StackTraceElement.class;
     }
 
     private static JsonNode text(String s, SerializationContext ctx) {
         int max = ctx.config.maxStringLength;
         if (s.length() > max) {
-            ctx.warn("string truncated from " + s.length() + " to " + max + " chars", String.class.getName());
-            return TextNode.valueOf(s.substring(0, max));
+            int dropped = s.length() - max;
+            ctx.warn("string ceiling " + max + " reached; " + dropped + " of " + s.length() + " chars dropped", String.class.getName());
+            return Placeholders.text(s.substring(0, max), s.length(), dropped);
         }
         return TextNode.valueOf(s);
     }
@@ -194,19 +215,20 @@ final class Scalars {
             if (type == Date.class) {
                 return new Date(Instant.parse(node.asText()).toEpochMilli());
             }
-            if (type == Timestamp.class) {
-                return new Timestamp(Instant.parse(node.asText()).toEpochMilli());
+            if (type.getName().equals(SQL_TIMESTAMP)) {
+                Instant instant = Instant.parse(node.asText());
+                Object ts = type.getConstructor(long.class).newInstance(instant.toEpochMilli());
+                type.getMethod("setNanos", int.class).invoke(ts, instant.getNano());
+                return ts;
             }
-            if (type == java.sql.Date.class) {
-                return new java.sql.Date(Instant.parse(node.asText()).toEpochMilli());
-            }
-            if (type == java.sql.Time.class) {
-                return new java.sql.Time(Instant.parse(node.asText()).toEpochMilli());
+            if (type.getName().equals("java.sql.Date") || type.getName().equals("java.sql.Time")) {
+                return type.getConstructor(long.class).newInstance(Instant.parse(node.asText()).toEpochMilli());
             }
             if (Calendar.class.isAssignableFrom(type)) {
-                GregorianCalendar c = new GregorianCalendar();
-                c.setTimeInMillis(Instant.parse(node.asText()).toEpochMilli());
-                return c;
+                return GregorianCalendar.from(ZonedDateTime.parse(node.asText()));
+            }
+            if (type == StackTraceElement.class) {
+                return parseFrame(node.asText());
             }
             Object time = readTime(node.asText(), type);
             if (time != null) {
@@ -266,6 +288,42 @@ final class Scalars {
         if (type == Period.class) return Period.parse(text);
         if (ZoneId.class.isAssignableFrom(type)) return ZoneId.of(text);
         return null;
+    }
+
+    /**
+     * "module@1.0/pkg.Cls.method(File.java:12)" back into a StackTraceElement. The module
+     * prefix stays in the text; the Java 8 constructor has no field for it.
+     */
+    private static StackTraceElement parseFrame(String frame) {
+        String rest = frame;
+        int slash = rest.indexOf('/');
+        if (slash > 0 && slash < rest.indexOf('(')) {
+            rest = rest.substring(slash + 1);
+        }
+        int paren = rest.indexOf('(');
+        String classAndMethod = paren < 0 ? rest : rest.substring(0, paren);
+        int dot = classAndMethod.lastIndexOf('.');
+        String cls = dot < 0 ? classAndMethod : classAndMethod.substring(0, dot);
+        String method = dot < 0 ? "" : classAndMethod.substring(dot + 1);
+        String file = null;
+        int line = -1;
+        if (paren >= 0 && rest.endsWith(")")) {
+            String location = rest.substring(paren + 1, rest.length() - 1);
+            int colon = location.lastIndexOf(':');
+            if (colon > 0) {
+                file = location.substring(0, colon);
+                try {
+                    line = Integer.parseInt(location.substring(colon + 1));
+                } catch (NumberFormatException ignored) {
+                    file = location;
+                }
+            } else if (!location.equals("Unknown Source") && !location.equals("Native Method")) {
+                file = location;
+            } else if (location.equals("Native Method")) {
+                line = -2;
+            }
+        }
+        return new StackTraceElement(cls, method, file, line);
     }
 
     /** Best effort for a scalar whose declared type carries no information. */

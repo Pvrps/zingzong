@@ -21,7 +21,8 @@ Full plan: docs/PLAN.md. Work phase by phase; each phase has an acceptance check
 ## Environment (NixOS)
 - Everything runs inside `devenv shell`; no containers.
 - WebLogic installer jar at `$WLS_INSTALLER` (outside the repo). Install into `.local/oracle`.
-- Scripts: `wls-install`, `wls-domain`, `wls-start [-b]`, `wls-stop`, `wls-deploy [--no-build]`, `capture-start <name> [principal=..] [session=..]`, `capture-stop`, `capture-status`, `trace-reader validate|tree|lineage|index`.
+- Scripts: `wls-install`, `wls-domain`, `wls-start [-b]`, `wls-stop`, `wls-deploy [--no-build]`, `capture-start <name> [principal=..] [session=..]`, `capture-stop`, `capture-status`, `trace-reader validate|tree|lineage|index`, `soap-tax`.
+- Never rebuild `capture-agent.jar` expecting a running server to pick it up: `wls-start` runs from a copy; restart to use a new build.
 - Oracle tooling (installer, WLST) runs through the `wls-fhs-run` shim; see docs/environment-notes.md before changing scripts.
 - `.local/` is gitignored: install, domain, H2, captures.
 

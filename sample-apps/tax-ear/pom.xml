@@ -16,6 +16,7 @@
 
   <modules>
     <module>tax-ejb</module>
+    <module>tax-web</module>
     <module>tax-ear</module>
   </modules>
 </project>

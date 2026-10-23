@@ -92,5 +92,6 @@ in
     capture-stop.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" stop "$@"'';
     capture-status.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" status "$@"'';
     trace-reader.exec = ''exec java -jar "$DEVENV_ROOT/trace-tools/trace-reader/target/trace-reader.jar" "$@"'';
+    soap-tax.exec = ''bash "$DEVENV_ROOT/scripts/soap-tax.sh" "$@"'';
   };
 }

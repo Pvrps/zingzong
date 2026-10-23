@@ -39,8 +39,12 @@ java_options="$java_options --add-opens=java.sql/java.sql=ALL-UNNAMED"
 java_options="$java_options --add-opens=java.logging/java.util.logging=ALL-UNNAMED"
 
 if [ "${CAPTURE_AGENT:-1}" != "0" ] && [ -f "$CAPTURE_AGENT_JAR" ]; then
-  log "attaching agent $CAPTURE_AGENT_JAR"
-  java_options="$java_options -javaagent:$CAPTURE_AGENT_JAR=out=$CAPTURE_OUT"
+  # The JVM memory-maps the agent jar for the whole run; a `mvn install` that rewrites it
+  # under a running server ends in SIGBUS in libzip. Run from a private copy.
+  agent_jar="$LOG_DIR/capture-agent.running.jar"
+  cp "$CAPTURE_AGENT_JAR" "$agent_jar"
+  log "attaching agent $agent_jar (copy of $CAPTURE_AGENT_JAR)"
+  java_options="$java_options -javaagent:$agent_jar=out=$CAPTURE_OUT"
 else
   log "starting without capture agent"
 fi

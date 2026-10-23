@@ -55,6 +55,15 @@ set; `lib.sh` exports `JAVA_VENDOR=Oracle` (plain HotSpot settings).
   that receives JPA entities needs `$ORACLE_HOME/oracle_common/modules/oracle.toplink/eclipselink.jar`
   for `IndirectList`, next to `wlthint3client.jar`, `common-dto` and `orders-api`.
 
+## Agent jar and the running server
+
+The JVM keeps the `-javaagent` jar memory-mapped. Rebuilding `capture-agent.jar` with
+`mvn install` while the server runs corrupts that mapping and the next class load from
+the jar (for instance at `capture-start`) dies with `SIGBUS` in `libzip newEntry`
+(`hs_err_pid*.log` under the domain directory). `wls-start.sh` therefore copies the jar to
+`.local/logs/capture-agent.running.jar` and starts the server from the copy; rebuild freely,
+restart to pick the new jar up.
+
 ## Domain
 
 - Created from the "Basic WebLogic Server Domain" template, dev mode, `AdminServer` on

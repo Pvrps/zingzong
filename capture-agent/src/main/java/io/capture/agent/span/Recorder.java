@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.capture.agent.AgentConfig;
 import io.capture.agent.AgentLog;
 import io.capture.agent.hook.InstrumentationHook;
+import io.capture.agent.http.HttpCapture;
+import io.capture.trace.HttpInfo;
 import io.capture.agent.serialize.GraphSerializer;
 import io.capture.agent.serialize.JacksonGraphSerializer;
 import io.capture.agent.serialize.SerializationContext;
@@ -180,6 +182,117 @@ public final class Recorder {
         }
     }
 
+    // ---- HTTP entry points -----------------------------------------------------------------
+
+    /** The container request of the servlet span open on this thread, or null. */
+    public static Object currentServletRequest() {
+        try {
+            Object capture = SpanStack.current().servletCapture();
+            return capture instanceof HttpCapture ? ((HttpCapture) capture).originalRequest : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** Opens a servlet span (root, or a child for a nested dispatch). False when the recording's filters reject it. */
+    public static boolean enterServlet(HttpCapture capture, String principal, String httpSessionId) {
+        Recording recording = ACTIVE.get();
+        if (recording == null) {
+            return false;
+        }
+        try {
+            SpanStack stack = SpanStack.current();
+            boolean root = stack.isEmpty();
+            if (root && !recording.accepts(principal, httpSessionId)) {
+                return false;
+            }
+            long now = System.nanoTime();
+            stack.push(recording, Span.KIND_HTTP, null, null, null, now, null, capture, propagation);
+            if (root) {
+                stack.trace().principal(principal);
+                stack.trace().httpSessionId(httpSessionId);
+            }
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** Completes the servlet span opened by {@link #enterServlet}. */
+    public static void exitServlet(HttpCapture capture, HttpInfo info, String principal, String httpSessionId, Throwable thrown) {
+        try {
+            SpanStack stack = SpanStack.current();
+            OpenSpan open = stack.top();
+            if (open == null || open.http != capture) {
+                stack.reset();
+                return;
+            }
+            long durationNs = System.nanoTime() - open.enteredAtNanos;
+            Span span = open.toSpan(durationNs);
+            span.http = info;
+            if (thrown != null) {
+                List<SerializationWarning> warnings = new ArrayList<SerializationWarning>();
+                span.exception = new ExceptionInfo();
+                span.exception.className = thrown.getClass().getName();
+                span.exception.message = thrown.getMessage();
+                span.exception.value = serialize(thrown, Throwable.class, "$.exception", warnings);
+                if (!warnings.isEmpty()) {
+                    span.serializationWarnings = warnings;
+                }
+            }
+            // A session created during the request, or a login, shows up now.
+            stack.trace().principal(principal);
+            stack.trace().httpSessionId(httpSessionId);
+
+            Recording recording = stack.trace().recording;
+            Trace finished = stack.pop(span, propagation);
+            if (finished != null) {
+                TraceWriter w = writer;
+                if (w != null) {
+                    w.offer(recording, finished);
+                }
+            }
+        } catch (Throwable t) {
+            try {
+                SpanStack.current().reset();
+                AgentLog.error("servlet exit handling failed", t);
+            } catch (Throwable ignored) {
+                // never into the request
+            }
+        }
+    }
+
+    /** JAX-RS resource / JAX-WS endpoint method entry: a child HTTP span with its layer. */
+    public static long enterResource(Object self, String resourceClass, String method, String signature) {
+        Recording recording = ACTIVE.get();
+        if (recording == null) {
+            return 0L;
+        }
+        try {
+            SpanStack stack = SpanStack.current();
+            boolean root = stack.isEmpty();
+            String principal = null;
+            String httpSessionId = null;
+            if (root) {
+                principal = WlsRuntime.principal();
+                httpSessionId = WlsRuntime.httpSessionId();
+                if (!recording.accepts(principal, httpSessionId)) {
+                    return 0L;
+                }
+            }
+            String layer = ResourceLayers.layerOf(self == null ? null : self.getClass());
+            long now = System.nanoTime();
+            stack.push(recording, Span.KIND_HTTP, layer, resourceClass, method, now, WlsRuntime.transactionStatus(), null, propagation);
+            if (root) {
+                stack.trace().principal(principal);
+                stack.trace().httpSessionId(httpSessionId);
+            }
+            return now == 0L ? 1L : now;
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
     /** Called on method exit, normal or exceptional. Token 0 means {@link #enter} recorded nothing. */
     public static void exit(long token, Object self, String beanClass, String method, String descriptor,
                             Object[] args, Object result, Throwable thrown) {
@@ -220,7 +333,11 @@ public final class Recorder {
                              Object[] args, Object result, Throwable thrown) {
         Class<?> bean = MethodSignatures.beanClass(self, beanClass);
         MethodSignatures.MethodInfo info = MethodSignatures.resolve(bean, method, descriptor);
-        span.ejb.signature = info.signature;
+        if (span.ejb != null) {
+            span.ejb.signature = info.signature;
+        } else if (span.http != null) {
+            span.http.resourceSignature = info.signature;
+        }
 
         List<SerializationWarning> warnings = new ArrayList<SerializationWarning>();
         span.args = new ArrayList<ValueCapture>();

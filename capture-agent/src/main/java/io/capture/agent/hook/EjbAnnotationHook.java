@@ -20,12 +20,14 @@ import static net.bytebuddy.matcher.ElementMatchers.isSynthetic;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.nameStartsWith;
 import static net.bytebuddy.matcher.ElementMatchers.not;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 /**
  * Portable hook: instruments classes annotated with the EJB component annotations, matched
  * by annotation <em>name</em> so the agent never links against javax.ejb. Container-generated
  * subclasses are not annotated and therefore not matched; the advice runs in the user's
- * class and reports it as the bean class.
+ * class and reports it as the bean class. Also instruments JAX-RS resources and JAX-WS
+ * endpoints (child HTTP spans) and WebLogic's filter chain entry (HTTP root spans).
  *
  * Installed only while a recording is active: {@link #install()} retransforms the matched
  * classes that are already loaded and transforms later ones as they load; {@link #uninstall()}
@@ -39,6 +41,20 @@ public final class EjbAnnotationHook implements InstrumentationHook {
             "javax.ejb.Singleton",
             "javax.ejb.MessageDriven",
     };
+
+    /** Resource-layer classes become HTTP child spans; an EJB that is also a resource stays an EJB span. */
+    private static final String[] RESOURCE_ANNOTATIONS = {
+            "javax.ws.rs.Path",
+            "javax.jws.WebService",
+    };
+
+    /**
+     * The WebLogic servlet pipeline entries taking the servlet API interfaces (docs/container-hook.md):
+     * the filter chain when the web app has filters, else the servlet stub directly. Both are
+     * advised; the second sees the request already being recorded and does nothing.
+     */
+    static final String FILTER_CHAIN = "weblogic.servlet.internal.FilterChainImpl";
+    static final String SERVLET_STUB = "weblogic.servlet.internal.ServletStubImpl";
 
     private static final String[] IGNORED_PACKAGES = {
             "weblogic.", "oracle.", "com.oracle.", "com.bea.",
@@ -91,11 +107,17 @@ public final class EjbAnnotationHook implements InstrumentationHook {
         for (String annotation : EJB_ANNOTATIONS) {
             ejbTypes = ejbTypes.or(isAnnotatedWith(named(annotation)));
         }
+        ElementMatcher.Junction<TypeDescription> resourceTypes = ElementMatchers.none();
+        for (String annotation : RESOURCE_ANNOTATIONS) {
+            resourceTypes = resourceTypes.or(isAnnotatedWith(named(annotation)));
+        }
+        resourceTypes = resourceTypes.and(not(ejbTypes));
 
         ElementMatcher.Junction<TypeDescription> ignored = isSynthetic();
         for (String prefix : IGNORED_PACKAGES) {
             ignored = ignored.or(nameStartsWith(prefix));
         }
+        ignored = ignored.and(not(named(FILTER_CHAIN))).and(not(named(SERVLET_STUB)));
 
         ElementMatcher<TypeDescription> configured = new ElementMatcher<TypeDescription>() {
             @Override
@@ -123,6 +145,18 @@ public final class EjbAnnotationHook implements InstrumentationHook {
                         // The agent jar is on the system class path (-javaagent) and on the
                         // bootstrap path; locate the advice class file through the former.
                         .include(ClassLoader.getSystemClassLoader())
-                        .advice(businessMethods, EjbAdvice.class.getName()));
+                        .advice(businessMethods, EjbAdvice.class.getName()))
+                .type(resourceTypes.and(configured))
+                .transform(new AgentBuilder.Transformer.ForAdvice()
+                        .include(ClassLoader.getSystemClassLoader())
+                        .advice(businessMethods, ResourceAdvice.class.getName()))
+                .type(named(FILTER_CHAIN))
+                .transform(new AgentBuilder.Transformer.ForAdvice()
+                        .include(ClassLoader.getSystemClassLoader())
+                        .advice(named("doFilter").and(takesArguments(2)), ServletAdvice.class.getName()))
+                .type(named(SERVLET_STUB))
+                .transform(new AgentBuilder.Transformer.ForAdvice()
+                        .include(ClassLoader.getSystemClassLoader())
+                        .advice(named("execute").and(takesArguments(2)), ServletAdvice.class.getName()));
     }
 }

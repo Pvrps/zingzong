@@ -12,11 +12,13 @@ import javax.ejb.EJB;
 import javax.json.Json;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -65,10 +67,18 @@ public class OrdersResource {
         }
     }
 
+    /** {@code ?delay=ms} holds the request open, for thread dumps of the servlet pipeline. */
     @GET
     @Path("{id}")
-    public Response get(@PathParam("id") long id) {
+    public Response get(@PathParam("id") long id, @QueryParam("delay") @DefaultValue("0") long delayMillis) {
         LOG.info("REST GET /orders/" + id);
+        if (delayMillis > 0) {
+            try {
+                Thread.sleep(Math.min(delayMillis, 30_000));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         try {
             return Response.ok(OrderJson.fromOrder(orderService.findOrder(id))).build();
         } catch (OrderNotFoundException e) {

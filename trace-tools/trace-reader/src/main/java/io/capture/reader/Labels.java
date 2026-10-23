@@ -17,6 +17,11 @@ public final class Labels {
             return bean(span) + "." + span.ejb.method;
         }
         if (span.http != null) {
+            if (span.layer != null && span.http.resourceClass != null) {
+                String cls = span.http.resourceClass;
+                int dot = cls.lastIndexOf('.');
+                return (dot < 0 ? cls : cls.substring(dot + 1)) + "." + span.http.resourceMethod + " [" + span.layer + "]";
+            }
             return span.http.method + " " + span.http.path;
         }
         return span.kind;

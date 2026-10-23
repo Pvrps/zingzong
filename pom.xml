@@ -135,6 +135,12 @@
         <version>${project.version}</version>
         <type>ejb</type>
       </dependency>
+      <dependency>
+        <groupId>io.capture.samples</groupId>
+        <artifactId>tax-web</artifactId>
+        <version>${project.version}</version>
+        <type>war</type>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 

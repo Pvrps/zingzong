@@ -39,12 +39,27 @@ final class SpanStack {
         return open.peek();
     }
 
+    /** The nearest open servlet span's capture state, or null. */
+    Object servletCapture() {
+        for (OpenSpan span : open) {
+            if (span.isServlet()) {
+                return span.http;
+            }
+        }
+        return null;
+    }
+
     TraceBuilder trace() {
         return trace;
     }
 
     OpenSpan push(Recording recording, String beanClass, String method, long nowNanos,
                   String transaction, TracePropagation propagation) {
+        return push(recording, io.capture.trace.Span.KIND_EJB, null, beanClass, method, nowNanos, transaction, null, propagation);
+    }
+
+    OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
+                  String transaction, Object http, TracePropagation propagation) {
         if (open.isEmpty() || trace == null || trace.recording != recording) {
             // New trace: either nothing is open, or the recording changed under an open stack
             // (start/stop mid-call); the stale spans are abandoned.
@@ -58,8 +73,8 @@ final class SpanStack {
         }
         OpenSpan parent = open.peek();
         int order = trace.nextOrder();
-        OpenSpan span = new OpenSpan(trace.spanId(order), parent, order, beanClass, method,
-                nowNanos - trace.startNanos, nowNanos, transaction);
+        OpenSpan span = new OpenSpan(trace.spanId(order), parent, order, kind, layer, beanClass, method,
+                nowNanos - trace.startNanos, nowNanos, transaction, http);
         open.push(span);
         return span;
     }

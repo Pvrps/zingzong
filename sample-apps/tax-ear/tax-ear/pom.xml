@@ -22,6 +22,11 @@
     </dependency>
     <dependency>
       <groupId>io.capture.samples</groupId>
+      <artifactId>tax-web</artifactId>
+      <type>war</type>
+    </dependency>
+    <dependency>
+      <groupId>io.capture.samples</groupId>
       <artifactId>tax-api</artifactId>
     </dependency>
     <dependency>
@@ -43,6 +48,11 @@
               <groupId>io.capture.samples</groupId>
               <artifactId>tax-ejb</artifactId>
             </ejbModule>
+            <webModule>
+              <groupId>io.capture.samples</groupId>
+              <artifactId>tax-web</artifactId>
+              <contextRoot>/tax</contextRoot>
+            </webModule>
           </modules>
         </configuration>
       </plugin>

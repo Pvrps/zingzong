@@ -23,12 +23,7 @@ public final class ValueFlattener {
                 flatten(loaded, span, "result", span.result.value, refs);
             }
             if (span.http != null && span.http.responseBody != null) {
-                JsonNode body = parseJson(span.http.responseBody);
-                if (body != null) {
-                    flatten(loaded, span, "http.responseBody", body, refs);
-                } else {
-                    add(loaded, span, "http.responseBody", span.http.responseBody, refs);
-                }
+                body(loaded, span, "http.responseBody", span.http.responseBody, refs);
             }
         }
         return refs;
@@ -44,17 +39,25 @@ public final class ValueFlattener {
                 }
             }
             if (span.http != null && span.http.requestBody != null) {
-                // Phase 5: the HTTP request body counts as input. JSON bodies are walked;
-                // other bodies contribute the whole text as one value.
-                JsonNode body = parseJson(span.http.requestBody);
-                if (body != null) {
-                    flatten(loaded, span, "http.requestBody", body, refs);
-                } else {
-                    add(loaded, span, "http.requestBody", span.http.requestBody, refs);
-                }
+                // The HTTP request body is input: JSON and XML bodies are walked element by
+                // element, and the whole text is a value too (resource methods receive it as one).
+                body(loaded, span, "http.requestBody", span.http.requestBody, refs);
             }
         }
         return refs;
+    }
+
+    private static void body(LoadedTrace loaded, Span span, String path, String text, List<ValueRef> refs) {
+        JsonNode json = parseJson(text);
+        if (json != null) {
+            flatten(loaded, span, path, json, refs);
+        } else {
+            JsonNode xml = XmlBodies.toTree(text);
+            if (xml != null) {
+                flatten(loaded, span, path, xml, refs);
+            }
+        }
+        add(loaded, span, path, text, refs);
     }
 
     static void flatten(LoadedTrace loaded, Span span, String path, JsonNode node, List<ValueRef> into) {

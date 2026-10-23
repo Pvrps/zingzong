@@ -1,0 +1,709 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261023-170623",
+    "name" : "create-confirm-soap",
+    "seq" : 1
+  },
+  "trace" : {
+    "id" : "t-1fa689f3",
+    "startedAt" : "2026-10-23T21:06:23.715Z",
+    "durationMs" : 20,
+    "httpSessionId" : "mJ5qlhPL_mzj3qn8DLLRMlX1O5L48LhSh4q6zgx17vHi4JnptldQ!-397688496!1792789582795",
+    "serverName" : "AdminServer"
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "HTTP",
+    "http" : {
+      "method" : "POST",
+      "path" : "/orders/api/orders",
+      "contextPath" : "/orders",
+      "servletPath" : "/api",
+      "pathInfo" : "/orders",
+      "protocol" : "HTTP/1.1",
+      "scheme" : "http",
+      "serverName" : "localhost",
+      "serverPort" : 7001,
+      "remoteAddr" : "127.0.0.1",
+      "status" : 201,
+      "contentType" : "application/json",
+      "responseContentType" : "application/json",
+      "requestHeaders" : {
+        "Host" : [ "localhost:7001" ],
+        "User-Agent" : [ "curl/8.22.0" ],
+        "Accept" : [ "*/*" ],
+        "Cookie" : [ "JSESSIONID=mJ5qlhPL_mzj3qn8DLLRMlX1O5L48LhSh4q6zgx17vHi4JnptldQ!-397688496" ],
+        "Content-Type" : [ "application/json" ],
+        "Authorization" : [ "Bearer test-token-123" ],
+        "Content-Length" : [ "420" ]
+      },
+      "responseHeaders" : {
+        "Date" : [ "Fri, 23 Oct 2026 21:06:23 GMT" ],
+        "Content-Length" : [ "237" ],
+        "Content-Type" : [ "application/json" ],
+        "X-ORACLE-DMS-ECID" : [ "554b6794-f028-4136-af50-97196f4978f4-00002b0c" ],
+        "X-ORACLE-DMS-RID" : [ "0" ]
+      },
+      "requestBody" : "{\"customer\":{\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\",\"loyaltyTier\":\"GOLD\",\"address\":{\"street\":\"Keizersgracht 1\",\"city\":\"Amsterdam\",\"region\":\"NH\",\"postalCode\":\"1015 CC\",\"country\":\"NL\"}},\"lines\":[{\"sku\":\"WIDGET-1\",\"quantity\":3},{\"sku\":\"GADGET-2\",\"quantity\":1}],\"attributes\":{\"channel\":\"web\",\"campaign\":\"autumn-2026\"},\"deliveryDate\":\"2026-10-30\",\"paymentMethod\":{\"type\":\"CARD\",\"lastFour\":\"4242\",\"expiry\":\"2028-06\"}}",
+      "requestBodyEncoding" : "UTF-8 (assumed)",
+      "requestBodyLength" : 420,
+      "responseBody" : "{\"id\":98643,\"status\":\"CREATED\",\"customerName\":\"Ada Lovelace\",\"currency\":\"EUR\",\"subtotal\":123.74,\"tax\":25.99,\"total\":149.73,\"createdAt\":\"2026-10-23T17:06:23.727206\",\"deliveryDate\":\"2026-10-30\",\"paymentSummary\":\"card ****4242 exp 2028-06\"}",
+      "responseBodyEncoding" : "UTF-8 (assumed)",
+      "responseBodyLength" : 237
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "startNs" : 0,
+    "durationNs" : 20294866
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "HTTP",
+    "layer" : "jaxrs",
+    "http" : {
+      "resourceClass" : "com.acme.orders.web.OrdersResource",
+      "resourceMethod" : "create",
+      "resourceSignature" : "javax.ws.rs.core.Response create(java.lang.String)"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "{\"customer\":{\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\",\"loyaltyTier\":\"GOLD\",\"address\":{\"street\":\"Keizersgracht 1\",\"city\":\"Amsterdam\",\"region\":\"NH\",\"postalCode\":\"1015 CC\",\"country\":\"NL\"}},\"lines\":[{\"sku\":\"WIDGET-1\",\"quantity\":3},{\"sku\":\"GADGET-2\",\"quantity\":1}],\"attributes\":{\"channel\":\"web\",\"campaign\":\"autumn-2026\"},\"deliveryDate\":\"2026-10-30\",\"paymentMethod\":{\"type\":\"CARD\",\"lastFour\":\"4242\",\"expiry\":\"2028-06\"}}"
+    } ],
+    "result" : {
+      "declaredType" : "javax.ws.rs.core.Response",
+      "value" : {
+        "@type" : "org.glassfish.jersey.message.internal.OutboundJaxrsResponse",
+        "@serializable" : false,
+        "context" : {
+          "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext",
+          "@serializable" : false,
+          "runtimeDelegateDecorator" : {
+            "@type" : "org.glassfish.jersey.internal.RuntimeDelegateDecorator$ConfigurableRuntimeDelegate",
+            "@serializable" : false,
+            "runtimeDelegate" : {
+              "@type" : "org.glassfish.jersey.server.internal.RuntimeDelegateImpl",
+              "@serializable" : false,
+              "hps" : [ {
+                "@type" : "org.glassfish.jersey.message.internal.CookieProvider",
+                "@serializable" : false,
+                "@id" : 2
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.MediaTypeProvider",
+                "@serializable" : false,
+                "@id" : 4
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.NewCookieProvider",
+                "@serializable" : false,
+                "@id" : 5
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.EntityTagProvider",
+                "@serializable" : false,
+                "@id" : 3
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.StringHeaderProvider",
+                "@serializable" : false,
+                "@id" : 7
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.DateProvider",
+                "@serializable" : false,
+                "@id" : 1
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.UriProvider",
+                "@serializable" : false,
+                "@id" : 8
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.CacheControlProvider",
+                "@serializable" : false,
+                "@id" : 6
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LocaleProvider",
+                "@serializable" : false
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LinkProvider",
+                "@serializable" : false
+              } ],
+              "map" : {
+                "@type" : "java.util.WeakHashMap",
+                "@entries" : [ {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@12aba8be",
+                    "toString" : "class java.util.Date"
+                  },
+                  "value" : {
+                    "@ref" : 1
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@4a03938f",
+                    "toString" : "class javax.ws.rs.core.Cookie"
+                  },
+                  "value" : {
+                    "@ref" : 2
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@17067dbd",
+                    "toString" : "class javax.ws.rs.core.EntityTag"
+                  },
+                  "value" : {
+                    "@ref" : 3
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@29c61a2e",
+                    "toString" : "class javax.ws.rs.core.MediaType"
+                  },
+                  "value" : {
+                    "@ref" : 4
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@5da4305c",
+                    "toString" : "class javax.ws.rs.core.NewCookie"
+                  },
+                  "value" : {
+                    "@ref" : 5
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@79eb4149",
+                    "toString" : "class javax.ws.rs.core.CacheControl"
+                  },
+                  "value" : {
+                    "@ref" : 6
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@6d6f6e28",
+                    "toString" : "class java.lang.String"
+                  },
+                  "value" : {
+                    "@ref" : 7
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@baf1bb3",
+                    "toString" : "class java.net.URI"
+                  },
+                  "value" : {
+                    "@ref" : 8
+                  }
+                } ]
+              }
+            },
+            "configuration" : null
+          },
+          "headers" : { },
+          "committingOutputStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@28cd6022",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@28cd6022"
+          },
+          "configuration" : null,
+          "mediaTypeCache" : {
+            "@type" : "org.glassfish.jersey.internal.util.collection.Values$LazyValueImpl",
+            "@serializable" : false,
+            "lock" : {
+              "@type" : "java.lang.Object",
+              "@serializable" : false
+            },
+            "delegate" : {
+              "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext$$Lambda/0x00007dbae5252678",
+              "@serializable" : false,
+              "@skipped" : [ {
+                "field" : "arg$1",
+                "reason" : "compiler-injected (synthetic)"
+              } ]
+            },
+            "value" : null
+          },
+          "entity" : "{\"id\":98643,\"status\":\"CREATED\",\"customerName\":\"Ada Lovelace\",\"currency\":\"EUR\",\"subtotal\":123.74,\"tax\":25.99,\"total\":149.73,\"createdAt\":\"2026-10-23T17:06:23.727206\",\"deliveryDate\":\"2026-10-30\",\"paymentSummary\":\"card ****4242 exp 2028-06\"}",
+          "entityType" : {
+            "@type" : "javax.ws.rs.core.GenericType",
+            "@serializable" : false,
+            "type" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            },
+            "rawType" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            }
+          },
+          "entityAnnotations" : [ ],
+          "entityStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@28cd6022",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@28cd6022"
+          }
+        },
+        "status" : "CREATED",
+        "closed" : false,
+        "buffered" : false
+      }
+    },
+    "serializationWarnings" : [ {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[0].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[1].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[2].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[3].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[4].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[5].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[6].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[7].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.committingOutputStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    }, {
+      "path" : "$.result.context.entityType.type",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityType.rawType",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    } ],
+    "startNs" : 1680961,
+    "durationNs" : 12365537
+  }, {
+    "id" : "s3",
+    "parentId" : "s2",
+    "depth" : 2,
+    "order" : 2,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.OrderServiceBean",
+      "method" : "createOrder",
+      "signature" : "com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.CreateOrderRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.CreateOrderRequest",
+        "customer" : {
+          "@type" : "com.acme.common.dto.Customer",
+          "name" : "Ada Lovelace",
+          "email" : "ada@example.com",
+          "loyaltyTier" : "GOLD",
+          "address" : {
+            "@type" : "com.acme.common.dto.Address",
+            "street" : "Keizersgracht 1",
+            "city" : "Amsterdam",
+            "region" : "NH",
+            "postalCode" : "1015 CC",
+            "country" : "NL"
+          }
+        },
+        "lines" : [ {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "WIDGET-1",
+          "quantity" : 3
+        }, {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "GADGET-2",
+          "quantity" : 1
+        } ],
+        "attributes" : {
+          "channel" : "web",
+          "campaign" : "autumn-2026"
+        },
+        "requestedDeliveryDate" : "2026-10-30",
+        "requestedAt" : "2026-10-23T21:06:23.719917201Z",
+        "paymentMethod" : {
+          "@type" : "com.acme.common.dto.CardPayment",
+          "lastFourDigits" : "4242",
+          "expiry" : "2028-06"
+        }
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.model.Order",
+      "value" : {
+        "@type" : "com.acme.common.model.Order",
+        "id" : 98643,
+        "customerName" : "Ada Lovelace",
+        "customerEmail" : "ada@example.com",
+        "status" : "CREATED",
+        "createdAt" : "2026-10-23T17:06:23.727206",
+        "deliveryDate" : "2026-10-30",
+        "currency" : "EUR",
+        "subtotal" : "123.74",
+        "tax" : "25.99",
+        "total" : "149.73",
+        "paymentSummary" : "card ****4242 exp 2028-06",
+        "lines" : {
+          "@lazy" : true,
+          "loaded" : false
+        },
+        "audit" : {
+          "@type" : "com.acme.common.model.AuditTrail",
+          "@serializable" : false,
+          "entries" : "",
+          "lock" : {
+            "@type" : "java.lang.Object",
+            "@serializable" : false
+          },
+          "openedAt" : "2026-10-23T21:06:23.727982620Z",
+          "entryCount" : 0
+        },
+        "@skipped" : [ {
+          "field" : "_persistence_primaryKey",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_cacheKey",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_listener",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_fetchGroup",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_shouldRefreshFetchGroup",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_session",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_relationshipInfo",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_href",
+          "reason" : "weaver-injected (EclipseLink)"
+        }, {
+          "field" : "_persistence_links",
+          "reason" : "weaver-injected (EclipseLink)"
+        } ]
+      }
+    },
+    "startNs" : 4742336,
+    "durationNs" : 7980279
+  }, {
+    "id" : "s4",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 3,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.InventoryServiceBean",
+      "method" : "reserve",
+      "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "WIDGET-1"
+    }, {
+      "declaredType" : "int",
+      "value" : 3
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.Reservation",
+      "value" : {
+        "@type" : "com.acme.common.dto.Reservation",
+        "reservationId" : "dcd08b97-88d3-4d49-bf84-ea05f5cef3ed",
+        "sku" : "WIDGET-1",
+        "quantity" : 3,
+        "warehouse" : "WH-AMS",
+        "reservedUntil" : "2026-10-23T19:06:23.720411839"
+      }
+    },
+    "startNs" : 4964054,
+    "durationNs" : 152690
+  }, {
+    "id" : "s5",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 4,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.InventoryServiceBean",
+      "method" : "reserve",
+      "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "GADGET-2"
+    }, {
+      "declaredType" : "int",
+      "value" : 1
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.Reservation",
+      "value" : {
+        "@type" : "com.acme.common.dto.Reservation",
+        "reservationId" : "2b1cdbb4-ed70-4fb3-be10-02b27a59900a",
+        "sku" : "GADGET-2",
+        "quantity" : 1,
+        "warehouse" : "WH-AMS",
+        "reservedUntil" : "2026-10-23T19:06:23.724594068"
+      }
+    },
+    "startNs" : 9218963,
+    "durationNs" : 68920
+  }, {
+    "id" : "s6",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 5,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "price",
+      "signature" : "com.acme.common.dto.PriceQuote price(com.acme.common.dto.CreateOrderRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.CreateOrderRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.CreateOrderRequest",
+        "customer" : {
+          "@type" : "com.acme.common.dto.Customer",
+          "name" : "Ada Lovelace",
+          "email" : "ada@example.com",
+          "loyaltyTier" : "GOLD",
+          "address" : {
+            "@type" : "com.acme.common.dto.Address",
+            "street" : "Keizersgracht 1",
+            "city" : "Amsterdam",
+            "region" : "NH",
+            "postalCode" : "1015 CC",
+            "country" : "NL"
+          }
+        },
+        "lines" : [ {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "WIDGET-1",
+          "quantity" : 3
+        }, {
+          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "sku" : "GADGET-2",
+          "quantity" : 1
+        } ],
+        "attributes" : {
+          "channel" : "web",
+          "campaign" : "autumn-2026"
+        },
+        "requestedDeliveryDate" : "2026-10-30",
+        "requestedAt" : "2026-10-23T21:06:23.719917201Z",
+        "paymentMethod" : {
+          "@type" : "com.acme.common.dto.CardPayment",
+          "lastFourDigits" : "4242",
+          "expiry" : "2028-06"
+        }
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.PriceQuote",
+      "value" : {
+        "@type" : "com.acme.common.dto.PriceQuote",
+        "currency" : "EUR",
+        "lineTotals" : {
+          "WIDGET-1" : "37.50",
+          "GADGET-2" : "99.99"
+        },
+        "subtotal" : "123.74",
+        "tax" : {
+          "@type" : "com.acme.common.dto.TaxResult",
+          "jurisdiction" : "NL-NH",
+          "rate" : "0.21",
+          "tax" : "25.99",
+          "computedAt" : "2026-10-23T21:06:23.725872121Z"
+        },
+        "total" : "149.73"
+      }
+    },
+    "startNs" : 9331342,
+    "durationNs" : 1673062
+  }, {
+    "id" : "s7",
+    "parentId" : "s6",
+    "depth" : 4,
+    "order" : 6,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "WIDGET-1"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "12.50"
+    },
+    "selfInvocation" : true,
+    "startNs" : 9449322,
+    "durationNs" : 8810
+  }, {
+    "id" : "s8",
+    "parentId" : "s6",
+    "depth" : 4,
+    "order" : 7,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "GADGET-2"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "99.99"
+    },
+    "selfInvocation" : true,
+    "startNs" : 9520061,
+    "durationNs" : 3070
+  }, {
+    "id" : "s9",
+    "parentId" : "s6",
+    "depth" : 4,
+    "order" : 8,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.tax.TaxServiceBean",
+      "method" : "computeTax",
+      "signature" : "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.TaxRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.TaxRequest",
+        "country" : "NL",
+        "region" : "NH",
+        "category" : "GOODS",
+        "amount" : "123.74"
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.TaxResult",
+      "value" : {
+        "@type" : "com.acme.common.dto.TaxResult",
+        "jurisdiction" : "NL-NH",
+        "rate" : "0.21",
+        "tax" : "25.99",
+        "computedAt" : "2026-10-23T21:06:23.725872121Z"
+      }
+    },
+    "startNs" : 10307097,
+    "durationNs" : 265479
+  }, {
+    "id" : "s10",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 9,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "WIDGET-1"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "12.50"
+    },
+    "startNs" : 11919999,
+    "durationNs" : 4700
+  }, {
+    "id" : "s11",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 10,
+    "kind" : "EJB",
+    "ejb" : {
+      "beanClass" : "com.acme.orders.PricingServiceBean",
+      "method" : "unitPrice",
+      "signature" : "java.math.BigDecimal unitPrice(java.lang.String)",
+      "transaction" : "ACTIVE"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "GADGET-2"
+    } ],
+    "result" : {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "99.99"
+    },
+    "startNs" : 11935989,
+    "durationNs" : 2180
+  } ]
+}

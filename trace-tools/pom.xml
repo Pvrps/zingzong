@@ -16,5 +16,6 @@
 
   <modules>
     <module>trace-reader</module>
+    <module>trace-export</module>
   </modules>
 </project>

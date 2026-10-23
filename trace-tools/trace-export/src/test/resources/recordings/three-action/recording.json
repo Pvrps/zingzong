@@ -1,0 +1,16 @@
+{
+  "formatVersion" : 1,
+  "id" : "rec-20261023-175858",
+  "name" : "phase7-three-action",
+  "startedAt" : "2026-10-23T21:58:58.763Z",
+  "endedAt" : "2026-10-23T21:59:00.491Z",
+  "serverName" : "AdminServer",
+  "agent" : {
+    "version" : "0.1.0-SNAPSHOT",
+    "build" : "2026-10-23T21:43:18Z",
+    "hook" : "container",
+    "jvm" : "21.0.12.1"
+  },
+  "traceCount" : 3,
+  "droppedTraces" : 0
+}

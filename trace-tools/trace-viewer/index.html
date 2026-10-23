@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ejb-capture viewer</title>
+<style>
+  :root {
+    --bg: #fafafa; --fg: #1d1d1d; --muted: #6b6b6b; --line: #dcdcdc; --sel: #e3edff; --sel-line: #7aa2ff;
+    --ejb: #2b6cb0; --http: #2f855a; --remote: #b7791f; --self: #805ad5; --err: #c53030; --trunc: #c05621;
+    --marker: #fff5d6; --ref: #e6fffa; --lazy: #fefcbf; --handle: #fed7d7; --skipped: #e2e8f0; --type: #ebf4ff;
+    --badge: #ffe8cc; --badge-line: #f6ad55; --flash: #fff176;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font: 13px/1.4 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+  header { display: flex; gap: 16px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); background: #fff; }
+  header h1 { font-size: 14px; margin: 0; }
+  header .meta { color: var(--muted); }
+  header label { user-select: none; }
+  header .keys { margin-left: auto; color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 300px minmax(380px, 1fr) minmax(420px, 1.2fr); height: calc(100% - 37px); }
+  main > section { overflow: auto; border-right: 1px solid var(--line); padding: 8px; }
+  main > section:last-child { border-right: none; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 4px 0 8px; }
+
+  /* lanes */
+  .lane { margin-bottom: 14px; }
+  .lane-head { font-size: 12px; color: var(--muted); padding: 2px 4px; border-bottom: 1px dashed var(--line); margin-bottom: 4px; }
+  .lane-head b { color: var(--fg); }
+  .trace { display: grid; grid-template-columns: 28px 1fr auto; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
+  .trace:hover { background: #f0f0f0; }
+  .trace.selected { background: var(--sel); border-color: var(--sel-line); }
+  .trace .seq { color: var(--muted); }
+  .trace .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trace .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .trace .sub { grid-column: 2 / 4; color: var(--muted); font-size: 11px; }
+
+  /* tree */
+  .node { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; white-space: nowrap; border: 1px solid transparent; }
+  .node:hover { background: #f0f0f0; }
+  .node.selected { background: var(--sel); border-color: var(--sel-line); }
+  .node .twist { width: 12px; display: inline-block; color: var(--muted); text-align: center; }
+  .node .dur { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 10px; }
+  .children { margin-left: 16px; border-left: 1px dotted var(--line); padding-left: 4px; }
+  .badge { display: inline-block; font-size: 10.5px; line-height: 1.3; padding: 0 5px; border-radius: 3px; border: 1px solid; font-weight: 600; letter-spacing: .02em; }
+  .badge.ejb { color: var(--ejb); border-color: var(--ejb); }
+  .badge.http { color: var(--http); border-color: var(--http); }
+  .badge.layer { color: var(--muted); border-color: var(--line); font-weight: 500; }
+  .badge.remote { color: #fff; background: var(--remote); border-color: var(--remote); }
+  .badge.self { color: #fff; background: var(--self); border-color: var(--self); }
+  .badge.err { color: #fff; background: var(--err); border-color: var(--err); }
+  .badge.trunc { color: #fff; background: var(--trunc); border-color: var(--trunc); }
+  .badge.warn { color: var(--trunc); border-color: var(--trunc); }
+
+  /* detail */
+  .detail-head { margin-bottom: 8px; }
+  .detail-head .path { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
+  .json { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+  .json .row { display: block; padding-left: var(--indent, 0); }
+  .json .k { color: #4a5568; }
+  .json .s { color: #2b6cb0; }
+  .json .n { color: #805ad5; }
+  .json .b { color: #b7791f; }
+  .json .z { color: var(--muted); }
+  .json .m { background: var(--marker); border-radius: 2px; padding: 0 2px; }
+  .json .m.type { background: var(--type); }
+  .json .m.ref { background: var(--ref); }
+  .json .m.lazy { background: var(--lazy); }
+  .json .m.handle { background: var(--handle); }
+  .json .m.skipped { background: var(--skipped); }
+  .json .m.truncated { background: #fbd38d; }
+  .json .m.unserializable { background: var(--handle); }
+  .json .row.flagged { outline: 2px solid var(--err); outline-offset: -1px; background: #fff5f5; }
+  .json .row.flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { 0% { background: var(--flash); } 100% { background: transparent; } }
+  .json .fold { cursor: pointer; color: var(--muted); user-select: none; }
+  .json .text-block { display: block; margin: 2px 0 2px 1em; padding: 4px 6px; background: #fff; border: 1px solid var(--line); border-radius: 3px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+  .lineage { display: inline-block; margin-left: 8px; font: 11px system-ui, sans-serif; background: var(--badge); border: 1px solid var(--badge-line); border-radius: 3px; padding: 0 5px; vertical-align: baseline; }
+  .lineage a { color: #7b341e; text-decoration: underline; cursor: pointer; }
+  .lineage .alt { color: var(--muted); }
+  .lineage.class-userInput { background: #e6fffa; border-color: #38b2ac; }
+  .lineage.class-environment { background: #edf2f7; border-color: #a0aec0; }
+  .lineage.uses { background: #ebf8ff; border-color: #63b3ed; }
+  .empty { color: var(--muted); padding: 20px; }
+  .err-box { color: var(--err); padding: 20px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ejb-capture</h1>
+  <span class="meta" id="recording-meta">loading…</span>
+  <label><input type="checkbox" id="hide-self"> hide self-invocations</label>
+  <label><input type="checkbox" id="only-roots"> only root spans</label>
+  <span class="keys">↑/↓ trace · ←/→ collapse/expand · everything shown by default; nothing is summarized</span>
+</header>
+<main>
+  <section id="traces"><h2>Traces</h2><div id="lanes"></div></section>
+  <section id="tree"><h2>Spans</h2><div id="tree-body" class="empty">Select a trace.</div></section>
+  <section id="detail"><h2>Span</h2><div id="detail-body" class="empty">Select a span.</div></section>
+</main>
+<script>
+'use strict';
+
+const state = {
+  index: null,
+  traces: new Map(),      // id -> trace JSON
+  order: [],              // trace ids by seq
+  selectedTrace: null,
+  selectedSpan: null,
+  collapsed: new Set(),   // "traceId/spanId"
+  hideSelf: false,
+  onlyRoots: false,
+};
+
+async function load() {
+  try {
+    const index = await (await fetch('recording-index.json', { cache: 'no-store' })).json();
+    state.index = index;
+    const traces = index.traces.slice().sort((a, b) => a.seq - b.seq);
+    await Promise.all(traces.map(async t => {
+      const trace = await (await fetch(t.file, { cache: 'no-store' })).json();
+      state.traces.set(t.id, trace);
+    }));
+    state.order = traces.map(t => t.id);
+    const r = index.recording || {};
+    const agent = r.agent || {};
+    document.getElementById('recording-meta').textContent =
+      `${r.name || ''} (${r.id || ''}) · ${index.traces.length} traces · ${index.sessions.length} session lanes · ` +
+      `${index.lineage.length} lineage entries · hook=${agent.hook || '?'} · server=${r.serverName || '?'}`;
+    renderLanes();
+    const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const wanted = h.get('t') && state.traces.has(h.get('t')) ? h.get('t') : state.order[0];
+    if (wanted) {
+      if (h.get('p')) jumpTo(wanted, h.get('s') || rootOf(wanted), h.get('p'));
+      else selectTrace(wanted, h.get('s') || undefined);
+    }
+  } catch (e) {
+    document.getElementById('lanes').innerHTML = `<div class="err-box">Could not load recording-index.json from this directory.\nRun: trace-reader index &lt;dir&gt;; then trace-view &lt;dir&gt;.\n\n${esc(String(e))}</div>`;
+  }
+}
+
+// ---- left: session lanes --------------------------------------------------------------
+
+function renderLanes() {
+  const lanes = document.getElementById('lanes');
+  lanes.innerHTML = '';
+  const byId = new Map(state.index.traces.map(t => [t.id, t]));
+  for (const session of state.index.sessions) {
+    const lane = el('div', 'lane');
+    const head = el('div', 'lane-head');
+    head.innerHTML = `<b>${esc(session.kind)}</b> ${esc(shorten(session.key, 28))} · ${session.traceIds.length} trace${session.traceIds.length === 1 ? '' : 's'}`;
+    head.title = session.key || '';
+    lane.appendChild(head);
+    for (const id of session.traceIds) {
+      const t = byId.get(id);
+      if (!t) continue;
+      const row = el('div', 'trace');
+      row.dataset.trace = id;
+      row.innerHTML = `<span class="seq">#${t.seq}</span><span class="label">${esc(t.rootLabel || '?')}</span><span class="dur">${t.durationMs} ms</span>` +
+        `<span class="sub">${esc(t.startedAt || '')}${t.principal ? ' · ' + esc(t.principal) : ''}${t.failed ? ' · <span class="badge err">failed</span>' : ''}` +
+        `${t.warningCount ? ' · ' + t.warningCount + ' warning' + (t.warningCount === 1 ? '' : 's') : ''}${t.parentTraceId ? ' · child of ' + esc(t.parentTraceId) : ''}</span>`;
+      row.title = `${t.id} · ${t.spanCount} spans`;
+      row.addEventListener('click', () => selectTrace(id));
+      lane.appendChild(row);
+    }
+    lanes.appendChild(lane);
+  }
+}
+
+function selectTrace(id, spanId) {
+  state.selectedTrace = id;
+  document.querySelectorAll('.trace').forEach(r => r.classList.toggle('selected', r.dataset.trace === id));
+  const row = document.querySelector(`.trace[data-trace="${CSS.escape(id)}"]`);
+  if (row) row.scrollIntoView({ block: 'nearest' });
+  const trace = state.traces.get(id);
+  const root = trace.spans.find(s => s.parentId == null) || trace.spans[0];
+  renderTree();
+  selectSpan(spanId || (root && root.id));
+}
+
+// ---- centre: span tree ----------------------------------------------------------------
+
+function spanLabel(s) {
+  if (s.ejb) return `${s.ejb.beanName || simple(s.ejb.beanClass)}.${s.ejb.method}`;
+  if (s.http) {
+    if (s.layer && s.http.resourceClass) return `${simple(s.http.resourceClass)}.${s.http.resourceMethod}`;
+    return `${s.http.method || ''} ${s.http.path || ''}`;
+  }
+  return s.kind || '?';
+}
+
+function truncation(s) {
+  const reasons = [];
+  if (s.http) {
+    if (s.http.requestBodyDropped) reasons.push(`request body: ${s.http.requestBodyDropped} bytes dropped`);
+    if (s.http.responseBodyDropped) reasons.push(`response body: ${s.http.responseBodyDropped} bytes dropped`);
+    if (s.http.requestBodyComplete === false) reasons.push('request body incomplete');
+  }
+  for (const w of s.serializationWarnings || []) {
+    if (/limit|truncat|dropped/i.test(w.reason || '')) reasons.push(`${w.path}: ${w.reason}`);
+  }
+  let found = false;
+  walk(s.args, v => { if (v && typeof v === 'object' && '@truncated' in v) found = true; });
+  walk(s.result, v => { if (v && typeof v === 'object' && '@truncated' in v) found = true; });
+  if (found) reasons.push('@truncated marker in args/result');
+  return reasons;
+}
+
+function walk(v, fn) {
+  if (v == null) return;
+  fn(v);
+  if (Array.isArray(v)) v.forEach(x => walk(x, fn));
+  else if (typeof v === 'object') Object.values(v).forEach(x => walk(x, fn));
+}
+
+function renderTree() {
+  const body = document.getElementById('tree-body');
+  body.className = '';
+  body.innerHTML = '';
+  const trace = state.traces.get(state.selectedTrace);
+  if (!trace) return;
+  const byId = new Map(trace.spans.map(s => [s.id, s]));
+  const children = new Map();
+  let roots = [];
+  for (const s of trace.spans) {
+    if (s.parentId == null || !byId.has(s.parentId)) roots.push(s);
+    else (children.get(s.parentId) || children.set(s.parentId, []).get(s.parentId)).push(s);
+  }
+  for (const list of children.values()) list.sort((a, b) => a.order - b.order);
+  // hide self-invocations: the span disappears, its children move up to its parent
+  const visibleChildren = (s) => {
+    const out = [];
+    for (const c of children.get(s.id) || []) {
+      if (state.hideSelf && c.selfInvocation) out.push(...visibleChildren(c));
+      else out.push(c);
+    }
+    return out;
+  };
+  const render = (s, container, depth) => {
+    const kids = state.onlyRoots ? [] : visibleChildren(s);
+    const key = `${trace.trace.id}/${s.id}`;
+    const row = el('div', 'node');
+    row.dataset.span = s.id;
+    const twist = el('span', 'twist');
+    twist.textContent = kids.length ? (state.collapsed.has(key) ? '▸' : '▾') : '·';
+    row.appendChild(twist);
+    row.appendChild(badge(s.kind === 'EJB' ? 'ejb' : 'http', s.kind));
+    if (s.layer) row.appendChild(badge('layer', s.layer));
+    const label = el('span', 'label');
+    label.textContent = spanLabel(s);
+    row.appendChild(label);
+    if (s.ejb && s.ejb.invocation === 'REMOTE') row.appendChild(badge('remote', 'REMOTE'));
+    if (s.selfInvocation) row.appendChild(badge('self', 'self-invocation'));
+    if (s.exception) row.appendChild(badge('err', `✗ ${simple(s.exception.className)}`));
+    const trunc = truncation(s);
+    if (trunc.length) { const b = badge('trunc', 'truncated'); b.title = trunc.join('\n'); row.appendChild(b); }
+    const warnings = (s.serializationWarnings || []).length;
+    if (warnings && !trunc.length) { const b = badge('warn', `${warnings} warning${warnings === 1 ? '' : 's'}`); b.title = (s.serializationWarnings || []).map(w => `${w.path}: ${w.reason}`).join('\n'); row.appendChild(b); }
+    const dur = el('span', 'dur');
+    dur.textContent = `${(s.durationNs / 1e6).toFixed(3)} ms`;
+    row.appendChild(dur);
+    row.addEventListener('click', (e) => {
+      if (e.target === twist && kids.length) toggleCollapse(key);
+      else selectSpan(s.id);
+    });
+    container.appendChild(row);
+    if (kids.length && !state.collapsed.has(key)) {
+      const box = el('div', 'children');
+      for (const c of kids) render(c, box, depth + 1);
+      container.appendChild(box);
+    }
+  };
+  for (const r of roots) render(r, body, 0);
+  if (state.selectedSpan) document.querySelectorAll('.node').forEach(n => n.classList.toggle('selected', n.dataset.span === state.selectedSpan));
+}
+
+function toggleCollapse(key) {
+  if (state.collapsed.has(key)) state.collapsed.delete(key); else state.collapsed.add(key);
+  renderTree();
+}
+
+function selectSpan(id, focusPath) {
+  state.selectedSpan = id;
+  document.querySelectorAll('.node').forEach(n => n.classList.toggle('selected', n.dataset.span === id));
+  const node = document.querySelector(`.node[data-span="${CSS.escape(id || '')}"]`);
+  if (node) node.scrollIntoView({ block: 'nearest' });
+  renderDetail(focusPath);
+  // a shareable link to what is on screen
+  history.replaceState(null, '', `#t=${encodeURIComponent(state.selectedTrace)}&s=${encodeURIComponent(id || '')}${focusPath ? '&p=' + encodeURIComponent(focusPath) : ''}`);
+}
+
+function rootOf(traceId) {
+  const t = state.traces.get(traceId);
+  const r = t.spans.find(s => s.parentId == null) || t.spans[0];
+  return r && r.id;
+}
+
+// ---- right: the span, in full ---------------------------------------------------------
+
+function renderDetail(focusPath) {
+  const body = document.getElementById('detail-body');
+  const trace = state.traces.get(state.selectedTrace);
+  const span = trace && trace.spans.find(s => s.id === state.selectedSpan);
+  if (!span) { body.className = 'empty'; body.textContent = 'Select a span.'; return; }
+  body.className = '';
+  body.innerHTML = '';
+  const head = el('div', 'detail-head');
+  head.innerHTML = `<b>${esc(spanLabel(span))}</b> <span class="path">${esc(trace.trace.id)} / ${esc(span.id)}</span>`;
+  body.appendChild(head);
+  const json = el('div', 'json');
+  const badges = lineageBadges(trace.trace.id, span.id);
+  renderValue(json, span, '', 0, badges);
+  body.appendChild(json);
+  const unplaced = Object.entries(badges).filter(([, v]) => !v.placed);
+  if (unplaced.length) {
+    const box = el('div', 'json');
+    box.appendChild(el('div', 'k', 'lineage on paths not rendered above:'));
+    for (const [path, v] of unplaced) { const r = el('div', 'row'); r.textContent = path + ' '; v.badges.forEach(b => r.appendChild(b)); box.appendChild(r); }
+    body.appendChild(box);
+  }
+  if (focusPath) {
+    const target = findRow(json, focusPath);
+    if (target) { target.scrollIntoView({ block: 'center' }); target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); }
+  }
+}
+
+// Markers the agent writes for structural necessities; each is highlighted, never hidden.
+const MARKERS = { '@type': 'type', '@ref': 'ref', '@id': 'ref', '@lazy': 'lazy', '@handle': 'handle', '@skipped': 'skipped', '@truncated': 'truncated', '@unserializable': 'unserializable', '@serializable': 'unserializable' };
+
+function renderValue(container, value, path, depth, badges, key) {
+  const row = el('span', 'row');
+  row.style.setProperty('--indent', depth ? '1.2em' : '0');  // rows nest, so each level adds one step
+  row.dataset.path = path;
+  if (key !== undefined) {
+    const k = el('span', 'k', typeof key === 'number' ? `[${key}]` : JSON.stringify(key));
+    const marker = typeof key === 'string' && MARKERS[key];
+    if (marker) { k.classList.add('m', marker); }
+    row.appendChild(k);
+    row.appendChild(document.createTextNode(': '));
+    if (key === '@serializable' && value === false) row.classList.add('flagged');
+    if (key === '@truncated' || key === '@handle' || key === '@lazy' || key === '@unserializable') row.classList.add('flagged');
+  }
+  if (value === null || value === undefined) {
+    row.appendChild(el('span', 'z', 'null'));
+  } else if (Array.isArray(value)) {
+    if (!value.length) row.appendChild(document.createTextNode('[]'));
+    else {
+      const fold = el('span', 'fold', `[ ${value.length} ]`);
+      const box = el('span', 'block');
+      fold.addEventListener('click', () => { box.hidden = !box.hidden; });
+      row.appendChild(fold);
+      row.appendChild(box);
+      value.forEach((v, i) => renderValue(box, v, `${path}[${i}]`, depth + 1, badges, i));
+    }
+  } else if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (!keys.length) row.appendChild(document.createTextNode('{}'));
+    else {
+      const fold = el('span', 'fold', `{ ${keys.length} }`);
+      const box = el('span', 'block');
+      fold.addEventListener('click', () => { box.hidden = !box.hidden; });
+      row.appendChild(fold);
+      row.appendChild(box);
+      for (const k of keys) renderValue(box, value[k], path ? `${path}.${k}` : k, depth + 1, badges, k);
+    }
+  } else if (typeof value === 'string') {
+    if (value.length > 120 || value.includes('\n')) {
+      const block = el('span', 'text-block');
+      block.textContent = value;
+      row.appendChild(el('span', 'z', `string, ${value.length} chars`));
+      row.appendChild(block);
+    } else {
+      row.appendChild(el('span', 's', JSON.stringify(value)));
+    }
+  } else if (typeof value === 'number') {
+    row.appendChild(el('span', 'n', String(value)));
+  } else {
+    row.appendChild(el('span', 'b', String(value)));
+  }
+  const b = badges[path];
+  if (b) { b.badges.forEach(x => row.appendChild(x)); b.placed = true; }
+  container.appendChild(row);
+}
+
+function findRow(json, path) {
+  // exact first, then the longest rendered prefix (a value inside a body string, a path segment)
+  let p = path;
+  while (p) {
+    const hit = json.querySelector(`.row[data-path="${CSS.escape(p)}"]`);
+    if (hit) return hit;
+    p = parentPath(p);
+  }
+  return null;
+}
+
+function parentPath(p) {
+  const i = Math.max(p.lastIndexOf('.'), p.lastIndexOf('['));
+  return i <= 0 ? '' : p.substring(0, i);
+}
+
+// ---- lineage ----------------------------------------------------------------------------
+
+// A lineage path names the captured value ("args[0].orderId", "result.id", "http.requestBody.x",
+// "http.path[4]"); in the span JSON an arg or result wraps its value (args[0].value.orderId), and a
+// value inside a body string or the URL is addressed from the field holding it, remainder shown.
+function locate(lineagePath) {
+  let m;
+  if ((m = /^(args\[\d+\])(.*)$/.exec(lineagePath))) return { json: m[1] + '.value' + m[2], remainder: '' };
+  if ((m = /^result(.*)$/.exec(lineagePath))) return { json: 'result.value' + m[1], remainder: '' };
+  if ((m = /^(http\.(requestBody|responseBody|path|query))(.*)$/.exec(lineagePath))) return { json: m[1], remainder: m[3] };
+  return { json: lineagePath, remainder: '' };
+}
+function jsonPath(lineagePath) { return locate(lineagePath).json; }
+
+function lineageBadges(traceId, spanId) {
+  const out = {};
+  const put = (lineagePath, badgeEl) => {
+    let jp = jsonPath(lineagePath);
+    if (!out[jp]) out[jp] = { badges: [], placed: false };
+    out[jp].badges.push(badgeEl);
+  };
+  const seqOf = id => { const t = state.index.traces.find(x => x.id === id); return t ? '#' + t.seq : id; };
+  const labelOf = (ref) => {
+    const t = state.traces.get(ref.trace || traceId);
+    const s = t && t.spans.find(x => x.id === ref.span);
+    return s ? spanLabel(s) : ref.span;
+  };
+  const link = (ref, text) => {
+    const a = el('a', '', text);
+    a.title = `${ref.trace || traceId} / ${ref.span} / ${ref.path}`;
+    a.addEventListener('click', (e) => { e.stopPropagation(); jumpTo(ref.trace || traceId, ref.span, jsonPath(ref.path)); });
+    return a;
+  };
+  for (const entry of state.index.lineage) {
+    const to = entry.to || {};
+    const toTrace = to.trace || traceId;
+    if (toTrace === traceId && to.span === spanId) {
+      const b = el('span', 'lineage');
+      const remainder = locate(to.path).remainder;
+      if (entry.from) {
+        b.appendChild(document.createTextNode((remainder ? remainder + ' ' : '') + '← '));
+        b.appendChild(link(entry.from, `${seqOf(entry.from.trace)} ${labelOf(entry.from)} / ${entry.from.path}`));
+        for (const alt of entry.alternatives || []) {
+          b.appendChild(document.createTextNode(' · '));
+          const altLink = link(alt, `${seqOf(alt.trace)} ${labelOf(alt)} / ${alt.path}`);
+          altLink.classList.add('alt');
+          b.appendChild(document.createTextNode('also: '));
+          b.appendChild(altLink);
+        }
+        if (entry.alsoProducedHere) b.appendChild(document.createTextNode(' · also produced in this trace'));
+      } else {
+        b.classList.add('class-' + entry.classification);
+        b.textContent = (remainder ? remainder + ' ' : '') + entry.classification;
+      }
+      b.title = `value ${entry.value}`;
+      put(to.path, b);
+    }
+    if (entry.from && (entry.from.trace || traceId) === traceId && entry.from.span === spanId) {
+      const b = el('span', 'lineage uses');
+      const remainder = locate(entry.from.path).remainder;
+      b.appendChild(document.createTextNode((remainder ? remainder + ' ' : '') + '→ '));
+      b.appendChild(link({ trace: toTrace, span: to.span, path: to.path }, `${seqOf(toTrace)} ${labelOf({ trace: toTrace, span: to.span })} / ${to.path}`));
+      b.title = `value ${entry.value}`;
+      put(entry.from.path, b);
+    }
+  }
+  return out;
+}
+
+function jumpTo(traceId, spanId, path) {
+  if (state.selectedTrace !== traceId) {
+    state.selectedSpan = spanId;
+    selectTrace(traceId, spanId);
+    renderDetail(path);
+  } else {
+    selectSpan(spanId, path);
+  }
+}
+
+// ---- keyboard & toggles ---------------------------------------------------------------
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  const i = state.order.indexOf(state.selectedTrace);
+  if (e.key === 'ArrowDown' && i >= 0 && i + 1 < state.order.length) { e.preventDefault(); selectTrace(state.order[i + 1]); }
+  else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); selectTrace(state.order[i - 1]); }
+  else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && state.selectedSpan) {
+    e.preventDefault();
+    const key = `${state.selectedTrace}/${state.selectedSpan}`;
+    if (e.key === 'ArrowLeft') state.collapsed.add(key); else state.collapsed.delete(key);
+    renderTree();
+  }
+});
+document.getElementById('hide-self').addEventListener('change', (e) => { state.hideSelf = e.target.checked; renderTree(); });
+document.getElementById('only-roots').addEventListener('change', (e) => { state.onlyRoots = e.target.checked; renderTree(); });
+
+// ---- helpers ------------------------------------------------------------------------------
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function badge(cls, text) { return el('span', 'badge ' + cls, text); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function simple(name) { if (!name) return '?'; const i = name.lastIndexOf('.'); return i < 0 ? name : name.substring(i + 1); }
+function shorten(s, n) { s = s || ''; return s.length > n ? s.substring(0, n) + '…' : s; }
+
+load();
+</script>
+</body>
+</html>

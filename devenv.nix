@@ -26,6 +26,7 @@ in
   packages = with pkgs; [
     wlsFhsRun
     jq
+    python3
     git
     curl
     coreutils
@@ -91,9 +92,13 @@ in
     capture-start.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" start "$@"'';
     capture-stop.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" stop "$@"'';
     capture-status.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" status "$@"'';
-    trace-reader.exec = ''exec java -jar "$DEVENV_ROOT/trace-tools/trace-reader/target/trace-reader.jar" "$@"'';
+    trace-reader.exec = ''
+      if [ "''${1:-}" = export ]; then exec java -jar "$DEVENV_ROOT/trace-tools/trace-export/target/trace-export.jar" "$@"; fi
+      exec java -jar "$DEVENV_ROOT/trace-tools/trace-reader/target/trace-reader.jar" "$@"
+    '';
     soap-tax.exec = ''bash "$DEVENV_ROOT/scripts/soap-tax.sh" "$@"'';
     hook-diff.exec = ''bash "$DEVENV_ROOT/scripts/hook-diff.sh" "$@"'';
     jndi-proof.exec = ''bash "$DEVENV_ROOT/scripts/jndi-proof.sh" "$@"'';
+    trace-view.exec = ''bash "$DEVENV_ROOT/scripts/trace-view.sh" "$@"'';
   };
 }

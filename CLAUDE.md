@@ -21,14 +21,14 @@ Full plan: docs/PLAN.md. Work phase by phase; each phase has an acceptance check
 ## Environment (NixOS)
 - Everything runs inside `devenv shell`; no containers.
 - WebLogic installer jar at `$WLS_INSTALLER` (outside the repo). Install into `.local/oracle`.
-- Scripts: `wls-install`, `wls-domain`, `wls-start [-b]`, `wls-stop`, `wls-deploy [--no-build]`, `capture-start <name> [principal=..] [session=..]`, `capture-stop`, `capture-status`, `trace-reader validate|tree|lineage|index`, `soap-tax`, `hook-diff <recA> <recB>`, `jndi-proof <trace.json>`.
+- Scripts: `wls-install`, `wls-domain`, `wls-start [-b]`, `wls-stop`, `wls-deploy [--no-build]`, `capture-start <name> [principal=..] [session=..]`, `capture-stop`, `capture-status`, `trace-reader validate|tree|lineage|index`, `soap-tax`, `trace-reader export <dir> --spans 1:s3,2:s3`, `trace-view <dir> [port]`, `hook-diff <recA> <recB>`, `jndi-proof <trace.json>`.
 - Never rebuild `capture-agent.jar` expecting a running server to pick it up: `wls-start` runs from a copy; restart to use a new build.
 - Oracle tooling (installer, WLST) runs through the `wls-fhs-run` shim; see docs/environment-notes.md before changing scripts.
 - `.local/` is gitignored: install, domain, H2, captures.
 
 ## Build & test
-- `mvn -q -pl trace-model,capture-agent,trace-tools/trace-reader test` for fast unit tests (no server).
-- Full loop: `wls-start` (background) → `wls-deploy` → `capture-start x` → click/curl → `capture-stop` → `trace-reader index .local/captures/<rec>`.
+- `mvn -q -pl trace-model,capture-agent,trace-tools/trace-reader,trace-tools/trace-export test` for fast unit tests (no server); `mvn -q -pl replay-check test` needs the server (skips without it).
+- Full loop: `wls-start` (background) → `wls-deploy` → `capture-start x` → click/curl → `capture-stop` → `trace-view .local/captures/<rec>` → `trace-reader export .local/captures/<rec> --spans 1:s3,2:s3`.
 - Agent log: `.local/captures/agent.log`. Server log: `.local/domains/capture/servers/AdminServer/logs/`.
 
 ## Style

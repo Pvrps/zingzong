@@ -1,0 +1,379 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261023-175858",
+    "name" : "phase7-three-action",
+    "seq" : 2
+  },
+  "trace" : {
+    "id" : "t-cd4795e8",
+    "startedAt" : "2026-10-23T21:58:59.644Z",
+    "durationMs" : 11,
+    "httpSessionId" : "HIxqxjlk1wKlYb7WYXOWzsTj0LB8cqucUcVArpoc4kV-kWOoUCl1!-2074857590!1792792738148",
+    "serverName" : "AdminServer",
+    "deployments" : [ {
+      "name" : "tax-ear",
+      "sourcePath" : "/home/purps/Development/ejb/sample-apps/tax-ear/tax-ear/target/tax-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "orders-ear",
+      "sourcePath" : "/home/purps/Development/ejb/sample-apps/orders-ear/orders-ear/target/orders-ear.ear",
+      "moduleType" : "ear"
+    } ]
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "HTTP",
+    "http" : {
+      "method" : "POST",
+      "path" : "/orders/api/orders/131663/confirm",
+      "contextPath" : "/orders",
+      "servletPath" : "/api",
+      "pathInfo" : "/orders/131663/confirm",
+      "protocol" : "HTTP/1.1",
+      "scheme" : "http",
+      "serverName" : "localhost",
+      "serverPort" : 7001,
+      "remoteAddr" : "127.0.0.1",
+      "status" : 200,
+      "contentType" : "application/json",
+      "responseContentType" : "application/json",
+      "requestHeaders" : {
+        "Host" : [ "localhost:7001" ],
+        "User-Agent" : [ "curl/8.22.0" ],
+        "Accept" : [ "*/*" ],
+        "Cookie" : [ "JSESSIONID=HIxqxjlk1wKlYb7WYXOWzsTj0LB8cqucUcVArpoc4kV-kWOoUCl1!-2074857590" ],
+        "Content-Type" : [ "application/json" ],
+        "Authorization" : [ "Bearer test-token-123" ],
+        "Content-Length" : [ "48" ]
+      },
+      "responseHeaders" : {
+        "Date" : [ "Fri, 23 Oct 2026 21:58:59 GMT" ],
+        "Content-Length" : [ "144" ],
+        "Content-Type" : [ "application/json" ],
+        "X-ORACLE-DMS-ECID" : [ "3d4ec01e-7b76-412b-8687-eba70d5c3a10-00000016" ],
+        "X-ORACLE-DMS-RID" : [ "0" ]
+      },
+      "requestBody" : "{\"confirmedBy\":\"ada\",\"notes\":\"please gift-wrap\"}",
+      "requestBodyEncoding" : "UTF-8 (assumed)",
+      "requestBodyLength" : 48,
+      "responseBody" : "{\"orderId\":131663,\"status\":\"CONFIRMED\",\"confirmedAt\":\"2026-10-23T21:58:59.652809993Z\",\"messages\":[\"Confirmed by ada\",\"Notes: please gift-wrap\"]}",
+      "responseBodyEncoding" : "UTF-8 (assumed)",
+      "responseBodyLength" : 144
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "startNs" : 0,
+    "durationNs" : 11322102
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "HTTP",
+    "layer" : "jaxrs",
+    "http" : {
+      "resourceClass" : "com.acme.orders.web.OrdersResource",
+      "resourceMethod" : "confirm",
+      "resourceSignature" : "javax.ws.rs.core.Response confirm(long, java.lang.String)"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "long",
+      "value" : 131663
+    }, {
+      "declaredType" : "java.lang.String",
+      "value" : "{\"confirmedBy\":\"ada\",\"notes\":\"please gift-wrap\"}"
+    } ],
+    "result" : {
+      "declaredType" : "javax.ws.rs.core.Response",
+      "value" : {
+        "@type" : "org.glassfish.jersey.message.internal.OutboundJaxrsResponse",
+        "@serializable" : false,
+        "context" : {
+          "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext",
+          "@serializable" : false,
+          "runtimeDelegateDecorator" : {
+            "@type" : "org.glassfish.jersey.internal.RuntimeDelegateDecorator$ConfigurableRuntimeDelegate",
+            "@serializable" : false,
+            "runtimeDelegate" : {
+              "@type" : "org.glassfish.jersey.server.internal.RuntimeDelegateImpl",
+              "@serializable" : false,
+              "hps" : [ {
+                "@type" : "org.glassfish.jersey.message.internal.EntityTagProvider",
+                "@serializable" : false,
+                "@id" : 2
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.CacheControlProvider",
+                "@serializable" : false,
+                "@id" : 7
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.UriProvider",
+                "@serializable" : false,
+                "@id" : 5
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.MediaTypeProvider",
+                "@serializable" : false,
+                "@id" : 8
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.DateProvider",
+                "@serializable" : false,
+                "@id" : 3
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LinkProvider",
+                "@serializable" : false
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.CookieProvider",
+                "@serializable" : false,
+                "@id" : 6
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.NewCookieProvider",
+                "@serializable" : false,
+                "@id" : 1
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.StringHeaderProvider",
+                "@serializable" : false,
+                "@id" : 4
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LocaleProvider",
+                "@serializable" : false
+              } ],
+              "map" : {
+                "@type" : "java.util.WeakHashMap",
+                "@entries" : [ {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@222ba69a",
+                    "toString" : "class javax.ws.rs.core.NewCookie"
+                  },
+                  "value" : {
+                    "@ref" : 1
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@1336b7f4",
+                    "toString" : "class javax.ws.rs.core.EntityTag"
+                  },
+                  "value" : {
+                    "@ref" : 2
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@12aba8be",
+                    "toString" : "class java.util.Date"
+                  },
+                  "value" : {
+                    "@ref" : 3
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@6d6f6e28",
+                    "toString" : "class java.lang.String"
+                  },
+                  "value" : {
+                    "@ref" : 4
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@67ec8477",
+                    "toString" : "class java.net.URI"
+                  },
+                  "value" : {
+                    "@ref" : 5
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@151aa344",
+                    "toString" : "class javax.ws.rs.core.Cookie"
+                  },
+                  "value" : {
+                    "@ref" : 6
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@615a5097",
+                    "toString" : "class javax.ws.rs.core.CacheControl"
+                  },
+                  "value" : {
+                    "@ref" : 7
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@55d8cdbd",
+                    "toString" : "class javax.ws.rs.core.MediaType"
+                  },
+                  "value" : {
+                    "@ref" : 8
+                  }
+                } ]
+              }
+            },
+            "configuration" : null
+          },
+          "headers" : { },
+          "committingOutputStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@795f4a06",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@795f4a06"
+          },
+          "configuration" : null,
+          "mediaTypeCache" : {
+            "@type" : "org.glassfish.jersey.internal.util.collection.Values$LazyValueImpl",
+            "@serializable" : false,
+            "lock" : {
+              "@type" : "java.lang.Object",
+              "@serializable" : false
+            },
+            "delegate" : {
+              "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext$$Lambda/0x000070b48117d4e8",
+              "@serializable" : false,
+              "@skipped" : [ {
+                "field" : "arg$1",
+                "reason" : "compiler-injected (synthetic)"
+              } ]
+            },
+            "value" : null
+          },
+          "entity" : "{\"orderId\":131663,\"status\":\"CONFIRMED\",\"confirmedAt\":\"2026-10-23T21:58:59.652809993Z\",\"messages\":[\"Confirmed by ada\",\"Notes: please gift-wrap\"]}",
+          "entityType" : {
+            "@type" : "javax.ws.rs.core.GenericType",
+            "@serializable" : false,
+            "type" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            },
+            "rawType" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            }
+          },
+          "entityAnnotations" : [ ],
+          "entityStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@795f4a06",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@795f4a06"
+          }
+        },
+        "status" : "OK",
+        "closed" : false,
+        "buffered" : false
+      }
+    },
+    "serializationWarnings" : [ {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[0].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[1].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[2].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[3].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[4].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[5].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[6].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[7].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.committingOutputStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    }, {
+      "path" : "$.result.context.entityType.type",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityType.rawType",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    } ],
+    "startNs" : 1756111,
+    "durationNs" : 8774505
+  }, {
+    "id" : "s3",
+    "parentId" : "s2",
+    "depth" : 2,
+    "order" : 2,
+    "kind" : "EJB",
+    "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "OrderService",
+      "beanClass" : "com.acme.orders.OrderServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:module/OrderService!com.acme.orders.api.OrderServiceLocal", "java:module/OrderService!com.acme.orders.api.OrderServiceRemote", "orders/OrderService" ],
+      "method" : "confirmOrder",
+      "signature" : "com.acme.common.dto.ConfirmResult confirmOrder(com.acme.common.dto.ConfirmRequest)",
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.api.OrderServiceLocal"
+    },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.ConfirmRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.ConfirmRequest",
+        "orderId" : 131663,
+        "confirmedBy" : "ada",
+        "confirmedAt" : "2026-10-23T21:58:59.647Z",
+        "notes" : "please gift-wrap"
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.ConfirmResult",
+      "value" : {
+        "@type" : "com.acme.common.dto.ConfirmResult",
+        "orderId" : 131663,
+        "status" : "CONFIRMED",
+        "confirmedAt" : "2026-10-23T21:58:59.652809993Z",
+        "messages" : [ "Confirmed by ada", "Notes: please gift-wrap" ]
+      }
+    },
+    "startNs" : 2374417,
+    "durationNs" : 7719811
+  } ]
+}

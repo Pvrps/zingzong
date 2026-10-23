@@ -23,6 +23,7 @@
     <module>capture-agent</module>
     <module>trace-tools</module>
     <module>sample-apps</module>
+    <module>replay-check</module>
   </modules>
 
   <properties>

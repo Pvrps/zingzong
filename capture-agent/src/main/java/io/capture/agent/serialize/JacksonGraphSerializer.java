@@ -67,6 +67,18 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         return reader.read(node, declaredType, loader);
     }
 
+    /**
+     * Rebuilds an object from captured JSON text. For tools outside the agent (replay-check),
+     * which read trace files with their own Jackson while the agent's is shaded.
+     */
+    public Object deserialize(String json, Type declaredType, ClassLoader loader) throws GraphException {
+        try {
+            return reader.read(new com.fasterxml.jackson.databind.ObjectMapper().readTree(json), declaredType, loader);
+        } catch (java.io.IOException e) {
+            throw new GraphException("not JSON: " + e.getMessage());
+        }
+    }
+
     // ---- writing -------------------------------------------------------------------------
 
     private JsonNode write(Object value, SerializationContext ctx) {

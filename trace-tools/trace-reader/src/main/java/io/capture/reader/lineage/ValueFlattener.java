@@ -43,6 +43,25 @@ public final class ValueFlattener {
                 // element, and the whole text is a value too (resource methods receive it as one).
                 body(loaded, span, "http.requestBody", span.http.requestBody, refs);
             }
+            if (span.http != null && span.layer == null) {
+                // So are the URL path segments (/orders/api/orders/{id}/confirm) and query parameters.
+                if (span.http.path != null) {
+                    String[] segments = span.http.path.split("/");
+                    for (int i = 0; i < segments.length; i++) {
+                        if (!segments[i].isEmpty()) {
+                            add(loaded, span, "http.path[" + i + "]", segments[i], refs);
+                        }
+                    }
+                }
+                if (span.http.query != null) {
+                    for (String pair : span.http.query.split("&")) {
+                        int eq = pair.indexOf('=');
+                        if (eq > 0) {
+                            add(loaded, span, "http.query." + pair.substring(0, eq), pair.substring(eq + 1), refs);
+                        }
+                    }
+                }
+            }
         }
         return refs;
     }

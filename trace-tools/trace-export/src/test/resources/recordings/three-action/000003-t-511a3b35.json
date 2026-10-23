@@ -1,0 +1,149 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261023-175858",
+    "name" : "phase7-three-action",
+    "seq" : 3
+  },
+  "trace" : {
+    "id" : "t-511a3b35",
+    "startedAt" : "2026-10-23T21:58:59.835Z",
+    "durationMs" : 57,
+    "serverName" : "AdminServer",
+    "deployments" : [ {
+      "name" : "tax-ear",
+      "sourcePath" : "/home/purps/Development/ejb/sample-apps/tax-ear/tax-ear/target/tax-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "orders-ear",
+      "sourcePath" : "/home/purps/Development/ejb/sample-apps/orders-ear/orders-ear/target/orders-ear.ear",
+      "moduleType" : "ear"
+    } ]
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "HTTP",
+    "http" : {
+      "method" : "POST",
+      "path" : "/tax/TaxWebService",
+      "contextPath" : "/tax",
+      "servletPath" : "/TaxWebService",
+      "protocol" : "HTTP/1.1",
+      "scheme" : "http",
+      "serverName" : "localhost",
+      "serverPort" : 7001,
+      "remoteAddr" : "127.0.0.1",
+      "status" : 200,
+      "contentType" : "text/xml; charset=UTF-8",
+      "responseContentType" : "text/xml; charset=utf-8",
+      "requestHeaders" : {
+        "Host" : [ "localhost:7001" ],
+        "User-Agent" : [ "curl/8.22.0" ],
+        "Accept" : [ "*/*" ],
+        "Content-Type" : [ "text/xml; charset=UTF-8" ],
+        "SOAPAction" : [ "\"\"" ],
+        "Content-Length" : [ "362" ]
+      },
+      "responseHeaders" : {
+        "Date" : [ "Fri, 23 Oct 2026 21:58:59 GMT" ],
+        "Transfer-Encoding" : [ "chunked" ],
+        "Content-Type" : [ "text/xml; charset=utf-8" ],
+        "X-ORACLE-DMS-ECID" : [ "3d4ec01e-7b76-412b-8687-eba70d5c3a10-00000017" ],
+        "X-ORACLE-DMS-RID" : [ "0" ]
+      },
+      "requestBody" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tax=\"http://acme.com/tax\">\n  <soapenv:Body>\n    <tax:computeTax>\n      <country>NL</country>\n      <region>NH</region>\n      <category>GOODS</category>\n      <amount>123.74</amount>\n    </tax:computeTax>\n  </soapenv:Body>\n</soapenv:Envelope>",
+      "requestBodyEncoding" : "UTF-8",
+      "requestBodyLength" : 362,
+      "responseBody" : "<?xml version='1.0' encoding='UTF-8'?><S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body><ns0:computeTaxResponse xmlns:ns0=\"http://acme.com/tax\"><quote><jurisdiction>NL-NH</jurisdiction><rate>0.21</rate><tax>25.99</tax><computedAt>2026-10-23T21:58:59.867448372Z</computedAt></quote></ns0:computeTaxResponse></S:Body></S:Envelope>",
+      "responseBodyEncoding" : "utf-8",
+      "responseBodyLength" : 350
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "startNs" : 0,
+    "durationNs" : 57878136
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "HTTP",
+    "layer" : "jaxws",
+    "http" : {
+      "resourceClass" : "com.acme.tax.ws.TaxWebService",
+      "resourceMethod" : "computeTax",
+      "resourceSignature" : "com.acme.tax.ws.TaxQuote computeTax(java.lang.String, java.lang.String, java.lang.String, java.math.BigDecimal)"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "java.lang.String",
+      "value" : "NL"
+    }, {
+      "declaredType" : "java.lang.String",
+      "value" : "NH"
+    }, {
+      "declaredType" : "java.lang.String",
+      "value" : "GOODS"
+    }, {
+      "declaredType" : "java.math.BigDecimal",
+      "value" : "123.74"
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.tax.ws.TaxQuote",
+      "value" : {
+        "@type" : "com.acme.tax.ws.TaxQuote",
+        "@serializable" : false,
+        "jurisdiction" : "NL-NH",
+        "rate" : "0.21",
+        "tax" : "25.99",
+        "computedAt" : "2026-10-23T21:58:59.867448372Z"
+      }
+    },
+    "startNs" : 30342926,
+    "durationNs" : 2542677
+  }, {
+    "id" : "s3",
+    "parentId" : "s2",
+    "depth" : 2,
+    "order" : 2,
+    "kind" : "EJB",
+    "ejb" : {
+      "app" : "tax-ear",
+      "module" : "tax-ejb",
+      "beanName" : "TaxService",
+      "beanClass" : "com.acme.tax.TaxServiceBean",
+      "invocation" : "REMOTE",
+      "jndiNames" : [ "java:global/tax-ear/tax-ejb/TaxService!com.acme.tax.api.TaxService", "java:app/tax-ejb/TaxService", "java:app/tax-ejb/TaxService!com.acme.tax.api.TaxService", "java:global/tax-ear/tax-ejb/TaxService", "java:module/TaxService", "java:module/TaxService!com.acme.tax.api.TaxService", "tax/TaxService" ],
+      "method" : "computeTax",
+      "signature" : "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.tax.api.TaxService"
+    },
+    "app" : "tax-ear",
+    "module" : "tax-ejb",
+    "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.TaxRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.TaxRequest",
+        "country" : "NL",
+        "region" : "NH",
+        "category" : "GOODS",
+        "amount" : "123.74"
+      }
+    } ],
+    "result" : {
+      "declaredType" : "com.acme.common.dto.TaxResult",
+      "value" : {
+        "@type" : "com.acme.common.dto.TaxResult",
+        "jurisdiction" : "NL-NH",
+        "rate" : "0.21",
+        "tax" : "25.99",
+        "computedAt" : "2026-10-23T21:58:59.867448372Z"
+      }
+    },
+    "startNs" : 31527880,
+    "durationNs" : 915505
+  } ]
+}

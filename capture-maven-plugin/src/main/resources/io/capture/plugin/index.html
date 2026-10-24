@@ -478,6 +478,7 @@ function buildModel() {
   const byId = new Map(traces.map(t => [t.trace.id, t]));
   for (const t of traces) {
     t.byId = new Map(t.spans.map(s => [s.id, s]));
+    for (const s of t.spans) if (!ORIGINAL.has(s)) ORIGINAL.set(s, Object.keys(s));
     t.startMs = Date.parse(t.trace.startedAt);
     for (const s of t.spans) {
       s.trace = t; s.parent = s.parentId ? t.byId.get(s.parentId) : null; s.kids = []; s.spawns = []; s.row = null; s.ret = null;
@@ -561,6 +562,8 @@ function buildModel() {
   for (const t of traces) for (const s of t.spans) { let n = 0; for (let p = up(s); p; p = up(p)) if (p.row && p.row.to === (s.row ? s.row.to : s.lane) && p.row.span === p) n++; s.nest = n; }
   return { traces, entries, lanes, appOrder, rows, H: yy };
 }
+/** A span's keys as the agent wrote them, before the page added its own bookkeeping. */
+const ORIGINAL = new WeakMap();
 function up(s) { return s.parent || (s.trace.cause && !s.parent ? s.trace.cause : null); }
 function visitInOrder(t, fn) { for (const s of t.spans) fn(s); for (const s of t.spans) for (const c of s.spawns) visitInOrder(c, fn); }
 function rootOf(traceId) { const t = state.traces.get(traceId); if (!t) return null; const r = t.spans.find(s => s.parentId == null) || t.spans[0]; return r && r.id; }
@@ -615,7 +618,7 @@ function renderBody() {
     if (r.kind === 'entry') {
       const t = r.trace, root = t.spans.find(x => x.parentId == null) || t.spans[0], h = el('div', 'entry'); h.style.top = r.y + 'px'; h.style.width = W + 'px';
       const who = root.http && root.http.remoteAddr ? ` · from ${root.http.remoteAddr}` : '';
-      h.innerHTML = `<span class="n">#${t.seq}</span><span class="t">${esc(spanLabel(root))}</span><span class="m">${esc(fmtTime(t.trace.startedAt))} · ${fmtDuration(t.trace.durationMs)}${root.http && root.http.status != null ? ` · HTTP ${root.http.status}` : ''}${t.trace.principal ? ' · ' + esc(t.trace.principal) : ''}${who}${t.spans.some(s => s.exception) ? ' · <span class="chip err">failed</span>' : ''}</span>`;
+      h.innerHTML = `<span class="n">#${t.seq}</span><span class="t">${esc(spanLabel(root))}</span><span class="m">${esc(fmtTime(t.trace.startedAt))} · ${fmtDuration(t.trace.durationMs)}${root.http && root.http.status != null ? ` · HTTP ${root.http.status}` : ''}${t.trace.principal ? ' · ' + esc(t.trace.principal) : ''}${who}${root.exception || (root.http && root.http.status >= 400) ? ' · <span class="chip err">failed</span>' : ''}${(n => n ? ` · <span class="chip" style="color:var(--err);border-color:#fca5a5">${n} failed call${n === 1 ? '' : 's'} inside</span>` : '')(t.spans.filter(s => s.exception && s !== root).length)}</span>`;
       h.title = t.trace.id;
       h.addEventListener('click', () => selectSpan(t.trace.id, root.id));
       body.appendChild(h); continue;
@@ -799,26 +802,66 @@ function renderDetail(focusPath) {
     const sum = el('summary'); sum.innerHTML = `${esc(title)}${count != null ? ` <span class="cnt">${esc(count)}</span>` : ''}`; d.appendChild(sum);
     const json = el('div', 'json'); fill(json); d.appendChild(json); body.appendChild(d); return json;
   };
-  if (span.kind === 'SQL') {
-    const d = el('details', 'sec'); d.open = true; const sum = el('summary'); sum.textContent = 'SQL'; d.appendChild(sum); const pre = el('pre', 'sqltext', span.sql.sql || `(${span.sql.operation})`); d.appendChild(pre); body.appendChild(d);
-    if (span.sql.parameters) section('Parameters', `${span.sql.parameters.length}`, true, j => span.sql.parameters.forEach((v, i) => renderValue(j, v, `sql.parameters[${i}]`, 0, badges, i + 1)));
-    if (span.sql.batches) section('Batches', `${span.sql.batches.length}`, true, j => renderValue(j, span.sql.batches, 'sql.batches', 0, badges, 'batches'));
-    section('Result', null, true, j => { const o = {}; if (span.sql.updateCount != null) o.updateCount = span.sql.updateCount; if (span.sql.updateCounts) o.updateCounts = span.sql.updateCounts; if (span.sql.resultSet != null) o.resultSet = span.sql.resultSet; if (span.sql.rows != null) o.rowsRead = span.sql.rows; renderValue(j, o, 'sql', 0, badges, 'result'); });
-  }
-  if (span.args) section('Arguments', `${span.args.length}`, true, j => renderValue(j, span.args, 'args', 0, badges, 'args'));
+  const shown = new Set(['args', 'argsBefore', 'result', 'exception', 'http', 'sql', 'serializationWarnings']);
+  const resBadges = res ? lineageBadges(trace.trace.id, res.id) : null;
+  // Input and Output, the same way for every kind of call
+  section('Input', span.kind === 'SQL' ? (span.sql.parameters ? `${span.sql.parameters.length} parameter${span.sql.parameters.length === 1 ? '' : 's'}` : null) : isReq ? (span.http.requestBodyLength != null ? `${span.http.requestBodyLength} bytes` : null) : span.args ? `${span.args.length} argument${span.args.length === 1 ? '' : 's'}` : null, true, j => {
+    if (span.kind === 'SQL') {
+      j.appendChild(el('pre', 'sqltext', span.sql.sql || `(${span.sql.operation})`));
+      if (span.sql.parameters) span.sql.parameters.forEach((v, i) => renderValue(j, v, `sql.parameters[${i}]`, 0, badges, i + 1));
+      if (span.sql.batches) renderValue(j, span.sql.batches, 'sql.batches', 0, badges, 'batches');
+      if (!span.sql.parameters && !span.sql.batches) j.appendChild(el('span', 'hint', 'no parameters'));
+    } else if (isReq) {
+      if (span.http.requestBody != null) renderValue(j, span.http.requestBody, 'http.requestBody', 0, badges, 'requestBody'); else j.appendChild(el('span', 'hint', 'no request body'));
+      if (res && res.args) { j.appendChild(el('div', 'hint', `arguments of ${spanLabel(res)}:`)); renderValue(j, res.args, 'args', 0, resBadges, 'args'); }
+    } else if (span.args) renderValue(j, span.args, 'args', 0, badges, 'args'); else j.appendChild(el('span', 'hint', 'no arguments'));
+  });
   if (span.argsBefore) section('Arguments before the call', `${span.argsBefore.length}`, false, j => renderValue(j, span.argsBefore, 'argsBefore', 0, badges, 'argsBefore'));
-  if (span.result !== undefined && span.kind !== 'SQL') section('Result', null, true, j => renderValue(j, span.result, 'result', 0, badges, 'result'));
+  section('Output', span.kind === 'SQL' ? (span.sql.rows != null ? `${span.sql.rows} row${span.sql.rows === 1 ? '' : 's'} read` : span.sql.updateCount != null ? `${span.sql.updateCount} updated` : null) : isReq && span.http.status != null ? `HTTP ${span.http.status}` : null, true, j => {
+    if (span.exception) { j.appendChild(el('span', 'hint', 'none: the call threw')); return; }
+    if (span.kind === 'SQL') {
+      if (span.sql.data) renderValue(j, span.sql.data, 'sql.data', 0, badges, 'rows');
+      else if (span.sql.rows != null) j.appendChild(el('span', 'hint', `${span.sql.rows} row${span.sql.rows === 1 ? '' : 's'} read, no column values asked for`));
+      if (span.sql.rowsNotRecorded) j.appendChild(el('div', 'hint', `${span.sql.rowsNotRecorded} more rows read past the element ceiling, not recorded`));
+      if (span.sql.updateCount != null) renderValue(j, span.sql.updateCount, 'sql.updateCount', 0, badges, 'updateCount');
+      if (span.sql.updateCounts) renderValue(j, span.sql.updateCounts, 'sql.updateCounts', 0, badges, 'updateCounts');
+      if (span.sql.resultSet === false && span.sql.updateCount == null) j.appendChild(el('span', 'hint', 'no result set'));
+    } else if (isReq) {
+      if (span.http.responseBody != null) renderValue(j, span.http.responseBody, 'http.responseBody', 0, badges, 'responseBody'); else j.appendChild(el('span', 'hint', span.http.responseBodyNote || 'no response body'));
+      if (span.http.sentError) renderValue(j, span.http.sentError, 'http.sentError', 0, badges, 'sentError');
+      if (res && res.result) { j.appendChild(el('div', 'hint', `result of ${spanLabel(res)}:`)); renderValue(j, res.result, 'result', 0, resBadges, 'result'); }
+    } else if (span.result) renderValue(j, span.result, 'result', 0, badges, 'result'); else j.appendChild(el('span', 'hint', 'void'));
+  });
   if (span.exception) section('Exception', simple(span.exception.className), true, j => renderValue(j, span.exception, 'exception', 0, badges, 'exception'));
-  if (span.http) section('HTTP', span.http.status != null ? `status ${span.http.status}` : null, !!(span.http && !span.layer), j => renderValue(j, span.http, 'http', 0, badges, 'http'));
+  if (res && res.exception) section(`Exception in ${spanLabel(res)}`, simple(res.exception.className), true, j => renderValue(j, res.exception, 'exception', 0, resBadges, 'exception'));
+  if (span.http) section(isReq ? 'HTTP request and response' : 'HTTP', null, false, j => { const h = {}; for (const kk of Object.keys(span.http)) if (kk !== 'requestBody' && kk !== 'responseBody') h[kk] = span.http[kk]; renderValue(j, h, 'http', 0, badges, 'http'); });
+  if (span.kind === 'SQL') section('Data source', null, false, j => { const d = {}; for (const kk of Object.keys(span.sql)) if (!['sql', 'parameters', 'batches', 'data', 'rows', 'rowsNotRecorded', 'updateCount', 'updateCounts', 'resultSet'].includes(kk)) d[kk] = span.sql[kk]; renderValue(j, d, 'sql', 0, badges, 'sql'); });
   if ((span.serializationWarnings || []).length) section('Notes from the capture', `${span.serializationWarnings.length}`, false, j => renderValue(j, span.serializationWarnings, 'serializationWarnings', 0, badges, 'serializationWarnings'));
-  section('Everything else on this call', null, false, j => { for (const kk of Object.keys(span)) { if (['args', 'argsBefore', 'result', 'exception', 'http', 'serializationWarnings', 'sql', 'trace', 'parent', 'kids', 'spawns', 'row', 'ret', 'comp', 'lane', 'queue', 'nest'].includes(kk)) continue; renderValue(j, span[kk], kk, 0, badges, kk); } });
+  section('Everything else on this call', null, false, j => { for (const kk of ORIGINAL.get(span) || Object.keys(span)) { if (shown.has(kk)) continue; renderValue(j, span[kk], kk, 0, badges, kk); } });
   const unplaced = Object.entries(badges).filter(([, v]) => !v.placed);
   if (unplaced.length) { const box = el('div', 'json'); box.appendChild(el('div', 'k', 'lineage on paths not rendered above:')); for (const [p, v] of unplaced) { const r = el('div', 'row'); r.textContent = p + ' '; v.badges.forEach(b => r.appendChild(b)); box.appendChild(r); } body.appendChild(box); }
   if (focusPath) { const target = findRow(body, focusPath); if (target) { const d = target.closest('details'); if (d) d.open = true; target.scrollIntoView({ block: 'center' }); target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); } }
 }
 
-// Markers the agent writes for structural necessities; each is highlighted, never hidden.
-const MARKERS = { '@type': 'type', '@ref': 'ref', '@id': 'ref', '@lazy': 'lazy', '@handle': 'handle', '@skipped': 'skipped', '@truncated': 'truncated', '@unserializable': 'unserializable', '@serializable': 'unserializable' };
+// Markers the agent writes for structural necessities; each is highlighted, never hidden. Red
+// means data is missing at this point; the others only tell what the value is.
+const MARKERS = { '@type': 'type', '@ref': 'ref', '@id': 'ref', '@lazy': 'lazy', '@handle': 'handle', '@skipped': 'skipped', '@truncated': 'truncated', '@unserializable': 'unserializable', '@serializable': 'unserializable', '@bytes': 'type', '@text': 'truncated', '@jms': 'type', '@entries': 'type' };
+const MISSING = new Set(['@lazy', '@handle', '@truncated', '@unserializable']);
+const MARKER_HELP = {
+  '@type': 'the runtime class of this value',
+  '@ref': 'the same object again (a cycle or a shared reference); it is written in full where @id says so',
+  '@id': 'this object is referred to elsewhere by @ref',
+  '@lazy': 'a lazy collection or holder that was not loaded when the call crossed the boundary; loading it would have changed the call, so its content is not here',
+  '@handle': 'a runtime handle (thread, class loader, socket, connection, lock); not payload, so only its identity and toString are recorded',
+  '@skipped': 'fields the walker leaves out because they describe the JVM, not the value (for example Throwable.backtrace)',
+  '@truncated': 'a safety ceiling was hit: what and how much was dropped',
+  '@unserializable': 'the walker could not read this value; the reason and its toString are recorded',
+  '@serializable': 'false: the object does not implement Serializable. It was captured in full all the same; this only matters for replaying it',
+  '@bytes': 'a byte array, base64',
+  '@text': 'a string over the ceiling: what was kept, and how much was dropped',
+  '@jms': 'a JMS message, recorded as headers, properties and body',
+  '@entries': 'a map with non-string keys, as key/value pairs',
+};
 
 function renderValue(container, value, path, depth, badges, key) {
   const row = el('span', 'row');
@@ -826,12 +869,11 @@ function renderValue(container, value, path, depth, badges, key) {
   row.dataset.path = path;
   if (key !== undefined) {
     const k = el('span', 'k', typeof key === 'number' ? `[${key}]` : JSON.stringify(key));
-    const marker = typeof key === 'string' && MARKERS[key];
-    if (marker) { k.classList.add('m', marker); }
+    const marker = typeof key === 'string' && Object.prototype.hasOwnProperty.call(MARKERS, key) ? MARKERS[key] : null;
+    if (marker) { k.classList.add('m', marker); k.title = MARKER_HELP[key] || ''; }
     row.appendChild(k);
     row.appendChild(document.createTextNode(': '));
-    if (key === '@serializable' && value === false) row.classList.add('flagged');
-    if (key === '@truncated' || key === '@handle' || key === '@lazy' || key === '@unserializable') row.classList.add('flagged');
+    if (MISSING.has(key) && value !== false) row.classList.add('flagged');
   }
   if (value === null || value === undefined) {
     row.appendChild(el('span', 'z', 'null'));

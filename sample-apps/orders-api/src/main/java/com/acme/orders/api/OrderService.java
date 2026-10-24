@@ -16,4 +16,7 @@ public interface OrderService {
 
     /** Fire-and-forget follow-up work for an order event; runs on another thread (@Asynchronous). */
     void notifyAsync(long orderId, String event);
+
+    /** Orders per status and what they add up to, straight from the data source (plain JDBC, no JPA). */
+    java.util.List<com.acme.common.dto.StatusSummary> salesSummary(String customerName);
 }

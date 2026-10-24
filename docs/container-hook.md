@@ -318,15 +318,15 @@ weblogic.jdbc.wrapper.PreparedStatement.executeQuery():     same shape
 | `Statement.sql` (public `String`), or the `String` argument of a plain `execute*(sql)` | `sql.sql` |
 | `Statement.conn` (public `weblogic.jdbc.wrapper.Connection`) → `getPoolName()` | `sql.dataSource` |
 | `PreparedStatement.set*(int, …)`, `setNull`, `addBatch`, `clearParameters` | the bound parameters and batches (`JdbcAdvice.Bind`), kept per statement in a weak map until the execute |
-| `weblogic.jdbc.wrapper.ResultSet.postInvocationHandler(String, Object[], Object)` with name `next` | rows read (`JdbcAdvice.Row`): the result-set wrapper has no `next()` of its own, the generated subclass routes every call through this handler; `ResultSet.stmt` (private) finds the statement |
+| `weblogic.jdbc.wrapper.ResultSet.postInvocationHandler(String, Object[], Object)` | the result-set wrapper has no JDBC methods of its own; the generated subclass routes every call through this handler (`JdbcAdvice.Row`): `next` returning true is one more row read (`sql.rows`), a `get*(column)` is a value the application read from that row, recorded as returned under the column asked for (`sql.data`, rows past the element ceiling counted in `rowsNotRecorded`); `ResultSet.stmt` (private) finds the statement |
 | config MBean `com.bea:Type=JDBCSystemResource,Name=<pool>` → `JDBCResource.JDBCDataSourceParams.JNDINames`, `JDBCDriverParams.Url`; runtime `com.bea:Type=JDBCDataSourceRuntime,Name=<pool>` → `DatabaseProductName`/`Version` | `sql.jndiNames`, `sql.url`, `sql.database` (`WlsDataSources`, once per pool) |
 
 The generated `PreparedStatement_<driver class>` subclasses add only vendor-specific extras, so
 the base classes see every execution, whatever the driver (verified with H2 on both lab domains:
 EclipseLink's inserts, `CALL IDENTITY()`, selects and updates, with their parameters and
 counts). A driver used directly, not through a data source, is not seen: it never passes the
-wrapper. Result sets are not walked (reading one consumes it); what is recorded is the count of
-rows the application read.
+wrapper. The agent never moves a cursor itself (reading one consumes it); what is recorded is
+what the application read: each row it stepped to, and the column values it asked for.
 
 ## Session bean type (both versions)
 

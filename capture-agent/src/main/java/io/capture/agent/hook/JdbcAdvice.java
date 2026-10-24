@@ -55,10 +55,9 @@ public final class JdbcAdvice {
         @Advice.OnMethodEnter(suppress = Throwable.class)
         public static void enter(@Advice.This(typing = Assigner.Typing.DYNAMIC) Object resultSet,
                                  @Advice.Argument(0) String method,
+                                 @Advice.Argument(value = 1, typing = Assigner.Typing.DYNAMIC) Object[] args,
                                  @Advice.Argument(value = 2, typing = Assigner.Typing.DYNAMIC) Object returned) {
-            if ("next".equals(method)) {
-                Recorder.rowJdbc(resultSet, Boolean.TRUE.equals(returned));
-            }
+            Recorder.readJdbc(resultSet, method, args, returned);
         }
     }
 }

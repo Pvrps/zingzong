@@ -114,7 +114,7 @@ One directory per recording (`rec-<timestamp>`), one JSON file per trace, writte
 trace's root call completes, plus one manifest per server. Every argument, result, exception,
 HTTP header and body is recorded as it crossed the boundary, and so is every SQL statement
 executed through a data source (which data source, the statement, its bound parameters, the
-update count or the rows read): no masking, no allow-lists.
+update count, and the rows and column values the application read from the result): no masking, no allow-lists.
 Cycles become `@ref`, unloaded lazy collections `@lazy`, runtime handles `@handle`, objects
 that are not serializable are marked `@serializable: false`, and any safety ceiling that is
 hit leaves a `@truncated` marker with counts. The page highlights all of these.

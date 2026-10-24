@@ -3,6 +3,7 @@ package com.acme.orders.web;
 import com.acme.common.dto.ConfirmRequest;
 import com.acme.common.dto.ConfirmResult;
 import com.acme.common.dto.CreateOrderRequest;
+import com.acme.common.dto.StatusSummary;
 import com.acme.common.model.Order;
 import com.acme.orders.api.InsufficientStockException;
 import com.acme.orders.api.OrderNotFoundException;
@@ -13,6 +14,7 @@ import javax.json.Json;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
+import javax.json.JsonArrayBuilder;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -77,6 +79,17 @@ public class OrdersResource {
     }
 
     /** {@code ?delay=ms} holds the request open, for thread dumps of the servlet pipeline. */
+    @GET
+    @Path("summary")
+    public Response summary(@QueryParam("customer") String customer) {
+        LOG.info("REST GET /orders/summary");
+        JsonArrayBuilder rows = Json.createArrayBuilder();
+        for (StatusSummary s : orderService.salesSummary(customer)) {
+            rows.add(Json.createObjectBuilder().add("status", s.getStatus()).add("orders", s.getOrders()).add("total", s.getTotal() == null ? "0" : s.getTotal().toPlainString()));
+        }
+        return Response.ok(Json.createObjectBuilder().add("summary", rows).build().toString()).build();
+    }
+
     @GET
     @Path("{id}")
     public Response get(@PathParam("id") long id, @QueryParam("delay") @DefaultValue("0") long delayMillis) {

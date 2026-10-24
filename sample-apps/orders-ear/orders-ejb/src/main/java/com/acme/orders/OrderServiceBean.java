@@ -5,6 +5,7 @@ import com.acme.common.dto.ConfirmResult;
 import com.acme.common.dto.CreateOrderRequest;
 import com.acme.common.dto.OrderLineRequest;
 import com.acme.common.dto.PriceQuote;
+import com.acme.common.dto.StatusSummary;
 import com.acme.common.model.Order;
 import com.acme.common.model.OrderStatus;
 import com.acme.orders.api.InsufficientStockException;
@@ -12,7 +13,9 @@ import com.acme.orders.api.OrderNotFoundException;
 import com.acme.orders.api.OrderServiceLocal;
 import com.acme.orders.api.OrderServiceRemote;
 
+import javax.annotation.Resource;
 import javax.ejb.Asynchronous;
+import javax.ejb.EJBException;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
 import javax.jms.Connection;
@@ -22,6 +25,10 @@ import javax.jms.Queue;
 import javax.jms.Session;
 import javax.jms.TextMessage;
 import javax.naming.InitialContext;
+import javax.sql.DataSource;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.Instant;
@@ -102,6 +109,30 @@ public class OrderServiceBean implements OrderServiceLocal, OrderServiceRemote {
         return result;
     }
 
+
+    @Resource(lookup = "jdbc/OrdersDS")
+    private DataSource dataSource;
+
+    @Override
+    public List<StatusSummary> salesSummary(String customerName) {
+        String sql = "SELECT STATUS, COUNT(*) AS ORDERS, SUM(TOTAL) AS TOTAL FROM ORDERS"
+                + (customerName == null ? "" : " WHERE CUSTOMER_NAME = ?") + " GROUP BY STATUS ORDER BY STATUS";
+        List<StatusSummary> summary = new ArrayList<>();
+        try (java.sql.Connection connection = dataSource.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            if (customerName != null) {
+                statement.setString(1, customerName);
+            }
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    summary.add(new StatusSummary(rows.getString("STATUS"), rows.getLong("ORDERS"), rows.getBigDecimal("TOTAL")));
+                }
+            }
+        } catch (SQLException e) {
+            throw new EJBException("sales summary failed", e);
+        }
+        LOG.info("OrderService.salesSummary " + (customerName == null ? "all" : customerName) + ": " + summary.size() + " statuses");
+        return summary;
+    }
     @Asynchronous
     @Override
     public void notifyAsync(long orderId, String event) {

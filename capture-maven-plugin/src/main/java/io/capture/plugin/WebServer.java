@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
  *   POST /api/capture/stop
  *   GET  /api/recordings                     all recordings under the output directory, newest first
  *   GET  /api/recordings/{id}                the viewer index (traces, sessions, lineage)
+ *   DELETE /api/recordings/{id}              remove a finished recording and its files (409 while active)
  *   GET  /api/recordings/{id}/traces/{file}  one trace file
  * </pre>
  */
@@ -113,6 +114,16 @@ public final class WebServer {
                 String id = parts[0];
                 if (!recordings.exists(id)) {
                     json(x, 404, error("no recording " + id));
+                } else if (parts.length == 1 && x.getRequestMethod().equals("DELETE")) {
+                    try {
+                        int files = recordings.delete(id, monitor.evaluate().activeRecordingId);
+                        ObjectNode result = JSON.createObjectNode();
+                        result.put("deleted", id);
+                        result.put("files", files);
+                        json(x, 200, result);
+                    } catch (IllegalStateException e) {
+                        json(x, 409, error(e.getMessage()));
+                    }
                 } else if (parts.length == 1) {
                     RecordingIndex index = recordings.index(id);
                     json(x, 200, JSON.valueToTree(index));

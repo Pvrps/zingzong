@@ -56,8 +56,21 @@ mvn capture:start   -Dcapture.domain=/path/to/domain
    status. **Start** (with an optional name) begins a capture on every server of the domain
    under one recording id; **Stop** ends it. Both are disabled, with the reason shown, unless
    the state is *ready*. The home view lists all recordings under the output directory,
-   newest first, with an ACTIVE marker; clicking one opens the three-pane view. While a
-   recording is active the page refreshes once a second and new traces appear as they land.
+   newest first, with a REC marker on the active one and a **Delete** per finished recording
+   (confirmed inline; it removes the directory). Clicking a recording opens three panes:
+   the traces grouped by HTTP session (a trace started on another thread by `@Asynchronous`
+   or JMS sits indented under the trace that caused it), the **call flow** of the selected
+   trace, and the selected call in full. The flow is a chart: one card per call, callers on
+   the left, callees to the right in call order, elbow arrows between them; a dashed amber
+   arrow is a REMOTE call and the card names the EAR it entered, a dashed violet card is a
+   trace this call started on another thread (click it to follow). Every card shows its
+   duration and where it sat in the trace's time. A card's `▾ n` folds the calls below it;
+   four or more consecutive calls of the same method that called nothing further and did not
+   fail are drawn as one `×N` card, which expands to the individual calls on click (nothing
+   is dropped; the card says what it stands for). The call pane shows the facts, then
+   Arguments, Result, Exception and HTTP sections with the values as captured, markers
+   highlighted, and lineage links to where a value came from or went. While a recording is
+   active the page refreshes once a second and new traces appear as they land.
 
 Parameters, all `-D`: `capture.domain` (required), `capture.port` (default 8077),
 `capture.out` (default `~/.ejb-capture/<domain directory name>`). There are no others; the

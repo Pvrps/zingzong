@@ -155,6 +155,37 @@ public final class Recordings {
         return f.isFile() ? f : null;
     }
 
+    /**
+     * Removes a recording: its trace files, manifests and directory. Refuses the active one
+     * (the servers are still writing into it). Returns how many files were deleted.
+     */
+    public synchronized int delete(String id, String activeId) throws IOException {
+        File dir = dir(id);
+        if (dir == null || !dir.isDirectory() || !isRecording(dir)) {
+            throw new IOException("no recording " + id);
+        }
+        if (id.equals(activeId)) {
+            throw new IllegalStateException("recording " + id + " is active; stop it first");
+        }
+        int deleted = 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile()) {
+                    if (!f.delete()) {
+                        throw new IOException("could not delete " + f);
+                    }
+                    deleted++;
+                }
+            }
+        }
+        if (!dir.delete()) {
+            throw new IOException("could not delete " + dir + " (something besides recording files is in it)");
+        }
+        cache.remove(id);
+        return deleted;
+    }
+
     private static boolean isRecording(File dir) {
         Path p = dir.toPath();
         try {

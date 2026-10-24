@@ -1,6 +1,7 @@
 package io.capture.agent;
 
 import io.capture.agent.hook.CaptureHook;
+import io.capture.agent.hook.ContainerTargets;
 import io.capture.agent.hook.FallbackHook;
 import io.capture.agent.hook.InstrumentationHook;
 import io.capture.agent.span.Recorder;
@@ -34,13 +35,15 @@ public final class AgentBootstrap {
         RecordingControl.register();
 
         ServerDetection.Server server = ServerDetection.detect();
-        boolean container = ServerDetection.useContainerHook(server, CaptureHook.containerTargetsPresent());
+        ContainerTargets.Target target = ContainerTargets.resolve();
+        boolean container = ServerDetection.useContainerHook(server, target != null);
         AgentLog.info("server=" + server + " hook=" + (container ? "container" : "annotation")
-                + (CaptureHook.containerTargetsPresent() ? "; container invokers present" : "; container invokers not on the class path"));
+                + (target != null ? "; container choke points of " + target.versions + " present"
+                        : "; no known container choke points on the class path"));
 
         CaptureHook annotation = new CaptureHook(inst, CaptureHook.EjbStrategy.ANNOTATION);
         InstrumentationHook chosen = container
-                ? new FallbackHook(new CaptureHook(inst, CaptureHook.EjbStrategy.CONTAINER), annotation)
+                ? new FallbackHook(new CaptureHook(inst, CaptureHook.EjbStrategy.CONTAINER, target), annotation)
                 : annotation;
         Recorder.hook(chosen);
         AgentLog.info("capture-agent ready, recording off");

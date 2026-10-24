@@ -211,10 +211,17 @@ class LimitsAndPlaceholdersTest {
         assertTrue(r.node.get("cause").get("cause").isNull(), "cause == this sentinel reads as no cause");
         assertEquals("while cleaning up", r.node.get("suppressedExceptions").get(0).get("detailMessage").asText());
         List<String> skipped = new ArrayList<>();
-        for (JsonNode s : r.node.get("@skipped")) {
-            skipped.add(s.get("field").asText());
+        if (r.node.has("@skipped")) {
+            for (JsonNode s : r.node.get("@skipped")) {
+                skipped.add(s.get("field").asText());
+            }
         }
-        assertTrue(skipped.contains("backtrace") && skipped.contains("depth"), "JVM-internal fields listed: " + skipped);
+        if (System.getProperty("java.specification.version").startsWith("1.")) {
+            // JDK 8 hides Throwable.backtrace from reflection and has no depth field: nothing to list.
+            assertTrue(skipped.isEmpty(), "JDK 8: no JVM-internal Throwable fields visible: " + skipped);
+        } else {
+            assertTrue(skipped.contains("backtrace") && skipped.contains("depth"), "JVM-internal fields listed: " + skipped);
+        }
         assertTrue(r.warnings.isEmpty(), r.warnings());
 
         Throwable back = graphs.read(r.node, Throwable.class);

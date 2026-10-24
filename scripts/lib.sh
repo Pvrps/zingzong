@@ -19,6 +19,32 @@ TMP_DIR="$LOCAL_DIR/tmp"
 LOG_DIR="$LOCAL_DIR/logs"
 mkdir -p "$TMP_DIR" "$LOG_DIR"
 
+# Two labs side by side. devenv.nix carries the 14.1.2 / JDK 21 set; WLS_VERSION=12 swaps in
+# 12.2.1.4 / JDK 8: its own install, domain, port, H2 (2.3 needs Java 11; 2.1 is the last for 8)
+# and log files, so both domains can run at the same time.
+WLS_VERSION="${WLS_VERSION:-14}"
+WLS_ORAPARAM="$DEVENV_ROOT/scripts/wls-oraparam.ini"
+WLS_LOG_SUFFIX=""
+case "$WLS_VERSION" in
+  14) ;;
+  12)
+    export ORACLE_HOME="$LOCAL_DIR/oracle12"
+    export MW_HOME="$ORACLE_HOME"
+    export WL_HOME="$ORACLE_HOME/wlserver"
+    export DOMAIN_HOME="$LOCAL_DIR/domains/capture12"
+    export DOMAIN_NAME="capture12"
+    export WLS_ADMIN_PORT="7101"
+    export WLS_JAVA_HOME="$LOCAL_DIR/jdk8"
+    export WLS_INSTALLER="${WLS_INSTALLER_12:-}"
+    export H2_DIR="$LOCAL_DIR/h2-12"
+    export CAPTURE_OUT="$LOCAL_DIR/captures12"
+    export H2_VERSION="2.1.214"
+    WLS_ORAPARAM="$DEVENV_ROOT/scripts/wls-oraparam-12.ini"
+    WLS_LOG_SUFFIX="12"
+    ;;
+  *) echo "error: WLS_VERSION must be 14 or 12, got $WLS_VERSION" >&2; exit 1 ;;
+esac
+
 # Oracle scripts read JAVA_HOME; keep them on the stable symlink managed by devenv.nix.
 # commBaseEnv.sh only honours JAVA_HOME from the environment when JAVA_VENDOR is also
 # set; "Oracle" selects the plain HotSpot settings (-server), which fit Temurin.

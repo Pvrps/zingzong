@@ -17,8 +17,8 @@ case "${1:-}" in
   *) die "unknown argument: $1" ;;
 esac
 
-pid_file="$LOG_DIR/wls.pid"
-out_file="$LOG_DIR/wls-start.out"
+pid_file="$LOG_DIR/wls$WLS_LOG_SUFFIX.pid"
+out_file="$LOG_DIR/wls-start$WLS_LOG_SUFFIX.out"
 
 if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
   die "server already running with pid $(cat "$pid_file")"

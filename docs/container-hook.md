@@ -146,7 +146,58 @@ duration of its calls.
 Deployments: `com.bea:Name=RuntimeService,Type=weblogic.management.mbeanservers.runtime.RuntimeServiceMBean`
 → attribute `DomainConfiguration` → `AppDeployments` → `Name`, `SourcePath`, `ModuleType`.
 
-## WebLogic Server 12.2.1.4 / JDK 8
+## WebLogic Server 12.2.1.4.0 (Sep 12 2019 build 1974621), JDK 8 (Temurin 1.8.0_504)
 
-Not verified yet. The same reflective paths are expected to exist; the agent logs once and
-records nulls if they do not.
+Verified on the lab's second domain (`WLS_VERSION=12`), fresh OTN install, no patches
+(`inventory/patches` absent; OPatch itself does not run under the NixOS shim). Every path above
+resolved unchanged; the agent selects the same `ContainerTargets` entry on both versions.
+
+### EJB container choke point
+
+Same classes, same methods, same line numbers as 14.1.2.0.0. From `jcmd <pid> Thread.print`
+while `OrderServiceBean.createOrder` slept on `attributes.delayMillis`; interceptor frames elided:
+
+```
+local (REST → @EJB OrderServiceLocal)
+com.acme.orders.OrderServiceBean.createOrder(OrderServiceBean.java:42)
+com.sun.proxy.$Proxy254.createOrder                                                     <- JDK 8: com.sun.proxy, not jdk.proxyN
+com.acme.orders.OrderService_wdu466_OrderServiceLocalImpl.__WL_invoke
+weblogic.ejb.container.internal.SessionLocalMethodInvoker.invoke(SessionLocalMethodInvoker.java:33)   <- hooked
+com.acme.orders.OrderService_wdu466_OrderServiceLocalImpl.createOrder
+com.acme.orders.web.OrdersResource.create(OrdersResource.java:53)
+
+remote (T3 → OrderServiceRemote)
+com.acme.orders.OrderServiceBean.createOrder(OrderServiceBean.java:42)
+com.sun.proxy.$Proxy254.createOrder
+com.acme.orders.OrderService_wdu466_OrderServiceRemoteImpl.__WL_invoke
+weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invokeInternal(SessionRemoteMethodInvoker.java:54)
+weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invoke(SessionRemoteMethodInvoker.java:21)  <- hooked
+com.acme.orders.OrderService_wdu466_OrderServiceRemoteImpl.createOrder
+com.acme.orders.OrderService_wdu466_OrderServiceRemoteImpl_WLSkel.invoke
+weblogic.rmi.internal.BasicServerRef.invoke(BasicServerRef.java:645)
+```
+
+`javap` of `com.oracle.weblogic.ejb.jar` (12.2.1.4.0) shows the identical signatures:
+`SessionLocalMethodInvoker.invoke(Invokable, BaseLocalObject, InvocationWrapper, Object[], int)`,
+`SessionRemoteMethodInvoker.invoke(Invokable, BaseRemoteObject, InvocationWrapper, Object[], int)`,
+`InvocationWrapper.getMethodDescriptor()/getBean()/isLocal()`, `MethodDescriptor.getApplicationName()/
+getModuleId()/getEjbName()/getMethod()/getTransactionPolicy()`, `TransactionPolicy.getTxAttribute()`,
+`BaseLocalObject.beanInfo`, `SessionBeanInfo.getBusinessJNDINames()`, `BeanInfo.getBeanClassName()`.
+The generated client classes follow the same naming (`OrderService_wdu466_OrderServiceLocalImpl`,
+`*RemoteImpl`, `*_WLSkel`); the JDK proxy in between is `com.sun.proxy.$ProxyN` on JDK 8 and
+`jdk.proxyN.$ProxyN` on JDK 21, which `InvokedInterface` treats alike (both pass-through prefixes).
+
+### Servlet pipeline, HTTP session, principal, metadata
+
+`FilterChainImpl.doFilter` and `ServletStubImpl.execute` exist with the same shapes and are
+retransformed at install (the circularity-lock case of `FilterChainImpl` occurs here too and is
+handled the same way). The runtime MBeanServer is reached as `java:comp/jmx/runtime`, the platform
+MBeanServer holds no `com.bea` MBeans, `EJBComponentRuntime` / `*EJBRuntime` names and attributes
+are the same, and `jndiNames` come out identical (including `java:app`, `java:module` and the
+`weblogic-ejb-jar.xml` mappings).
+
+### Differences that are not the agent's
+
+See `docs/weblogic-12-vs-14.md`: Jersey version (fewer `@handle` markers in a JAX-RS `Response`),
+Coherence's management REST resources being `@Path`-annotated classes on the server class path
+(now in the hook's ignored packages), JDK 8 reflection hiding `Throwable.backtrace`.

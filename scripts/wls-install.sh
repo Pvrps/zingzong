@@ -9,7 +9,7 @@ if [ -d "$ORACLE_HOME/wlserver" ]; then
   exit 0
 fi
 
-[ -f "$WLS_INSTALLER" ] || die "installer not found: $WLS_INSTALLER (see docs/PLAN.md, Manual prerequisites)"
+[ -f "$WLS_INSTALLER" ] || die "installer not found: $WLS_INSTALLER (WLS_INSTALLER, or WLS_INSTALLER_12 for WLS_VERSION=12)"
 
 rsp="$TMP_DIR/wls-response.rsp"
 inv_ptr="$TMP_DIR/oraInst.loc"
@@ -36,7 +36,7 @@ oracle_run "$JAVA_HOME/bin/java" \
   -silent \
   -ignoreSysPrereqs \
   -novalidation \
-  -paramFile "$DEVENV_ROOT/scripts/wls-oraparam.ini" \
+  -paramFile "$WLS_ORAPARAM" \
   -responseFile "$rsp" \
   -invPtrLoc "$inv_ptr" \
   -logLevel info

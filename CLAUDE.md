@@ -25,16 +25,16 @@ README.md is the user's view; docs/history/ holds the prototype's plan and statu
 ## Environment (NixOS)
 - Everything runs inside `devenv shell`; no containers.
 - WebLogic installer jar at `$WLS_INSTALLER` (outside the repo). Install into `.local/oracle`.
-- Lab scripts (environment, not product): `wls-install`, `wls-domain`, `wls-start [-b]` (a plain domain: no agent), `wls-stop`, `wls-deploy [--no-build]`. The product: `capture enable|disable|start` runs `mvn io.capture:capture-maven-plugin:<version>:<goal> -Dcapture.domain=$DOMAIN_HOME -Dcapture.out=$CAPTURE_OUT` after `mvn -q install`.
+- Lab scripts (environment, not product): `wls-install`, `wls-domain`, `wls-start [-b]` (a plain domain: no agent), `wls-stop`, `wls-deploy [--no-build]`. Two labs: 14.1.2 / JDK 21 (default, port 7001) and `WLS_VERSION=12` for 12.2.1.4 / JDK 8 (port 7101, `.local/oracle12`, `.local/domains/capture12`, `.local/captures12`, H2 2.1); both run at once. `$JDK8_HOME` is the JDK 8; `JAVA_HOME=$JDK8_HOME capture …` or `… mvn -q test` exercises the Java 8 path. Sample EARs for the 12 domain build with `-Pjava8` (same sources, Java 8 bytecode, EE 7 API). The product: `capture enable|disable|start` runs `mvn io.capture:capture-maven-plugin:<version>:<goal> -Dcapture.domain=$DOMAIN_HOME -Dcapture.out=$CAPTURE_OUT` after `mvn -q install`.
 - A running server has its agent jar mapped: never overwrite that file in place (`capture:enable` replaces it by rename); a rebuilt agent is picked up at the next server start.
 - Oracle tooling (installer, WLST) runs through the `wls-fhs-run` shim; see docs/environment-notes.md before changing scripts.
 - `.local/` is gitignored: install, domain, H2, captures.
 
 ## Build & test
-- `mvn -q test` for the unit tests (no server). Modules: `trace-model`, `capture-agent`, `trace-reader`, `capture-maven-plugin`, `sample-apps`.
+- `mvn -q test` for the unit tests (no server), green under JDK 21 and under JDK 8 (`JAVA_HOME=$JDK8_HOME`). Modules: `trace-model`, `capture-agent`, `trace-reader`, `capture-maven-plugin`, `sample-apps`.
 - Lab loop: `mvn -q install` → `capture enable` → `wls-start -b` → `wls-deploy` → `capture start` → the page (Start, click the three sample buttons, Stop) → `capture disable`.
 - Agent log: `.local/captures/agent.log`. Server log: `.local/domains/capture/servers/AdminServer/logs/`.
 
 ## Style
 - Small classes, explicit names, no frameworks beyond ByteBuddy/Jackson/JUnit in the agent; the plugin uses the JDK's `com.sun.net.httpserver`, no web framework, and one HTML file with no build step.
-- When an internal WebLogic class is referenced, record the version and stack frame in docs/container-hook.md.
+- When an internal WebLogic class is referenced, record the version and stack frame in docs/container-hook.md, for both 12.2.1.4 and 14.1.2; version differences go in docs/weblogic-12-vs-14.md.

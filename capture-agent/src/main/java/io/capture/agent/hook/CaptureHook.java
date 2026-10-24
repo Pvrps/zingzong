@@ -54,11 +54,8 @@ public final class CaptureHook implements InstrumentationHook {
             "javax.jws.WebService",
     };
 
-    /** WebLogic's EJB choke points (docs/container-hook.md, 14.1.2.0.0). */
-    public static final String[] CONTAINER_INVOKERS = {
-            "weblogic.ejb.container.internal.SessionLocalMethodInvoker",
-            "weblogic.ejb.container.internal.SessionRemoteMethodInvoker",
-    };
+    /** The container's choke points for this WebLogic ({@link ContainerTargets}); null with the annotation strategy. */
+    private final ContainerTargets.Target target;
 
     /** WebLogic's servlet pipeline entries taking the servlet API interfaces (docs/container-hook.md). */
     static final String FILTER_CHAIN = "weblogic.servlet.internal.FilterChainImpl";
@@ -69,6 +66,7 @@ public final class CaptureHook implements InstrumentationHook {
             "io.capture.",
             "java.", "javax.", "jdk.", "sun.", "com.sun.",
             "org.eclipse.persistence.", "org.glassfish.", "org.jboss.weld.",
+            "com.tangosol.",  // Coherence, bundled with WebLogic; its management REST resources are not the application
     };
 
     private final Instrumentation instrumentation;
@@ -77,8 +75,16 @@ public final class CaptureHook implements InstrumentationHook {
     private ResettableClassFileTransformer transformer;
 
     public CaptureHook(Instrumentation instrumentation, EjbStrategy strategy) {
+        this(instrumentation, strategy, strategy == EjbStrategy.CONTAINER ? ContainerTargets.resolve() : null);
+    }
+
+    public CaptureHook(Instrumentation instrumentation, EjbStrategy strategy, ContainerTargets.Target target) {
+        if (strategy == EjbStrategy.CONTAINER && target == null) {
+            throw new IllegalArgumentException("container strategy without a resolved target");
+        }
         this.instrumentation = instrumentation;
         this.strategy = strategy;
+        this.target = target;
     }
 
     public EjbStrategy strategy() {
@@ -90,35 +96,13 @@ public final class CaptureHook implements InstrumentationHook {
         return strategy.name().toLowerCase();
     }
 
-    /** The server classes advised by name (container invokers, servlet pipeline). */
+    /** The server classes advised by name (container invokers of any known shape, servlet pipeline). */
     static boolean isNamedTarget(String typeName) {
-        if (typeName.equals(FILTER_CHAIN) || typeName.equals(SERVLET_STUB)) {
-            return true;
-        }
-        for (String invoker : CONTAINER_INVOKERS) {
-            if (typeName.equals(invoker)) {
-                return true;
-            }
-        }
-        return false;
+        return typeName.equals(FILTER_CHAIN) || typeName.equals(SERVLET_STUB) || ContainerTargets.isNamedInvoker(typeName);
     }
 
-    /** Whether the container choke points exist in this JVM (resolvable, not necessarily loaded). */
-    public static boolean containerTargetsPresent() {
-        for (String name : CONTAINER_INVOKERS) {
-            if (!resolvable(name)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean resolvable(String name) {
-        try {
-            return ClassLoader.getSystemResource(name.replace('.', '/') + ".class") != null;
-        } catch (Throwable t) {
-            return false;
-        }
+    private String[] invokers() {
+        return target == null ? new String[0] : target.invokers;
     }
 
     @Override
@@ -197,7 +181,7 @@ public final class CaptureHook implements InstrumentationHook {
             return false;
         }
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-            for (String name : CONTAINER_INVOKERS) {
+            for (String name : invokers()) {
                 if (loaded.getName().equals(name) && !listener.transformed(name)) {
                     return true;
                 }
@@ -222,7 +206,7 @@ public final class CaptureHook implements InstrumentationHook {
             ignored = ignored.or(nameStartsWith(prefix));
         }
         ignored = ignored.and(not(named(FILTER_CHAIN))).and(not(named(SERVLET_STUB)));
-        for (String invoker : CONTAINER_INVOKERS) {
+        for (String invoker : invokers()) {
             ignored = ignored.and(not(named(invoker)));
         }
 
@@ -249,7 +233,7 @@ public final class CaptureHook implements InstrumentationHook {
                             .include(ClassLoader.getSystemClassLoader())
                             .advice(businessMethods, EjbAdvice.class.getName()));
         } else {
-            for (String invoker : CONTAINER_INVOKERS) {
+            for (String invoker : invokers()) {
                 builder = builder.type(named(invoker))
                         .transform(new AgentBuilder.Transformer.ForAdvice()
                                 .include(ClassLoader.getSystemClassLoader())

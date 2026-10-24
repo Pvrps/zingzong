@@ -4,7 +4,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_env WLS_ADMIN_HOST WLS_ADMIN_PORT WLS_ADMIN_USER WLS_ADMIN_PASSWORD
 
-pid_file="$LOG_DIR/wls.pid"
+pid_file="$LOG_DIR/wls$WLS_LOG_SUFFIX.pid"
 stop_script="$DOMAIN_HOME/bin/stopWebLogic.sh"
 
 if [ -x "$stop_script" ]; then

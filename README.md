@@ -11,7 +11,9 @@ and shows them: three Maven goals and one web page.
   where a value in a later call came from.
 
 The agent is a `-javaagent` with no compile dependency on WebLogic; the plugin runs inside
-your Maven's JDK (8 or later). Targets: WebLogic 14.1.2 / JDK 21 and 12.2.1 / JDK 8.
+your Maven's JDK (8 or later). Verified on WebLogic 12.2.1.4 / JDK 8 and 14.1.2 / JDK 21, with
+the plugin under both a JDK 8 and a JDK 21 Maven; what differs between the two is in
+`docs/weblogic-12-vs-14.md`.
 
 ## Install
 
@@ -125,4 +127,7 @@ scripts) is recoverable from the tag `v0.1-prototype`.
 
 The home lab runs inside `devenv shell`: `wls-install`, `wls-domain`, `wls-start [-b]`,
 `wls-stop`, `wls-deploy` set up and run a plain domain; `capture enable|disable|start` runs
-the plugin against it with `capture.out` under `.local/captures`.
+the plugin against it with `capture.out` under `.local/captures`. There are two labs: the
+default is 14.1.2 / JDK 21 on port 7001; `WLS_VERSION=12` in front of any of those commands
+selects 12.2.1.4 / JDK 8 on port 7101 (its own install, domain, H2 and `capture.out`), and both
+can run at once. `JAVA_HOME=$JDK8_HOME capture …` runs the plugin under a Java 8 Maven.

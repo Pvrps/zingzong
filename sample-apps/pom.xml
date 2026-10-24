@@ -30,4 +30,18 @@
       <scope>provided</scope>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <!--
+      The same sources for WebLogic 12.2.1.4 / JDK 8: Java 8 bytecode, compiled against the
+      Java EE 7 API so nothing EE 8-only slips in. `wls-deploy` selects it for WLS_VERSION=12.
+    -->
+    <profile>
+      <id>java8</id>
+      <properties>
+        <maven.compiler.release>8</maven.compiler.release>
+        <javaee-api.version>7.0</javaee-api.version>
+      </properties>
+    </profile>
+  </profiles>
 </project>

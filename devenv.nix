@@ -52,8 +52,14 @@ in
     DOMAIN_NAME = "capture";
     ORACLE_INVENTORY = "${localDir}/oraInventory";
 
-    # Stable JDK path for Oracle scripts, see enterShell.
+    # Stable JDK paths for Oracle scripts, see enterShell. JDK 8 runs the 12.2.1.4 domain and
+    # is what `JAVA_HOME=$JDK8_HOME mvn ...` uses to exercise the plugin on Java 8.
     WLS_JAVA_HOME = "${localDir}/jdk";
+    JDK8_HOME = "${pkgs.temurin-bin-8}";
+
+    # WLS_VERSION=14 (default) or 12 selects install, domain, port, JDK and H2 in scripts/lib.sh;
+    # the values above are the 14 set, lib.sh overrides them for 12.
+    WLS_VERSION = "14";
 
     WLS_ADMIN_HOST = "localhost";
     WLS_ADMIN_PORT = "7001";
@@ -74,12 +80,14 @@ in
 
   enterShell = ''
     export WLS_INSTALLER="''${WLS_INSTALLER:-$HOME/Documents/oracle/installers/fmw_14.1.2.0.0_wls.jar}"
+    export WLS_INSTALLER_12="''${WLS_INSTALLER_12:-$HOME/Documents/oracle/installers/fmw_12.2.1.4.0_wls_lite_generic.jar}"
 
     # WebLogic bakes JAVA_HOME into its install and domain scripts. Point them at a
     # symlink that is refreshed on every shell entry so a nixpkgs JDK bump cannot
     # leave a dangling /nix/store path inside .local/.
     mkdir -p "$DEVENV_ROOT/.local"
     ln -sfn "$JAVA_HOME" "$WLS_JAVA_HOME"
+    ln -sfn "$JDK8_HOME" "$DEVENV_ROOT/.local/jdk8"
   '';
 
   scripts = {
@@ -88,11 +96,8 @@ in
     wls-start.exec = ''bash "$DEVENV_ROOT/scripts/wls-start.sh" "$@"'';
     wls-stop.exec = ''bash "$DEVENV_ROOT/scripts/wls-stop.sh" "$@"'';
     wls-deploy.exec = ''bash "$DEVENV_ROOT/scripts/wls-deploy.sh" "$@"'';
-    # The product, driven as a user would: capture enable | disable | start.
-    # Needs `mvn -q install` first (the plugin and the agent come from the local repository).
-    capture.exec = ''
-      goal="''${1:?usage: capture enable|disable|start}"; shift
-      cd "$DEVENV_ROOT" && exec mvn -q io.capture:capture-maven-plugin:0.1.0-SNAPSHOT:"$goal" -Dcapture.domain="$DOMAIN_HOME" -Dcapture.out="$CAPTURE_OUT" "$@"
-    '';
+    # The product, driven as a user would: capture enable | disable | start, against the
+    # WLS_VERSION domain. Needs `mvn -q install` first (plugin and agent come from the local repository).
+    capture.exec = ''bash "$DEVENV_ROOT/scripts/plugin.sh" "$@"'';
   };
 }

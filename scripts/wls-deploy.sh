@@ -17,11 +17,14 @@ case "${1:-}" in
   *) die "unknown argument: $1" ;;
 esac
 
+# The server deploys (nostage) from the path it is given and re-reads it on restart, so each
+# lab gets its own copy of the EARs: a rebuild for the other JDK must not change a deployed app.
+deploy_dir="$LOCAL_DIR/deploy$WLS_LOG_SUFFIX"
 # Deployment order matters only at runtime (orders looks tax up by JNDI per call),
 # but deploying tax-ear first keeps the first smoke test clean.
 apps=(
-  "tax-ear:$DEVENV_ROOT/sample-apps/tax-ear/tax-ear/target/tax-ear.ear"
-  "orders-ear:$DEVENV_ROOT/sample-apps/orders-ear/orders-ear/target/orders-ear.ear"
+  "tax-ear:$deploy_dir/tax-ear.ear"
+  "orders-ear:$deploy_dir/orders-ear.ear"
 )
 
 deployer() {
@@ -33,7 +36,18 @@ deployer() {
 
 if [ "$build" = "1" ]; then
   log "building sample apps"
-  (cd "$DEVENV_ROOT" && mvn -q -pl sample-apps/orders-ear/orders-ear,sample-apps/tax-ear/tax-ear -am package -DskipTests)
+  profile=""; [ "$WLS_VERSION" = "12" ] && profile="-Pjava8"
+  # clean: switching the target release between the two labs does not invalidate compiled classes otherwise
+  (cd "$DEVENV_ROOT" && mvn -q $profile -pl sample-apps/orders-ear/orders-ear,sample-apps/tax-ear/tax-ear -am clean package -DskipTests)
+fi
+
+if [ "$undeploy" = "0" ]; then
+  mkdir -p "$deploy_dir"
+  for ear in tax-ear orders-ear; do
+    built="$DEVENV_ROOT/sample-apps/$ear/$ear/target/$ear.ear"
+    [ -f "$built" ] || die "missing $built; run without --no-build"
+    cp "$built" "$deploy_dir/$ear.ear"
+  done
 fi
 
 deployed=$(deployer -listapps 2>/dev/null | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' || true)

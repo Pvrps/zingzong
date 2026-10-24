@@ -76,9 +76,10 @@ final class OpenSpan {
      */
     private List<String> jndiNames() {
         List<String> names = new ArrayList<String>(meta.jndiNames);
+        // The invoked view's portable name first, when the bean has one (an EJB 2.x component
+        // interface has no java:global binding of its own; nothing is invented for it).
         String invoked = meta.globalName(interfaceName);
-        if (invoked != null) {
-            names.remove(invoked);
+        if (invoked != null && names.remove(invoked)) {
             names.add(0, invoked);
         }
         return names.isEmpty() ? null : names;

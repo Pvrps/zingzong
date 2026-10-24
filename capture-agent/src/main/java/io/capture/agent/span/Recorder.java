@@ -219,7 +219,7 @@ public final class Recorder {
                 principal = WlsRuntime.principal();
                 httpSessionId = WlsRuntime.httpSessionId();
             }
-            BeanMeta meta = WlsMetadata.of(ci.beanClass);
+            BeanMeta meta = WlsMetadata.of(ci.beanClass, new WlsMetadata.Hint(ci.ejbName, ci.beanInfo));
             String txAttribute = ci.transactionAttribute != null ? ci.transactionAttribute
                     : EjbAnnotations.transactionAttribute(ci.beanClass, ci.method);
             String invocation = ci.local ? BeanMeta.LOCAL : BeanMeta.REMOTE;

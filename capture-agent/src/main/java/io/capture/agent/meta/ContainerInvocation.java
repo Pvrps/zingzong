@@ -27,10 +27,12 @@ public final class ContainerInvocation {
     public final String transactionAttribute;
     public final boolean local;
     public final Class<?> beanClass;
+    /** The container's BeanInfo behind the client object (BaseLocalObject/BaseRemoteObject.beanInfo). */
+    public final Object beanInfo;
     private final Object invokable;
 
     private ContainerInvocation(String application, String moduleId, String ejbName, Method method,
-                                String transactionAttribute, boolean local, Class<?> beanClass, Object invokable) {
+                                String transactionAttribute, boolean local, Class<?> beanClass, Object beanInfo, Object invokable) {
         this.application = application;
         this.moduleId = moduleId;
         this.ejbName = ejbName;
@@ -38,6 +40,7 @@ public final class ContainerInvocation {
         this.transactionAttribute = transactionAttribute;
         this.local = local;
         this.beanClass = beanClass;
+        this.beanInfo = beanInfo;
         this.invokable = invokable;
     }
 
@@ -58,7 +61,7 @@ public final class ContainerInvocation {
             boolean local = isLocal instanceof Boolean ? (Boolean) isLocal
                     : !superclassNamed(clientObject, "weblogic.ejb.container.internal.BaseRemoteObject");
             Class<?> beanClass = beanClassOf(clientObject, invokable);
-            return new ContainerInvocation(application, moduleId, ejbName, method, txAttribute, local, beanClass, invokable);
+            return new ContainerInvocation(application, moduleId, ejbName, method, txAttribute, local, beanClass, fieldUp(clientObject, "beanInfo"), invokable);
         } catch (Throwable t) {
             return null;
         }

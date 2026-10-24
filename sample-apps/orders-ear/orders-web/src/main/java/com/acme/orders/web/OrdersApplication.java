@@ -10,6 +10,6 @@ public class OrdersApplication extends Application {
 
     @Override
     public Set<Class<?>> getClasses() {
-        return Collections.singleton(OrdersResource.class);
+        return new java.util.HashSet<Class<?>>(java.util.Arrays.asList(OrdersResource.class, CartResource.class));
     }
 }

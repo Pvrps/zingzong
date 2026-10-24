@@ -59,11 +59,37 @@ public final class WlsMetadata {
     private WlsMetadata() {
     }
 
+    /** What the container hook knows at the call site and the annotations may not say: the descriptor's EJB name and the container's BeanInfo. */
+    public static final class Hint {
+        final String ejbName;
+        final Object beanInfo;
+
+        public Hint(String ejbName, Object beanInfo) {
+            this.ejbName = ejbName;
+            this.beanInfo = beanInfo;
+        }
+    }
+
+    private static final ThreadLocal<Hint> HINT = new ThreadLocal<Hint>();
+
     public static BeanMeta of(Class<?> beanClass) {
         if (beanClass == null) {
             return null;
         }
         return CACHE.get(beanClass);
+    }
+
+    /** As {@link #of(Class)}, with the container's hints used the first time this class is resolved. */
+    public static BeanMeta of(Class<?> beanClass, Hint hint) {
+        if (beanClass == null) {
+            return null;
+        }
+        HINT.set(hint);
+        try {
+            return CACHE.get(beanClass);
+        } finally {
+            HINT.remove();
+        }
     }
 
     /** Forget cross-class state (deployments list); per-class answers stay with their classes. */
@@ -74,12 +100,28 @@ public final class WlsMetadata {
     // ---- per bean --------------------------------------------------------------------------
 
     private static BeanMeta resolve(Class<?> beanClass) {
-        String ejbName = EjbAnnotations.ejbName(beanClass);
+        Hint hint = HINT.get();
+        String ejbName = hint != null && hint.ejbName != null ? hint.ejbName : EjbAnnotations.ejbName(beanClass);
         Map<String, String> interfaces = EjbAnnotations.interfaces(beanClass);
+        // EJB 2.x component interfaces (no annotations: the bean does not even implement them) come from the container.
+        Set<String> componentInterfaces = new java.util.HashSet<String>();
+        if (hint != null && hint.beanInfo != null) {
+            Object remote = ContainerInvocation.call(hint.beanInfo, "getRemoteInterfaceClass");
+            Object local = ContainerInvocation.call(hint.beanInfo, "getLocalInterfaceClass");
+            if (remote instanceof Class && !interfaces.containsKey(((Class<?>) remote).getName())) {
+                interfaces.put(((Class<?>) remote).getName(), BeanMeta.REMOTE);
+                componentInterfaces.add(((Class<?>) remote).getName());
+            }
+            if (local instanceof Class && !interfaces.containsKey(((Class<?>) local).getName())) {
+                interfaces.put(((Class<?>) local).getName(), BeanMeta.LOCAL);
+                componentInterfaces.add(((Class<?>) local).getName());
+            }
+        }
         String app = null;
         String module = null;
         Object clientObject = null;
         String problem = null;
+        Set<String> resolvedNames = new TreeSet<String>(); // portable names that actually resolved in JNDI
         try {
             MBeanServerConnection server = server();
             if (server == null) {
@@ -90,7 +132,7 @@ public final class WlsMetadata {
                     problem = "no *EJBRuntime MBean named " + ejbName;
                 }
                 for (String[] candidate : candidates) {
-                    Object found = lookupClientObject(candidate[0], candidate[1], ejbName, interfaces.keySet());
+                    Object found = lookupClientObject(candidate[0], candidate[1], ejbName, interfaces.keySet(), resolvedNames);
                     if (found != null && beanClass.getName().equals(beanClassNameOf(found))) {
                         app = candidate[0];
                         module = candidate[1];
@@ -108,18 +150,33 @@ public final class WlsMetadata {
             problem = "metadata lookup failed: " + t;
         }
 
-        Set<String> names = new TreeSet<String>();
-        if (clientObject != null) {
-            Map<String, String> fromContainer = businessJndiNames(clientObject, names);
+        Set<String> names = new TreeSet<String>(resolvedNames);
+        Object infoSource = clientObject != null ? clientObject : hint == null ? null : hint.beanInfo;
+        if (infoSource != null) {
+            Map<String, String> fromContainer = businessJndiNames(infoSource, names);
             for (Map.Entry<String, String> e : fromContainer.entrySet()) {
                 if (!interfaces.containsKey(e.getKey())) {
                     interfaces.put(e.getKey(), e.getValue());
                 }
             }
+            // EJB 2.x: the home's JNDI names (weblogic-ejb-jar.xml <jndi-name>), the way a client reaches the bean.
+            Object info = beanInfo(infoSource);
+            if (ContainerInvocation.call(info, "getHomeInterfaceClass") != null) {
+                Object home = ContainerInvocation.call(info, "getJNDINameAsString");
+                if (home != null && !home.toString().isEmpty()) {
+                    names.add(home.toString());
+                }
+            }
+            if (ContainerInvocation.call(info, "getLocalHomeInterfaceClass") != null) {
+                Object home = ContainerInvocation.call(info, "getLocalJNDINameAsString");
+                if (home != null && !home.toString().isEmpty()) {
+                    names.add(home.toString());
+                }
+            }
         }
         BeanMeta partial = new BeanMeta(app, module, ejbName, beanClass.getName(), interfaces, null, problem);
         for (String iface : interfaces.keySet()) {
-            String global = partial.globalName(iface);
+            String global = componentInterfaces.contains(iface) ? null : partial.globalName(iface);
             if (global != null) {
                 names.add(global);
             }
@@ -175,7 +232,8 @@ public final class WlsMetadata {
         return dot > 0 ? moduleId.substring(0, dot) : moduleId;
     }
 
-    private static Object lookupClientObject(String app, String module, String ejbName, Set<String> interfaces) {
+    /** The client object under one of the portable names; the name that resolved is added to {@code resolvedNames}. */
+    private static Object lookupClientObject(String app, String module, String ejbName, Set<String> interfaces, Set<String> resolvedNames) {
         List<String> tries = new ArrayList<String>();
         tries.add("java:global/" + app + "/" + module + "/" + ejbName);
         for (String iface : interfaces) {
@@ -185,6 +243,7 @@ public final class WlsMetadata {
             try {
                 Object found = new javax.naming.InitialContext().lookup(name);
                 if (found != null) {
+                    resolvedNames.add(name);
                     return found;
                 }
             } catch (Throwable ignored) {
@@ -243,6 +302,17 @@ public final class WlsMetadata {
      * A bounded search over WebLogic-typed fields rather than those names, so a different
      * wrapping in another patch level still resolves.
      */
+
+    private static boolean implementsNamed(Class<?> type, String interfaceName) {
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+            for (Class<?> i : c.getInterfaces()) {
+                if (i.getName().equals(interfaceName) || implementsNamed(i, interfaceName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     static Object beanInfo(Object clientObject) {
         return findBeanInfo(clientObject, 0);
     }
@@ -250,6 +320,9 @@ public final class WlsMetadata {
     private static Object findBeanInfo(Object o, int depth) {
         if (o == null || depth > 4) {
             return null;
+        }
+        if (implementsNamed(o.getClass(), "weblogic.ejb.container.interfaces.BeanInfo")) {
+            return o; // the container's BeanInfo itself (the container hook hands it over)
         }
         if (Proxy.isProxyClass(o.getClass())) {
             return findBeanInfo(Proxy.getInvocationHandler(o), depth + 1);

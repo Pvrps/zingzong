@@ -8,6 +8,8 @@ import com.acme.common.dto.PriceQuote;
 import com.acme.common.dto.TaxCategory;
 import com.acme.common.dto.TaxRequest;
 import com.acme.common.dto.TaxResult;
+import com.acme.tax.api.RateLookup;
+import com.acme.tax.api.RateLookupHome;
 import com.acme.tax.api.TaxService;
 
 import javax.ejb.EJBException;
@@ -52,6 +54,11 @@ public class PricingServiceBean implements PricingService {
         Address address = request.getCustomer().getAddress();
         TaxResult tax = taxService().computeTax(
                 new TaxRequest(address.getCountry(), address.getRegion(), TaxCategory.GOODS, subtotal));
+        // Cross-check with the tax team's EJB 2.x bean, the old way: home lookup, create(), call.
+        BigDecimal legacyRate = legacyRate(address.getCountry(), address.getRegion());
+        if (legacyRate.compareTo(tax.getRate()) != 0) {
+            LOG.warning("PricingService: legacy rate " + legacyRate + " differs from " + tax.getRate());
+        }
 
         return new PriceQuote(CURRENCY, lineTotals, subtotal, tax, subtotal.add(tax.getTax()));
     }
@@ -79,6 +86,22 @@ public class PricingServiceBean implements PricingService {
             return (TaxService) new InitialContext().lookup(TaxService.JNDI_GLOBAL);
         } catch (NamingException e) {
             throw new EJBException("TaxService not available at " + TaxService.JNDI_GLOBAL, e);
+        }
+    }
+    /** EJB 2.x: RateLookupHome from JNDI, create() for the component, then the business call, then remove(). */
+    private static BigDecimal legacyRate(String country, String region) {
+        try {
+            Object home = new InitialContext().lookup(RateLookupHome.JNDI_NAME);
+            // No PortableRemoteObject.narrow: JDK 11+ has no javax.rmi, and a WebLogic T3 stub implements the home directly.
+            RateLookupHome narrowed = (RateLookupHome) home;
+            RateLookup lookup = narrowed.create();
+            try {
+                return lookup.rateFor(country, region);
+            } finally {
+                lookup.remove();
+            }
+        } catch (Exception e) {
+            throw new EJBException("RateLookup not available at " + RateLookupHome.JNDI_NAME, e);
         }
     }
 }

@@ -121,3 +121,41 @@ written after the request has left `FilterChainImpl`, when the span is already c
 recorded: on JDK 21 a `NullPointerException`'s `detailMessage` field is null (the helpful
 message is computed by `getMessage()` on demand and shows up in the wrapping `EJBException`'s
 message); on JDK 8 both are null. No getters were added for that.
+
+## 4. Stateful and EJB 2.x
+
+**Added**: `CartService` (`@Stateful`, `@Remove checkout`; `CartResource` keeps the instance in
+the HTTP session so `POST /cart/items`, `GET /cart/total`, `DELETE /cart` reach one bean across
+requests), and in `tax-ear` an EJB 2.x `RateLookup` (`RateLookupHome`/`RateLookup` in `tax-api`,
+`RateLookupBean implements SessionBean` with `ejbCreate`, declared only in `ejb-jar.xml`, home
+bound to `tax/RateLookupHome` by `weblogic-ejb-jar.xml`), called by `PricingService.price` the old
+way: home lookup, `create()`, `rateFor`, `remove()`. 14 only (`rec-20261023-214657`).
+
+**What the agent did**: the stateful conversation was right from the start: `CartService.addItem`,
+then `items`/`total → PricingService.unitPrice`, then `checkout`, three traces in one lane with
+full metadata (`LOCAL`, `REQUIRED`, the six portable names). The 2.x call was captured, by the
+same choke point (`SessionRemoteMethodInvoker.invoke`, reached from the generated
+`RateLookup_j2unwk_EOImpl`; `docs/container-hook.md`, "EJB 2.x beans"), but with weak metadata:
+`beanName` was the class name `RateLookupBean`, no interface, no `app`/`module`, no names: the bean
+has no annotations and does not implement its component interface, so nothing on the class said
+who it was, and the runtime MBean lookup by that wrong name missed. `home.create()` is not a span.
+
+**What changed**:
+- `WlsMetadata.of(Class, Hint)`: the container hook passes what it has at the call site, the
+  descriptor's EJB name (`InvocationWrapper.getMethodDescriptor().getEJBName()`) and the
+  container's `BeanInfo`; the name wins over the class name, and
+  `getRemoteInterfaceClass`/`getLocalInterfaceClass` supply the 2.x views. Home names
+  (`getJNDINameAsString`/`getLocalJNDINameAsString`) are added only when the bean has a home
+  interface, because WebLogic binds an internal `tax-eartax-ejb_jarTaxService_Home` for every
+  bean and that had crept into `TaxService`'s names.
+- No portable name is synthesized for a 2.x component interface (it has no `java:global/…!iface`
+  binding); the name the lookup actually resolved is recorded instead, and `OpenSpan` moves the
+  invoked view's name to the front only when it is really bound.
+- Sample: `javax.rmi.PortableRemoteObject.narrow` does not exist on JDK 21 (CORBA removed); a
+  WebLogic T3 stub implements the home directly, so the sample casts. `SessionContext` fields
+  must not be `transient` (compliance check), and a JAX-RS `Application` listing its classes has
+  to list the new resource.
+
+After: `RateLookup.rateFor` with `beanName: RateLookup`, `interface: com.acme.tax.api.RateLookup`
+REMOTE, `app: tax-ear`, `module: tax-ejb`, `jndiNames: [java:global/tax-ear/tax-ejb/RateLookup,
+tax/RateLookupHome]`, args `["NL","NH"]`, result `0.21`.

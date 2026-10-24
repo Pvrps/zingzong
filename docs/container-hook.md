@@ -259,3 +259,42 @@ SOAP | MIME_HEADER` composed from the named constants, because on both versions
 work-manager handoff; with GLOBAL the `@Asynchronous` worker saw nothing while the MDB did.
 Verified handoffs: `@Asynchronous` (`AsyncExecutor.run` under `weblogic.work.WorkAreaContextWrap.run`)
 and JMS to an MDB in the same server. RMI is in the mode but not verified across servers.
+
+## EJB 2.x beans (14.1.2.0.0; same classes in 12.2.1.4.0)
+
+`jcmd <pid> Thread.print` while `RateLookupBean.rateFor` slept (region `DUMP`), a bean declared
+only in `ejb-jar.xml` (`<home>`/`<remote>`, `ejbCreate`), called by `PricingServiceBean.legacyRate`
+through its home:
+
+```
+com.acme.tax.RateLookupBean.rateFor(RateLookupBean.java:27)
+jdk.proxy12.$Proxy352.rateFor
+com.acme.tax.RateLookup_j2unwk_EOImpl.__WL_invoke
+weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invokeInternal(SessionRemoteMethodInvoker.java:54)
+weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invoke(SessionRemoteMethodInvoker.java:21)   <- hooked (same as 3.x)
+com.acme.tax.RateLookup_j2unwk_EOImpl.rateFor
+com.acme.tax.RateLookup_j2unwk_EOImpl_WLSkel.invoke
+weblogic.rmi.internal.ServerRequest.sendReceive
+weblogic.rmi.cluster.ClusterableRemoteRef.invoke
+com.acme.tax.RateLookup_j2unwk_EOImpl_14120_WLStub.rateFor
+com.acme.orders.PricingServiceBean.legacyRate(PricingServiceBean.java:99)
+```
+
+The choke point does not differ: the generated component object (`*_EOImpl`, an `EJBObject`
+rather than a 3.x `*Impl` business-interface class) calls the same static
+`SessionRemoteMethodInvoker.invoke(Invokable, BaseRemoteObject, InvocationWrapper, Object[], int)`;
+local 2.x views would go through `SessionLocalMethodInvoker` the same way. `home.create()` and
+`EJBObject.remove()` do not pass the invokers and are not spans (they are container lifecycle,
+not business calls). What differs is the metadata: the bean carries no annotations and does not
+implement its component interface, so `EjbAnnotations` yields the class name and no views. The
+container hook therefore hands `WlsMetadata` a hint it already has at the call site:
+
+| member | gives |
+| --- | --- |
+| `InvocationWrapper.getMethodDescriptor().getEJBName()` (via `ContainerInvocation.ejbName`) | the descriptor's `<ejb-name>` (`RateLookup`), used instead of the class name |
+| `BaseRemoteObject.beanInfo` → `ClientDrivenBeanInfo.getRemoteInterfaceClass()` / `getLocalInterfaceClass()` | the 2.x component interfaces (`ejb.interface`, REMOTE/LOCAL) |
+| `ClientDrivenBeanInfo.getHomeInterfaceClass()` / `getLocalHomeInterfaceClass()`, then `getJNDINameAsString()` / `getLocalJNDINameAsString()` | the home's bound names (`weblogic-ejb-jar.xml <jndi-name>`, `tax/RateLookupHome`), the way a 2.x client reaches the bean. Read only when the home interface exists: WebLogic binds an internal `<app><module>_jar<ejb>_Home` name for every bean, which is noise for a 3.x bean |
+
+A 2.x component interface has no `java:global/…/<ejb>!<iface>` binding, so none is synthesized
+for it; `java:global/tax-ear/tax-ejb/RateLookup` (the home) is listed because the lookup resolved
+there. Stateful beans (`CartService`) need nothing new: same invokers, same metadata.

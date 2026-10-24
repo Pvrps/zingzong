@@ -61,12 +61,17 @@ public final class CaptureHook implements InstrumentationHook {
     static final String FILTER_CHAIN = "weblogic.servlet.internal.FilterChainImpl";
     static final String SERVLET_STUB = "weblogic.servlet.internal.ServletStubImpl";
 
+    /**
+     * Never instrumented wherever they are loaded: the JVM, the agent, the server's own packages
+     * and the frameworks it embeds (which an application may also bundle). Vendor code outside
+     * these packages is kept out by {@link ApplicationLoaders}: application classes are
+     * recognised by their defining loader, not by a growing list of package prefixes.
+     */
     private static final String[] IGNORED_PACKAGES = {
             "weblogic.", "oracle.", "com.oracle.", "com.bea.",
             "io.capture.",
             "java.", "javax.", "jdk.", "sun.", "com.sun.",
             "org.eclipse.persistence.", "org.glassfish.", "org.jboss.weld.",
-            "com.tangosol.",  // Coherence, bundled with WebLogic; its management REST resources are not the application
     };
 
     private final Instrumentation instrumentation;
@@ -190,6 +195,27 @@ public final class CaptureHook implements InstrumentationHook {
         return false;
     }
 
+    /**
+     * An annotated type is instrumented only when an application loader defined it; a vendor
+     * class that carries the annotation on the server class path is logged as kept out, once.
+     */
+    private AgentBuilder.RawMatcher ownedBy(final ElementMatcher<TypeDescription> annotated, final String layer) {
+        return new AgentBuilder.RawMatcher() {
+            @Override
+            public boolean matches(TypeDescription type, ClassLoader loader, net.bytebuddy.utility.JavaModule module,
+                                   Class<?> classBeingRedefined, java.security.ProtectionDomain protectionDomain) {
+                if (!annotated.matches(type)) {
+                    return false;
+                }
+                if (ApplicationLoaders.isApplication(loader)) {
+                    return true;
+                }
+                listener.keptOut(layer, type.getName(), loader);
+                return false;
+            }
+        };
+    }
+
     private AgentBuilder builder() {
         ElementMatcher.Junction<TypeDescription> ejbTypes = ElementMatchers.none();
         for (String annotation : EJB_ANNOTATIONS) {
@@ -226,7 +252,7 @@ public final class CaptureHook implements InstrumentationHook {
                 .ignore(ignored);
 
         if (strategy == EjbStrategy.ANNOTATION) {
-            builder = builder.type(ejbTypes)
+            builder = builder.type(ownedBy(ejbTypes, "EJB"))
                     .transform(new AgentBuilder.Transformer.ForAdvice()
                             // The agent jar is on the system class path (-javaagent) and on the
                             // bootstrap path; locate the advice class file through the former.
@@ -241,7 +267,7 @@ public final class CaptureHook implements InstrumentationHook {
             }
         }
         return builder
-                .type(resourceTypes)
+                .type(ownedBy(resourceTypes, "resource"))
                 .transform(new AgentBuilder.Transformer.ForAdvice()
                         .include(ClassLoader.getSystemClassLoader())
                         .advice(businessMethods, ResourceAdvice.class.getName()))

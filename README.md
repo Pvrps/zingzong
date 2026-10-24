@@ -131,3 +131,5 @@ the plugin against it with `capture.out` under `.local/captures`. There are two 
 default is 14.1.2 / JDK 21 on port 7001; `WLS_VERSION=12` in front of any of those commands
 selects 12.2.1.4 / JDK 8 on port 7101 (its own install, domain, H2 and `capture.out`), and both
 can run at once. `JAVA_HOME=$JDK8_HOME capture …` runs the plugin under a Java 8 Maven.
+`WLS_VERSION=12` is a verification lab, not a daily driver: it exists to prove the plugin on the
+production version, and it runs on the JDK 8 `tools.jar` attach path; day to day, use the 14 lab.

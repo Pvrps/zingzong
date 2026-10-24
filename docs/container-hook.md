@@ -201,3 +201,20 @@ are the same, and `jndiNames` come out identical (including `java:app`, `java:mo
 See `docs/weblogic-12-vs-14.md`: Jersey version (fewer `@handle` markers in a JAX-RS `Response`),
 Coherence's management REST resources being `@Path`-annotated classes on the server class path
 (now in the hook's ignored packages), JDK 8 reflection hiding `Throwable.backtrace`.
+
+## Class loaders (both versions, `ApplicationLoaders`)
+
+Ownership decides whether an annotated class is an application class. Seen in the agent logs
+of both domains:
+
+| loader class | defines | treated as |
+| --- | --- | --- |
+| `weblogic.utils.classloaders.GenericClassLoader` | EAR and EJB module classes (`OrderServiceBean`, `TaxServiceBean`) | application |
+| `weblogic.utils.classloaders.ChangeAwareClassLoader` | web module classes (`OrdersResource`, `TaxWebService`) | application |
+| `com.oracle.classloader.PolicyClassLoader 'weblogic-launcher'` | the server itself and everything on its class path, Coherence's `@Path` resources included | not application |
+| system / bootstrap | JDK, agent | not application |
+
+The rule is "a subclass of `weblogic.utils.classloaders.*`"; the first two are what 12.2.1.4.0
+and 14.1.2.0.0 use for deployed modules (WebLogic also loads each application class in an
+analysis loader of the same kind before the real one, which is why the same class is logged as
+instrumented twice per install on 14.1.2).

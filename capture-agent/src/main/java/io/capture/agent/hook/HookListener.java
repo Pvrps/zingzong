@@ -53,6 +53,16 @@ final class HookListener extends AgentBuilder.Listener.Adapter {
         transformedNames.clear();
     }
 
+
+    private final java.util.Set<String> keptOut = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+
+    /** An annotated class the ownership rule refused: not defined by an application loader. Logged once per class. */
+    void keptOut(String layer, String className, ClassLoader loader) {
+        if (keptOut.add(className)) {
+            AgentLog.info("not instrumented (" + layer + " annotation, but not an application class): " + className
+                    + " loader=" + describe(loader));
+        }
+    }
     boolean transformed(String className) {
         return transformedNames.contains(className);
     }

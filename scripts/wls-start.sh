@@ -26,6 +26,9 @@ fi
 
 java_options="${JAVA_OPTIONS:-}"
 java_options="$java_options -Djava.security.egd=file:/dev/./urandom"
+# Lab only: the self-tuning pool starts at one thread and grows slowly, which serialises the
+# concurrency checks (scripts/load.sh); a floor makes 8 parallel clients run on 8 threads.
+java_options="$java_options -Dweblogic.threadpool.MinPoolSize=16"
 
 export JAVA_OPTIONS="$java_options"
 export WLS_REDIRECT_LOG=""

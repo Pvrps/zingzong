@@ -85,7 +85,12 @@ public final class DomainState {
             (s.agentLoaded ? withAgent : withoutAgent).add(s.serverName + " (pid " + s.pid + ")");
         }
         if (!enabledOnDisk) {
-            if (!withAgent.isEmpty()) {
+            if (blockPresent && jarPresent) {
+                // Enabled, but with an agent jar this plugin did not ship: a rebuilt plugin, or a mix of versions.
+                kind = Kind.NOT_ENABLED;
+                message = kind.message + ": the installed agent jar is not the one this plugin ships; run capture:enable"
+                        + (withAgent.isEmpty() ? "" : ", then restart " + join(withAgent) + " (running an older agent)");
+            } else if (!withAgent.isEmpty()) {
                 kind = Kind.DISABLED_AGENT_LOADED;
                 message = kind.message + ": " + join(withAgent) + "; the agent is idle, no advice is installed";
             } else {
@@ -93,7 +98,7 @@ public final class DomainState {
                 String why = !blockPresent && !jarPresent ? "run capture:enable -Dcapture.domain=" + domain
                         : !blockPresent ? "the agent jar is installed but bin/setUserOverrides.sh has no ejb-capture block; run capture:enable"
                         : !jarPresent ? "bin/setUserOverrides.sh has the block but " + domain.installedAgentJar() + " is missing; run capture:enable"
-                        : "the installed agent jar is not the one this plugin ships; run capture:enable";
+                        : "run capture:enable";
                 message = kind.message + ": " + why;
             }
         } else if (servers.isEmpty()) {

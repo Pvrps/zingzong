@@ -34,3 +34,25 @@ resources are instrumented on both, the Coherence resource on neither. Outside W
 ownership cannot be read from the loader (a plain JVM runs applications on the system loader),
 so there every non-bootstrap loader counts and the package list decides; the unit tests run that
 way.
+
+## 1. Concurrency
+
+**Added**: `scripts/load.sh` (`load [pairs] [clients]`, default 8 parallel clients × 25
+Create+Confirm pairs, each call with its own customer name and `confirmedBy`
+`client-<c>-<i>`; `LOAD_DELAY_MS`, default 30, holds each `createOrder` open inside the bean so
+the clients really overlap), and `scripts/check-recording.sh`, which asserts over a recording:
+every trace's spans ran on one thread; every span's parent is a span of the same trace one
+level up; every `confirmOrder` names an order that a `createOrder` of the same customer
+produced (EJB argument, URL path and `confirmedBy` agree); as many confirms as creates, each at
+most once per trace.
+
+**What the agent did**: nothing wrong. On both domains, 408 traces (8 sessions + 200 + 200),
+200 distinct customers, 0 multi-thread traces, 0 foreign parents, 0 wrong links, 0 dropped
+traces; 16 distinct server threads carried the work, 200 pairs in 2 s
+(14: `rec-20261023-211150`, 12: `rec-20261023-211155`).
+
+**What changed**: not the agent. The first runs were not a concurrency test at all: WebLogic's
+self-tuning pool served the 8 clients on 2–3 threads, one request after another (8 parallel
+2-second calls took 8 s). The lab start script now sets `-Dweblogic.threadpool.MinPoolSize=16`
+so the pool starts wide; with it the same 8 calls take 2.5 s. The checker counts distinct
+threads so a serialised run cannot pass as evidence again.

@@ -99,5 +99,8 @@ in
     # The product, driven as a user would: capture enable | disable | start, against the
     # WLS_VERSION domain. Needs `mvn -q install` first (plugin and agent come from the local repository).
     capture.exec = ''bash "$DEVENV_ROOT/scripts/plugin.sh" "$@"'';
+    # Lab checks: concurrent load against the WLS_VERSION domain, and the recording checker.
+    load.exec = ''bash "$DEVENV_ROOT/scripts/load.sh" "$@"'';
+    check-recording.exec = ''bash "$DEVENV_ROOT/scripts/check-recording.sh" "$@"'';
   };
 }

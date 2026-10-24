@@ -159,3 +159,40 @@ who it was, and the runtime MBean lookup by that wrong name missed. `home.create
 After: `RateLookup.rateFor` with `beanName: RateLookup`, `interface: com.acme.tax.api.RateLookup`
 REMOTE, `app: tax-ear`, `module: tax-ejb`, `jndiNames: [java:global/tax-ear/tax-ejb/RateLookup,
 tax/RateLookupHome]`, args `["NL","NH"]`, result `0.21`.
+
+## 5. Redeploy during a recording
+
+**Added**: `wls-deploy --only orders-ear` (redeploy one application) and a driver: recording on,
+Create, redeploy `orders-ear`, Create, recording off. Run on both domains
+(14: `rec-20261023-215007`, 12: `rec-20261023-215459`).
+
+**What the agent did**: both traces complete and correct (8 spans each: resource → `createOrder`
+→ `reserve`, `price` → `computeTax`, `rateFor`, `unitPrice`; 201). The second one ran on the new
+deployment: the agent log shows `OrdersResource` instrumented again in a new
+`ChangeAwareClassLoader` (`@64edaded` → `@521736ad` on 14, `@2edf572d` on 12) and
+`OrderServiceBean`'s metadata resolved again for the new class (the caches are `ClassValue`s, so
+a new class is a new entry and the old one goes with its class). The redeploy itself also
+retransformed nothing of the application: only the container classes are advised.
+
+**Class retention**: after two `jcmd GC.run`, `VM.class_hierarchy` (JDK 21) listed 3 copies of
+`OrderServiceBean` and 2 of `OrdersResource`, and `GC.class_histogram` live instances of two
+copies of the generated `OrderService_wdu466_OrderServiceLocalImpl` and `OrdersApplication`. That
+is not the agent's doing. Measured on both domains, same JVM each time:
+
+| step | 14 (`OrderServiceBean` / `OrdersResource` loaded copies) | 12 (`…OrderServiceLocalImpl` / `OrdersApplication` live copies) |
+| --- | --- | --- |
+| fresh start, no agent in the JVM | 2 / 1 (the EJB module is loaded once more by WebLogic's analysis loader) | 1 / 1 |
+| redeploy, no agent | 3 / 2 | 2 / 2 |
+| second redeploy, no agent | 4 / 3 | 3 / 3 |
+| redeploy with the agent idle (advice removed) | +1 / +1 | +1 / +1 |
+| redeploy during a recording | +1 / +1 | +1 / +1 |
+
+WebLogic 12.2.1.4 and 14.1.2 retain one copy of the previous deployment per redeploy by themselves
+(the old EJB client objects `*LocalImpl`/`*RemoteImpl` and the JAX-RS `Application` instance stay
+reachable); the agent, recording or idle, adds no copy. "No retained copy of the old classes"
+therefore cannot be shown on this server; what is shown is that the count grows by exactly the
+same one with and without the agent. Checked for completeness: the agent's only per-class state
+is in `ClassValue`s (owned by the class), `SpanStack` drops its spans and trace at the end of
+every trace, `HookListener` keeps class names as strings.
+
+**What changed**: nothing in the agent; the deploy script gained `--only`.

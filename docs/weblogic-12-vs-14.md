@@ -97,3 +97,11 @@ Confirm, SOAP) and the plugin under both a JDK 8 and a JDK 21 Maven. Recordings
   the EARs to `.local/deploy[12]/` first.
 - The maven-compiler-plugin does not treat a changed `release` as a reason to recompile;
   `wls-deploy` runs `clean package` so the 8 and 21 builds do not share stale class files.
+
+## Redeploy (hardening item 5)
+
+Identical: both versions keep one copy of the previous deployment's classes per redeploy without
+any agent (see `docs/HARDENING.md`, item 5). The only difference is in the tooling: JDK 21's
+`jcmd VM.class_hierarchy` lists every loaded copy; JDK 8 has only `GC.class_histogram`, which
+shows a retained copy only through classes that still have live instances (the generated
+`*Impl` client objects and `OrdersApplication` do).

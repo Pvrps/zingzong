@@ -4,15 +4,18 @@
 #   wls-deploy              build, then deploy tax-ear and orders-ear
 #   wls-deploy --no-build   deploy the EARs already in target/
 #   wls-deploy --undeploy   remove both applications
+#   wls-deploy --only NAME  build, then (re)deploy only that application (a redeploy mid-recording)
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_env WLS_ADMIN_HOST WLS_ADMIN_PORT WLS_ADMIN_USER WLS_ADMIN_PASSWORD WL_HOME
 
 build=1
 undeploy=0
+only=""
 case "${1:-}" in
   --no-build) build=0 ;;
   --undeploy) undeploy=1; build=0 ;;
+  --only) only="${2:?usage: wls-deploy --only <tax-ear|orders-ear|notify-ear>}" ;;
   "") ;;
   *) die "unknown argument: $1" ;;
 esac
@@ -67,6 +70,7 @@ fi
 for entry in "${apps[@]}"; do
   name="${entry%%:*}"
   source="${entry#*:}"
+  [ -z "$only" ] || [ "$name" = "$only" ] || continue
   [ -f "$source" ] || die "missing $source; run without --no-build"
   if grep -qx "$name" <<<"$deployed"; then
     log "redeploying $name"

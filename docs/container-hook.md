@@ -298,3 +298,39 @@ container hook therefore hands `WlsMetadata` a hint it already has at the call s
 A 2.x component interface has no `java:global/…/<ejb>!<iface>` binding, so none is synthesized
 for it; `java:global/tax-ear/tax-ejb/RateLookup` (the home) is listed because the lookup resolved
 there. Stateful beans (`CartService`) need nothing new: same invokers, same metadata.
+
+## JDBC through data sources (both versions, `JdbcAdvice`)
+
+Every statement a data source hands out is one of WebLogic's own wrappers around the driver's
+object, and those base classes implement the JDBC methods themselves; `javap -c` on
+`com.bea.core.datasource6.jar` (12.2.1.4.0 and 14.1.2.0.0 alike):
+
+```
+weblogic.jdbc.wrapper.Statement.executeQuery(String):
+   ldc "executeQuery"; invokevirtual preInvocationHandler(String, Object[])
+   invokeinterface java/sql/Statement.executeQuery          <- the driver
+weblogic.jdbc.wrapper.PreparedStatement.executeQuery():     same shape
+```
+
+| member | gives |
+| --- | --- |
+| `weblogic.jdbc.wrapper.Statement` / `PreparedStatement` / `CallableStatement`, public `execute*` | the advised methods (`JdbcAdvice.Execute`): one SQL span per execution, exceptions included |
+| `Statement.sql` (public `String`), or the `String` argument of a plain `execute*(sql)` | `sql.sql` |
+| `Statement.conn` (public `weblogic.jdbc.wrapper.Connection`) → `getPoolName()` | `sql.dataSource` |
+| `PreparedStatement.set*(int, …)`, `setNull`, `addBatch`, `clearParameters` | the bound parameters and batches (`JdbcAdvice.Bind`), kept per statement in a weak map until the execute |
+| `weblogic.jdbc.wrapper.ResultSet.postInvocationHandler(String, Object[], Object)` with name `next` | rows read (`JdbcAdvice.Row`): the result-set wrapper has no `next()` of its own, the generated subclass routes every call through this handler; `ResultSet.stmt` (private) finds the statement |
+| config MBean `com.bea:Type=JDBCSystemResource,Name=<pool>` → `JDBCResource.JDBCDataSourceParams.JNDINames`, `JDBCDriverParams.Url`; runtime `com.bea:Type=JDBCDataSourceRuntime,Name=<pool>` → `DatabaseProductName`/`Version` | `sql.jndiNames`, `sql.url`, `sql.database` (`WlsDataSources`, once per pool) |
+
+The generated `PreparedStatement_<driver class>` subclasses add only vendor-specific extras, so
+the base classes see every execution, whatever the driver (verified with H2 on both lab domains:
+EclipseLink's inserts, `CALL IDENTITY()`, selects and updates, with their parameters and
+counts). A driver used directly, not through a data source, is not seen: it never passes the
+wrapper. Result sets are not walked (reading one consumes it); what is recorded is the count of
+rows the application read.
+
+## Session bean type (both versions)
+
+`weblogic.ejb.spi.SessionBeanInfo.isStateless()/isStateful()/isSingleton()` on the container's
+`BeanInfo` (the hint the container hook passes to `WlsMetadata`), and a `MessageDrivenBeanInfo`
+for MDBs, give `ejb.beanType`; the invoked interface being one of the 2.x component interfaces
+gives `ejb.ejb2x`.

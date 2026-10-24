@@ -11,18 +11,20 @@ public class Span {
     public static final String KIND_HTTP = "HTTP";
     public static final String KIND_SOAP = "SOAP";
     public static final String KIND_JMS = "JMS";
+    public static final String KIND_SQL = "SQL";
 
     public String id;
     public String parentId;
     public int depth;
     public int order;
-    /** Open enum: EJB, HTTP, SOAP, JMS to start. */
+    /** Open enum: EJB, HTTP, SOAP, JMS, SQL. */
     public String kind;
     /** Sub-classification within a kind, e.g. "jaxrs" or "jaxws" for HTTP. */
     public String layer;
 
     public HttpInfo http;
     public EjbInfo ejb;
+    public SqlInfo sql;
 
     public String app;
     public String module;

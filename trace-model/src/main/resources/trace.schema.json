@@ -52,10 +52,11 @@
         "parentId": { "type": ["string", "null"] },
         "depth": { "type": "integer", "minimum": 0 },
         "order": { "type": "integer", "minimum": 0 },
-        "kind": { "type": "string", "examples": ["EJB", "HTTP", "SOAP", "JMS"] },
+        "kind": { "type": "string", "examples": ["EJB", "HTTP", "SOAP", "JMS", "SQL"] },
         "layer": { "type": "string" },
         "http": { "$ref": "#/definitions/httpInfo" },
         "ejb": { "$ref": "#/definitions/ejbInfo" },
+        "sql": { "$ref": "#/definitions/sqlInfo" },
         "app": { "type": "string" },
         "module": { "type": "string" },
         "thread": { "type": "string" },
@@ -113,12 +114,33 @@
         "beanName": { "type": "string" },
         "beanClass": { "type": "string" },
         "interface": { "type": "string" },
-        "invocation": { "type": "string", "enum": ["LOCAL", "REMOTE"] },
+        "invocation": { "type": "string", "enum": ["LOCAL", "REMOTE", "MESSAGE"] },
+        "beanType": { "type": "string", "enum": ["STATELESS", "STATEFUL", "SINGLETON", "MESSAGE_DRIVEN"] },
+        "ejb2x": { "type": "boolean" },
         "jndiNames": { "type": "array", "items": { "type": "string" } },
         "destination": { "type": "string" },
         "method": { "type": "string" },
         "signature": { "type": "string" },
         "transactionAttribute": { "type": "string" }
+      }
+    },
+    "sqlInfo": {
+      "type": "object",
+      "required": ["dataSource", "operation"],
+      "properties": {
+        "dataSource": { "type": "string" },
+        "jndiNames": { "type": "array", "items": { "type": "string" } },
+        "url": { "type": "string" },
+        "database": { "type": "string" },
+        "statementType": { "type": "string", "enum": ["statement", "prepared", "callable"] },
+        "operation": { "type": "string" },
+        "sql": { "type": ["string", "null"] },
+        "parameters": { "type": "array" },
+        "batches": { "type": "array", "items": { "type": "array" } },
+        "updateCount": { "type": "integer" },
+        "updateCounts": { "type": "array", "items": { "type": "integer" } },
+        "resultSet": { "type": "boolean" },
+        "rows": { "type": "integer" }
       }
     },
     "valueCapture": {

@@ -18,6 +18,10 @@ public final class BeanMeta {
     public final Map<String, String> interfaces;
     /** Every JNDI name the bean is bound under, sorted: java:global/... and descriptor mappings. */
     public final List<String> jndiNames;
+    /** STATELESS, STATEFUL, SINGLETON or MESSAGE_DRIVEN as the container says; null when unknown. */
+    public String beanType;
+    /** EJB 2.x component interfaces (EJBObject / EJBLocalObject views), by name. */
+    public java.util.Set<String> componentInterfaces = java.util.Collections.emptySet();
     /** Why a field is null, for the log; null when complete. */
     public final String problem;
 

@@ -41,6 +41,9 @@ final class OpenSpan {
     /** Message-driven bean spans: the destination, and the resolved onMessage (set after construction). */
     String destination;
     MethodSignatures.MethodInfo methodInfo;
+    /** SQL spans: what the statement wrapper told us (set after construction). */
+    io.capture.trace.SqlInfo sql;
+    List<io.capture.trace.SerializationWarning> sqlWarnings;
 
     OpenSpan(String id, OpenSpan parent, int order, String kind, String layer, String beanClass, String method,
              long startNs, long enteredAtNanos, Object http, Object container,
@@ -112,7 +115,11 @@ final class OpenSpan {
                 span.ejb.module = meta.module;
                 span.ejb.beanName = meta.ejbName;
                 span.ejb.jndiNames = jndiNames();
+                span.ejb.beanType = meta.beanType;
+                span.ejb.ejb2x = interfaceName != null && meta.componentInterfaces.contains(interfaceName) ? Boolean.TRUE : null;
             }
+        } else if (Span.KIND_SQL.equals(kind)) {
+            span.sql = sql;
         } else {
             span.http = new HttpInfo();
             if (layer != null) {

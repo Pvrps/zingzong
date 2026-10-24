@@ -21,6 +21,7 @@ import static net.bytebuddy.matcher.ElementMatchers.isSynthetic;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.nameStartsWith;
 import static net.bytebuddy.matcher.ElementMatchers.not;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 /**
@@ -77,6 +78,8 @@ public final class CaptureHook implements InstrumentationHook {
     private final Instrumentation instrumentation;
     private final EjbStrategy strategy;
     private final HookListener listener = new HookListener();
+    /** SQL through data sources is recorded wherever WebLogic's JDBC wrappers exist, under either EJB strategy. */
+    private final boolean jdbc = JdbcTargets.present();
     private ResettableClassFileTransformer transformer;
 
     public CaptureHook(Instrumentation instrumentation, EjbStrategy strategy) {
@@ -103,7 +106,7 @@ public final class CaptureHook implements InstrumentationHook {
 
     /** The server classes advised by name (container invokers of any known shape, servlet pipeline). */
     static boolean isNamedTarget(String typeName) {
-        return typeName.equals(FILTER_CHAIN) || typeName.equals(SERVLET_STUB) || ContainerTargets.isNamedInvoker(typeName);
+        return typeName.equals(FILTER_CHAIN) || typeName.equals(SERVLET_STUB) || ContainerTargets.isNamedInvoker(typeName) || JdbcTargets.isNamed(typeName);
     }
 
     /** The container classes this hook advises for EJBs: the session invokers and the MDB listener. */
@@ -239,6 +242,9 @@ public final class CaptureHook implements InstrumentationHook {
             ignored = ignored.or(nameStartsWith(prefix));
         }
         ignored = ignored.and(not(named(FILTER_CHAIN))).and(not(named(SERVLET_STUB)));
+        for (String wrapper : JdbcTargets.ALL) {
+            ignored = ignored.and(not(named(wrapper)));
+        }
         for (String invoker : invokers()) {
             ignored = ignored.and(not(named(invoker)));
         }
@@ -276,6 +282,18 @@ public final class CaptureHook implements InstrumentationHook {
                     .transform(new AgentBuilder.Transformer.ForAdvice()
                             .include(ClassLoader.getSystemClassLoader())
                             .advice(named("onMessage").and(not(isStatic())).and(takesArguments(1)), MessageAdvice.class.getName()));
+        }
+        if (jdbc) {
+            // SQL through data sources: WebLogic's own wrappers around any driver (JdbcTargets).
+            builder = builder.type(named(JdbcTargets.STATEMENT).or(named(JdbcTargets.PREPARED_STATEMENT)).or(named(JdbcTargets.CALLABLE_STATEMENT)))
+                    .transform(new AgentBuilder.Transformer.ForAdvice()
+                            .include(ClassLoader.getSystemClassLoader())
+                            .advice(isPublic().and(not(isStatic())).and(nameStartsWith("execute")), JdbcAdvice.Execute.class.getName())
+                            .advice(isPublic().and(not(isStatic())).and(nameStartsWith("set").and(takesArgument(0, int.class)).or(named("addBatch")).or(named("clearParameters"))), JdbcAdvice.Bind.class.getName()))
+                    .type(named(JdbcTargets.RESULT_SET))
+                    .transform(new AgentBuilder.Transformer.ForAdvice()
+                            .include(ClassLoader.getSystemClassLoader())
+                            .advice(named("postInvocationHandler").and(takesArguments(3)), JdbcAdvice.Row.class.getName()));
         }
         return builder
                 .type(ownedBy(resourceTypes, "resource"))

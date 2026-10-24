@@ -24,6 +24,10 @@ public class EjbInfo {
     /** LOCAL, REMOTE or MESSAGE, when known. */
     public String invocation;
     public List<String> jndiNames;
+    /** STATELESS, STATEFUL, SINGLETON or MESSAGE_DRIVEN, from the container. */
+    public String beanType;
+    /** True when the invoked view is an EJB 2.x component interface (EJBObject / EJBLocalObject). */
+    public Boolean ejb2x;
     /** For a message-driven bean: the destination it listens on, as configured. */
     public String destination;
     public String method;

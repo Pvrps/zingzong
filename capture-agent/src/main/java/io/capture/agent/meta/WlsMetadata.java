@@ -182,6 +182,8 @@ public final class WlsMetadata {
             }
         }
         BeanMeta meta = new BeanMeta(app, module, ejbName, beanClass.getName(), interfaces, new ArrayList<String>(names), problem);
+        meta.componentInterfaces = componentInterfaces;
+        meta.beanType = beanType(infoSource != null ? beanInfo(infoSource) : null);
         AgentLog.info("metadata " + beanClass.getName() + ": app=" + app + " module=" + module + " ejb=" + ejbName
                 + " interfaces=" + interfaces + " jndi=" + meta.jndiNames
                 + " via=" + (clientObject == null ? "none" : clientObject.getClass().getName())
@@ -303,6 +305,22 @@ public final class WlsMetadata {
      * wrapping in another patch level still resolves.
      */
 
+    /** weblogic.ejb.spi.SessionBeanInfo.isStateless/isStateful/isSingleton; a MessageDrivenBeanInfo is message-driven. */
+    private static String beanType(Object info) {
+        if (info == null) {
+            return null;
+        }
+        if (implementsNamed(info.getClass(), "weblogic.ejb.container.interfaces.MessageDrivenBeanInfo")) {
+            return "MESSAGE_DRIVEN";
+        }
+        for (String[] probe : new String[][]{{"isStateful", "STATEFUL"}, {"isSingleton", "SINGLETON"}, {"isStateless", "STATELESS"}}) {
+            if (Boolean.TRUE.equals(ContainerInvocation.call(info, probe[0]))) {
+                return probe[1];
+            }
+        }
+        return null;
+    }
+
     private static boolean implementsNamed(Class<?> type, String interfaceName) {
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
             for (Class<?> i : c.getInterfaces()) {
@@ -362,7 +380,7 @@ public final class WlsMetadata {
      * runtime MBeans there by default, PlatformMBeanServerUsed=true), else the server's runtime
      * MBeanServer from JNDI. The answer is logged once.
      */
-    static MBeanServerConnection server() {
+    public static MBeanServerConnection server() {
         MBeanServerConnection server = SERVER.get();
         if (server != null || serverProbed.get()) {
             return server;

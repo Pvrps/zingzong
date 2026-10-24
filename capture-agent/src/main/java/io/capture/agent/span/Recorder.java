@@ -9,6 +9,7 @@ import io.capture.agent.meta.BeanMeta;
 import io.capture.agent.meta.ContainerInvocation;
 import io.capture.agent.meta.EjbAnnotations;
 import io.capture.agent.meta.InvokedInterface;
+import io.capture.agent.meta.WlsDataSources;
 import io.capture.agent.meta.WlsMetadata;
 import io.capture.trace.HttpInfo;
 import io.capture.agent.serialize.GraphSerializer;
@@ -25,6 +26,7 @@ import io.capture.trace.ValueCapture;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -294,7 +296,7 @@ public final class Recorder {
             SpanStack stack = SpanStack.current();
             boolean root = stack.isEmpty();
             String principal = root ? WlsRuntime.principal() : null;
-            BeanMeta meta = WlsMetadata.of(bean);
+            BeanMeta meta = WlsMetadata.of(bean, new WlsMetadata.Hint(null, info));
             Object destination = ContainerInvocation.call(info, "getDestinationName");
             MethodSignatures.MethodInfo onMessage = MethodSignatures.resolve(bean, "onMessage", "(Ljavax/jms/Message;)V");
             String txAttribute = EjbAnnotations.transactionAttribute(bean, onMessage.method);
@@ -337,6 +339,201 @@ public final class Recorder {
         }
     }
 
+
+    // ---- JDBC through data sources ------------------------------------------------------------
+
+    /** The parameters bound on a prepared statement wrapper so far, and the batches added. */
+    private static final class Binds {
+        final java.util.TreeMap<Integer, Object> current = new java.util.TreeMap<Integer, Object>();
+        final List<java.util.TreeMap<Integer, Object>> batches = new ArrayList<java.util.TreeMap<Integer, Object>>();
+        final List<String> sqlBatch = new ArrayList<String>();
+    }
+
+    private static final Map<Object, Binds> BINDS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, Binds>());
+    /** The SQL record of the statement whose result set is being read, so next() can count rows. */
+    private static final Map<Object, io.capture.trace.SqlInfo> READING = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, io.capture.trace.SqlInfo>());
+
+    /** PreparedStatement wrapper: set*(index, value), setNull, addBatch, clearParameters. */
+    public static void bindJdbc(Object statement, String method, Object[] args) {
+        if (ACTIVE.get() == null) {
+            return;
+        }
+        try {
+            Binds binds = BINDS.get(statement);
+            if (binds == null) {
+                binds = new Binds();
+                BINDS.put(statement, binds);
+            }
+            synchronized (binds) {
+                if (method.equals("clearParameters")) {
+                    binds.current.clear();
+                } else if (method.equals("addBatch")) {
+                    if (args.length == 1 && args[0] instanceof String) {
+                        binds.sqlBatch.add((String) args[0]);
+                    } else {
+                        binds.batches.add(new java.util.TreeMap<Integer, Object>(binds.current));
+                    }
+                } else if (args.length >= 1 && args[0] instanceof Integer) {
+                    binds.current.put((Integer) args[0], method.equals("setNull") || args.length < 2 ? null : args[1]);
+                }
+            }
+        } catch (Throwable ignored) {
+            // never into the statement
+        }
+    }
+
+    /** Statement wrapper, {@code execute*}: opens the SQL span with what the wrapper knows before the driver runs. */
+    public static long enterJdbc(Object statement, String operation, Object[] args) {
+        Recording recording = ACTIVE.get();
+        if (recording == null) {
+            return 0L;
+        }
+        try {
+            Object conn = ContainerInvocation.fieldUp(statement, "conn");
+            Object pool = conn == null ? null : ContainerInvocation.call(conn, "getPoolName");
+            String poolName = pool == null ? "?" : pool.toString();
+            io.capture.trace.SqlInfo info = new io.capture.trace.SqlInfo();
+            info.dataSource = poolName;
+            WlsDataSources.DataSource ds = WlsDataSources.describe(poolName);
+            if (ds != null) {
+                info.jndiNames = ds.jndiNames.isEmpty() ? null : ds.jndiNames;
+                info.url = ds.url;
+                info.database = ds.database;
+            }
+            info.statementType = statementType(statement);
+            info.operation = operation;
+            Object sql = ContainerInvocation.fieldUp(statement, "sql");
+            info.sql = sql != null ? sql.toString() : args.length > 0 && args[0] instanceof String ? (String) args[0] : null;
+            List<SerializationWarning> warnings = new ArrayList<SerializationWarning>();
+            Binds binds = BINDS.get(statement);
+            if (binds != null) {
+                synchronized (binds) {
+                    if (operation.equals("executeBatch")) {
+                        if (!binds.batches.isEmpty()) {
+                            info.batches = new ArrayList<List<JsonNode>>();
+                            for (java.util.TreeMap<Integer, Object> batch : binds.batches) {
+                                info.batches.add(parameters(batch, "$.sql.batches[" + info.batches.size() + "]", warnings));
+                            }
+                        } else if (!binds.sqlBatch.isEmpty()) {
+                            info.batches = new ArrayList<List<JsonNode>>();
+                            for (String s : binds.sqlBatch) {
+                                info.batches.add(java.util.Collections.singletonList((JsonNode) com.fasterxml.jackson.databind.node.TextNode.valueOf(s)));
+                            }
+                        }
+                        binds.batches.clear();
+                        binds.sqlBatch.clear();
+                    } else if (!binds.current.isEmpty()) {
+                        info.parameters = parameters(binds.current, "$.sql.parameters", warnings);
+                    }
+                }
+            }
+            SpanStack stack = SpanStack.current();
+            long now = System.nanoTime();
+            OpenSpan span = stack.push(recording, Span.KIND_SQL, null, poolName, operation, now, null, statement, null, null, null, null, propagation);
+            span.sql = info;
+            span.sqlWarnings = warnings;
+            return now == 0L ? 1L : now;
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    public static void exitJdbc(long token, Object statement, Object result, Throwable thrown) {
+        if (token == 0L) {
+            return;
+        }
+        try {
+            SpanStack stack = SpanStack.current();
+            OpenSpan open = stack.top();
+            if (open == null || open.container != statement) {
+                stack.reset();
+                return;
+            }
+            long durationNs = System.nanoTime() - open.enteredAtNanos;
+            Span span = open.toSpan(durationNs);
+            List<SerializationWarning> warnings = open.sqlWarnings == null ? new ArrayList<SerializationWarning>() : open.sqlWarnings;
+            if (thrown != null) {
+                span.exception = new ExceptionInfo();
+                span.exception.className = thrown.getClass().getName();
+                span.exception.message = thrown.getMessage();
+                span.exception.value = serialize(thrown, Throwable.class, "$.exception", warnings);
+            } else if (result instanceof Integer) {
+                span.sql.updateCount = (Integer) result;
+            } else if (result instanceof int[]) {
+                span.sql.updateCounts = (int[]) result;
+            } else if (result instanceof Boolean) {
+                span.sql.resultSet = (Boolean) result;
+                if ((Boolean) result) {
+                    span.sql.rows = 0L;
+                    READING.put(statement, span.sql);
+                }
+            } else if (result != null && implementsNamed(result.getClass(), "java.sql.ResultSet")) {
+                span.sql.resultSet = Boolean.TRUE;
+                span.sql.rows = 0L;
+                READING.put(statement, span.sql);
+            }
+            if (!warnings.isEmpty()) {
+                span.serializationWarnings = warnings;
+            }
+            complete(stack, span);
+        } catch (Throwable t) {
+            try {
+                SpanStack.current().reset();
+                AgentLog.error("jdbc exit handling failed", t);
+            } catch (Throwable ignored) {
+                // never into the statement
+            }
+        }
+    }
+
+    /** ResultSet wrapper, {@code next()}: one more row read from the statement's last result. */
+    public static void rowJdbc(Object resultSet, boolean next) {
+        if (!next || ACTIVE.get() == null) {
+            return;
+        }
+        try {
+            Object statement = ContainerInvocation.fieldUp(resultSet, "stmt");
+            io.capture.trace.SqlInfo info = statement == null ? null : READING.get(statement);
+            if (info != null && info.rows != null) {
+                info.rows = info.rows + 1;
+            }
+        } catch (Throwable ignored) {
+            // counting only
+        }
+    }
+
+    private static List<JsonNode> parameters(java.util.TreeMap<Integer, Object> bound, String path, List<SerializationWarning> warnings) {
+        int size = bound.isEmpty() ? 0 : bound.lastKey();
+        List<JsonNode> out = new ArrayList<JsonNode>(size);
+        for (int i = 1; i <= size; i++) {
+            Object v = bound.get(i);
+            out.add(bound.containsKey(i) ? serialize(v, v == null ? Object.class : v.getClass(), path + "[" + (i - 1) + "]", warnings) : com.fasterxml.jackson.databind.node.NullNode.getInstance());
+        }
+        return out;
+    }
+
+    private static String statementType(Object statement) {
+        for (Class<?> c = statement.getClass(); c != null; c = c.getSuperclass()) {
+            if (c.getName().equals("weblogic.jdbc.wrapper.CallableStatement")) {
+                return "callable";
+            }
+            if (c.getName().equals("weblogic.jdbc.wrapper.PreparedStatement")) {
+                return "prepared";
+            }
+        }
+        return "statement";
+    }
+
+    private static boolean implementsNamed(Class<?> type, String interfaceName) {
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+            for (Class<?> i : c.getInterfaces()) {
+                if (i.getName().equals(interfaceName) || implementsNamed(i, interfaceName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     private static String describe(Object o) {
         return o == null ? "null" : o.getClass().getName();
     }

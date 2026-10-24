@@ -99,7 +99,9 @@
         "responseBodyDropped": { "type": "integer" },
         "resourceClass": { "type": "string" },
         "resourceMethod": { "type": "string" },
-        "resourceSignature": { "type": "string" }
+        "resourceSignature": { "type": "string" },
+        "sentError": { "type": "object", "properties": { "status": { "type": "integer" }, "message": { "type": ["string", "null"] } } },
+        "responseBodyNote": { "type": "string" }
       }
     },
     "ejbInfo": {

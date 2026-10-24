@@ -94,3 +94,30 @@ After (`rec-20261023-213036`): Confirm yields `#4 POST …/confirm → confirmOr
 both with `parentTraceId = t(#4)`, `parentSpanId = s3`, the message view carrying
 `{"orderId":143699,"event":"CONFIRMED","by":"ann"}` with its JMS headers and properties.
 Cross-server handoffs stay out of scope (`docs/trace-propagation.md`).
+
+## 3. Exceptions
+
+**Added**: the business failure, `InsufficientStockException` (`@ApplicationException(rollback =
+true)`, thrown by `InventoryService.reserve` for `GIZMO-3 × 999`, mapped by `OrdersResource` to
+409 with an error body), and the system failure, a JSON `"customer": null` that the resource now
+passes on as null so the `NullPointerException` happens in `OrderServiceBean.createOrder`. Run on
+both domains (14: `rec-20261023-213741`, 12: `rec-20261023-213744`).
+
+**What the agent did**: the business path was right from the start: `reserve` and `createOrder`
+each carry the exception walked under the raw rule (`@type`, `detailMessage`, the bean's own
+fields `sku`/`requested`/`available`, 101 stack frames, cause null, JVM-internal fields listed
+under `@skipped`), the resource span completes normally and the HTTP root has status 409 and the
+JSON error body. The system path showed two things: the `createOrder` span's exception is the
+container's `javax.ejb.EJBException` wrapping the NPE, because that is what crosses the invoker
+(the cause chain holds the NPE, 77 frames, top `OrderServiceBean.createOrder:53`); and the HTTP
+root had status 500 but no body, while the client received WebLogic's `Request failed.` page.
+
+**What changed**: the response wrapper now intercepts `sendError(status[, message])` and the
+root records it as `http.sentError` (`{500, "Request failed."}` on both versions: Jersey calls it
+for an unmapped exception, with the text the client then sees); when nothing was written inside
+the pipeline the root carries `responseBodyNote` saying that the container produced its error
+page afterwards through its own stream. The bytes of that page are not captured: they are
+written after the request has left `FilterChainImpl`, when the span is already closed. Also
+recorded: on JDK 21 a `NullPointerException`'s `detailMessage` field is null (the helpful
+message is computed by `getMessage()` on demand and shows up in the wrapping `EJBException`'s
+message); on JDK 8 both are null. No getters were added for that.

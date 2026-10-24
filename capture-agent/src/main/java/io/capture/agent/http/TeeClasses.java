@@ -111,6 +111,8 @@ public final class TeeClasses {
                     .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getOutputStream")).to(TeeSupport.class))
                     .method(named("getWriter"))
                     .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getWriter")).to(TeeSupport.class))
+                    .method(named("sendError"))
+                    .intercept(MethodDelegation.withDefaultConfiguration().filter(named("sendError")).to(TeeSupport.class))
                     .make()
                     .load(servletLoader, ClassLoadingStrategy.Default.WRAPPER_PERSISTENT)
                     .getLoaded();

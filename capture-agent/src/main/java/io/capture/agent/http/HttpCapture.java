@@ -20,6 +20,9 @@ public final class HttpCapture {
     public Object requestReader;
     public Object responseStream;
     public PrintWriter responseWriter;
+    /** sendError(status, message) as the application called it; the container writes the page itself. */
+    public Integer sentErrorStatus;
+    public String sentErrorMessage;
 
     public HttpCapture(Object originalRequest, Object originalResponse) {
         this.originalRequest = originalRequest;

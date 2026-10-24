@@ -84,7 +84,7 @@ public final class ServletRecorder {
             HttpCapture capture = (HttpCapture) context[2];
             flushWriter(capture);
             drainUnreadRequestBody(capture);
-            HttpInfo info = describe(capture);
+            HttpInfo info = describe(capture, thrown != null);
             Recorder.exitServlet(capture, info, principalOf(capture.originalRequest), sessionIdOf(capture.originalRequest), thrown);
         } catch (Throwable t) {
             try {
@@ -97,7 +97,7 @@ public final class ServletRecorder {
 
     // ---- facts about the request and response --------------------------------------------
 
-    static HttpInfo describe(HttpCapture capture) {
+    static HttpInfo describe(HttpCapture capture, boolean thrownThroughChain) {
         Object req = capture.originalRequest;
         Object resp = capture.originalResponse;
         HttpInfo info = new HttpInfo();
@@ -130,6 +130,14 @@ public final class ServletRecorder {
         } else if (capture.responseBody.touched() || capture.responseBody.length() > 0) {
             String encoding = textCharset(info.responseContentType, string(resp, "getCharacterEncoding"));
             encode(info, false, capture.responseBody, encoding);
+        }
+        if (capture.sentErrorStatus != null) {
+            info.sentError = new HttpInfo.SentError();
+            info.sentError.status = capture.sentErrorStatus;
+            info.sentError.message = capture.sentErrorMessage;
+        }
+        if (info.responseBody == null && (capture.sentErrorStatus != null || thrownThroughChain)) {
+            info.responseBodyNote = "no body was written inside the servlet pipeline; the container produced its error page for this status afterwards, through its own stream, which the agent does not see";
         }
         return info;
     }

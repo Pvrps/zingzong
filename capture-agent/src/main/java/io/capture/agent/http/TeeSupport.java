@@ -92,6 +92,21 @@ public final class TeeSupport {
         }
     }
 
+
+    /**
+     * sendError(status[, message]): the application asked the container for its error page.
+     * The page itself is written by the container through its own stream, not through the
+     * wrapper, so what is recorded is the request: status and message.
+     */
+    @RuntimeType
+    public static Object sendError(@SuperCall Callable<?> zuper, @AllArguments Object[] args, @FieldValue("capture") Object captureField) throws Exception {
+        HttpCapture capture = (HttpCapture) captureField;
+        synchronized (capture) {
+            capture.sentErrorStatus = args.length > 0 && args[0] instanceof Integer ? (Integer) args[0] : null;
+            capture.sentErrorMessage = args.length > 1 && args[1] != null ? String.valueOf(args[1]) : null;
+        }
+        return zuper.call();
+    }
     // ---- generated stream subclasses -----------------------------------------------------
 
     /**

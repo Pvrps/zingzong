@@ -52,4 +52,14 @@ public class HttpInfo {
     public String resourceClass;
     public String resourceMethod;
     public String resourceSignature;
+    /** The application called sendError(status, message): the container then writes its own error page. */
+    public SentError sentError;
+    /** Why {@code responseBody} is absent although the client received one. */
+    public String responseBodyNote;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class SentError {
+        public Integer status;
+        public String message;
+    }
 }

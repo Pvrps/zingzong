@@ -35,7 +35,8 @@ final class OrderJson {
         JsonObject json = parse(body);
         CreateOrderRequest request = new CreateOrderRequest();
         request.setRequestedAt(Instant.now());
-        request.setCustomer(toCustomer(json.getJsonObject("customer")));
+        // A missing or null customer is passed on as null: the bean, not the parser, decides what that means.
+        request.setCustomer(json.containsKey("customer") && !json.isNull("customer") ? toCustomer(json.getJsonObject("customer")) : null);
         if (json.containsKey("paymentMethod") && !json.isNull("paymentMethod")) {
             request.setPaymentMethod(toPaymentMethod(json.getJsonObject("paymentMethod")));
         }

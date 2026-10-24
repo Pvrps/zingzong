@@ -47,11 +47,20 @@ public class OrdersResource {
     }
 
     @POST
-    public Response create(String body) throws InsufficientStockException {
+    public Response create(String body) {
         LOG.info("REST POST /orders");
         CreateOrderRequest request = OrderJson.toCreateOrderRequest(body);
-        Order order = orderService.createOrder(request);
-        return Response.status(Response.Status.CREATED).entity(OrderJson.fromOrder(order)).build();
+        try {
+            Order order = orderService.createOrder(request);
+            return Response.status(Response.Status.CREATED).entity(OrderJson.fromOrder(order)).build();
+        } catch (InsufficientStockException e) {
+            // The business failure: an application exception (rollback) becomes 409 with the facts.
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(OrderJson.error(e.getMessage() + " (sku=" + e.getSku() + ", requested=" + e.getRequested() + ", available=" + e.getAvailable() + ")"))
+                    .build();
+        }
+        // A null customer is left alone on purpose: the NullPointerException in the bean becomes an
+        // EJBException, Jersey's 500 and WebLogic's error page: the system-failure path.
     }
 
     @POST

@@ -13,6 +13,9 @@ import java.lang.instrument.Instrumentation;
  * Everything {@link Agent} does after the jar is on the bootstrap path. Public, not
  * package-private: {@link Agent} lives in the system loader and this class in the bootstrap
  * loader, so they are in different runtime packages.
+ *
+ * Nothing is instrumented here: the hook is installed by {@code Recorder.start} and removed
+ * by {@code Recorder.stop}, so a loaded agent with no recording leaves every class as it was.
  */
 public final class AgentBootstrap {
 
@@ -31,29 +34,16 @@ public final class AgentBootstrap {
         RecordingControl.register();
 
         ServerDetection.Server server = ServerDetection.detect();
-        boolean containerAvailable = CaptureHook.containerTargetsPresent();
-        String hook = ServerDetection.chooseHook(config.hook, server, containerAvailable);
-        AgentLog.info("server=" + server + " hook=" + hook
-                + (config.hook != null ? " (overridden)" : " (auto)")
-                + (containerAvailable ? "; container invokers present" : "; container invokers not on the class path"));
+        boolean container = ServerDetection.useContainerHook(server, CaptureHook.containerTargetsPresent());
+        AgentLog.info("server=" + server + " hook=" + (container ? "container" : "annotation")
+                + (CaptureHook.containerTargetsPresent() ? "; container invokers present" : "; container invokers not on the class path"));
 
-        // Installed by Recorder.start and removed by Recorder.stop: no advice without a recording.
-        CaptureHook annotation = new CaptureHook(inst, config, CaptureHook.EjbStrategy.ANNOTATION);
-        InstrumentationHook chosen = annotation;
-        if (AgentConfig.HOOK_CONTAINER.equals(hook)) {
-            if (containerAvailable) {
-                chosen = new FallbackHook(new CaptureHook(inst, config, CaptureHook.EjbStrategy.CONTAINER), annotation);
-            } else {
-                AgentLog.warn("hook=container requested but " + CaptureHook.CONTAINER_INVOKERS[0]
-                        + " is not resolvable; using the annotation hook");
-            }
-        }
+        CaptureHook annotation = new CaptureHook(inst, CaptureHook.EjbStrategy.ANNOTATION);
+        InstrumentationHook chosen = container
+                ? new FallbackHook(new CaptureHook(inst, CaptureHook.EjbStrategy.CONTAINER), annotation)
+                : annotation;
         Recorder.hook(chosen);
-
-        if (config.enabled) {
-            Recorder.start("startup");
-        }
-        AgentLog.info("capture-agent ready, recording " + (config.enabled ? "ON" : "off"));
+        AgentLog.info("capture-agent ready, recording off");
     }
 
     private static String describe(ClassLoader loader) {

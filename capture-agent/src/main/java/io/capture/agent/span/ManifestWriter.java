@@ -14,10 +14,18 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
 
-/** Writes {@code recording.json} at start and again, completed, at stop. Never throws. */
+/**
+ * Writes this server's manifest into the recording directory at start and again, completed,
+ * at stop: {@code recording-<serverName>.json}, so that the servers of a domain sharing one
+ * recording do not overwrite each other ({@code recording.json} when there is no server name).
+ * Never throws.
+ */
 final class ManifestWriter {
 
-    static final String FILE_NAME = "recording.json";
+    static String fileName() {
+        String server = WlsRuntime.serverName();
+        return server == null || server.isEmpty() ? "recording.json" : "recording-" + server.replaceAll("[^A-Za-z0-9._-]", "_") + ".json";
+    }
 
     private ManifestWriter() {
     }
@@ -35,15 +43,14 @@ final class ManifestWriter {
             manifest.agent.build = AgentVersion.BUILD;
             manifest.agent.hook = hook;
             manifest.agent.jvm = System.getProperty("java.version");
-            manifest.filters = recording.filters();
             manifest.traceCount = traceCount;
             manifest.droppedTraces = dropped;
 
             if (!dir.isDirectory() && !dir.mkdirs()) {
                 throw new java.io.IOException("cannot create " + dir);
             }
-            File target = new File(dir, FILE_NAME);
-            File tmp = new File(dir, FILE_NAME + ".tmp");
+            File target = new File(dir, fileName());
+            File tmp = new File(dir, fileName() + ".tmp");
             OutputStream out = new FileOutputStream(tmp);
             try {
                 TraceJson.write(manifest, out);
@@ -52,7 +59,7 @@ final class ManifestWriter {
             }
             Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (Throwable t) {
-            AgentLog.error("could not write " + FILE_NAME + " for " + recording.id, t);
+            AgentLog.error("could not write " + fileName() + " for " + recording.id, t);
         }
     }
 

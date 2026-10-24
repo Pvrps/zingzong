@@ -1,6 +1,5 @@
 package io.capture.agent.serialize;
 
-import io.capture.agent.AgentConfig;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,8 +32,23 @@ public final class TypeAllowList {
         return new TypeAllowList(Collections.<Pattern>emptyList());
     }
 
+    /** Globs separated by {@code |}: {@code *} any run of characters, {@code ?} one; matched against the whole class name. */
     public static TypeAllowList of(String globs) {
-        return new TypeAllowList(globs == null ? Collections.<Pattern>emptyList() : AgentConfig.globs(globs));
+        List<Pattern> patterns = new ArrayList<Pattern>();
+        if (globs != null) {
+            for (String glob : globs.split("\\|")) {
+                String g = glob.trim();
+                if (!g.isEmpty()) {
+                    StringBuilder regex = new StringBuilder();
+                    for (int i = 0; i < g.length(); i++) {
+                        char c = g.charAt(i);
+                        regex.append(c == '*' ? ".*" : c == '?' ? "." : Pattern.quote(String.valueOf(c)));
+                    }
+                    patterns.add(Pattern.compile(regex.toString()));
+                }
+            }
+        }
+        return new TypeAllowList(patterns);
     }
 
     public boolean allows(String className) {

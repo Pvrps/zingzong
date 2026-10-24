@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.capture</groupId>
+    <artifactId>ejb-capture-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>capture-maven-plugin</artifactId>
+  <packaging>maven-plugin</packaging>
+  <name>capture-maven-plugin</name>
+  <description>
+    capture:enable / capture:disable install or remove the capture agent in a WebLogic domain;
+    capture:start serves the page where captures are started, stopped, watched and viewed.
+    Runs inside the developer's Maven JDK (8 or later), hence --release 8.
+  </description>
+
+  <properties>
+    <maven.compiler.release>8</maven.compiler.release>
+    <maven.version>3.6.3</maven.version>
+    <maven-plugin-tools.version>3.15.1</maven-plugin-tools.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-plugin-api</artifactId>
+      <version>${maven.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-core</artifactId>
+      <version>${maven.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven.plugin-tools</groupId>
+      <artifactId>maven-plugin-annotations</artifactId>
+      <version>${maven-plugin-tools.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.capture</groupId>
+      <artifactId>trace-model</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.capture</groupId>
+      <artifactId>trace-reader</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!--
+      The agent jar capture:enable installs. Kept as a plain dependency (not shaded in) so
+      Maven resolves it next to the plugin and the goal finds it among the plugin's artifacts.
+    -->
+    <dependency>
+      <groupId>io.capture</groupId>
+      <artifactId>capture-agent</artifactId>
+      <version>${project.version}</version>
+      <!-- The agent jar is self-contained (shaded); its pom's dependencies are not wanted here. -->
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-plugin-plugin</artifactId>
+        <version>${maven-plugin-tools.version}</version>
+        <configuration>
+          <goalPrefix>capture</goalPrefix>
+        </configuration>
+        <executions>
+          <execution>
+            <id>help-goal</id>
+            <goals>
+              <goal>helpmojo</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!--
+        Everything but the agent jar is shaded in and relocated: the plugin runs inside the
+        Maven JVM, which has its own Jackson and SLF4J.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>true</createDependencyReducedPom>
+              <artifactSet>
+                <excludes>
+                  <exclude>io.capture:capture-agent</exclude>
+                </excludes>
+              </artifactSet>
+              <relocations>
+                <relocation>
+                  <pattern>com.fasterxml.jackson</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.com.fasterxml.jackson</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.networknt</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.com.networknt</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.ethlo</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.com.ethlo</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.slf4j</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.org.slf4j</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.yaml</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.org.yaml</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.jcodings</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.org.jcodings</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.joni</pattern>
+                  <shadedPattern>io.capture.plugin.shaded.org.joni</shadedPattern>
+                </relocation>
+              </relocations>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/LICENSE*</exclude>
+                    <exclude>META-INF/NOTICE*</exclude>
+                    <exclude>module-info.class</exclude>
+                    <exclude>META-INF/versions/**/module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

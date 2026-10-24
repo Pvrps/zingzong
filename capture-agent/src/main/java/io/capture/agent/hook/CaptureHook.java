@@ -1,6 +1,5 @@
 package io.capture.agent.hook;
 
-import io.capture.agent.AgentConfig;
 import io.capture.agent.AgentLog;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.agent.builder.ResettableClassFileTransformer;
@@ -73,14 +72,12 @@ public final class CaptureHook implements InstrumentationHook {
     };
 
     private final Instrumentation instrumentation;
-    private final AgentConfig config;
     private final EjbStrategy strategy;
     private final HookListener listener = new HookListener();
     private ResettableClassFileTransformer transformer;
 
-    public CaptureHook(Instrumentation instrumentation, AgentConfig config, EjbStrategy strategy) {
+    public CaptureHook(Instrumentation instrumentation, EjbStrategy strategy) {
         this.instrumentation = instrumentation;
-        this.config = config;
         this.strategy = strategy;
     }
 
@@ -229,13 +226,6 @@ public final class CaptureHook implements InstrumentationHook {
             ignored = ignored.and(not(named(invoker)));
         }
 
-        ElementMatcher<TypeDescription> configured = new ElementMatcher<TypeDescription>() {
-            @Override
-            public boolean matches(TypeDescription target) {
-                return config.accepts(target.getName());
-            }
-        };
-
         ElementMatcher.Junction<MethodDescription> businessMethods = isPublic()
                 .and(not(isStatic()))
                 .and(not(isConstructor()))
@@ -252,7 +242,7 @@ public final class CaptureHook implements InstrumentationHook {
                 .ignore(ignored);
 
         if (strategy == EjbStrategy.ANNOTATION) {
-            builder = builder.type(ejbTypes.and(configured))
+            builder = builder.type(ejbTypes)
                     .transform(new AgentBuilder.Transformer.ForAdvice()
                             // The agent jar is on the system class path (-javaagent) and on the
                             // bootstrap path; locate the advice class file through the former.
@@ -267,7 +257,7 @@ public final class CaptureHook implements InstrumentationHook {
             }
         }
         return builder
-                .type(resourceTypes.and(configured))
+                .type(resourceTypes)
                 .transform(new AgentBuilder.Transformer.ForAdvice()
                         .include(ClassLoader.getSystemClassLoader())
                         .advice(businessMethods, ResourceAdvice.class.getName()))

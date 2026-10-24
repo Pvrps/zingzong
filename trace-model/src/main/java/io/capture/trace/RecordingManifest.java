@@ -2,7 +2,13 @@ package io.capture.trace;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-/** {@code recording.json}: written by the agent at start, completed at stop. */
+import java.util.List;
+
+/**
+ * A server's manifest of a recording ({@code recording-<serverName>.json}), written by the
+ * agent at start and completed at stop. trace-reader merges the servers' manifests of one
+ * recording into a single view ({@link #servers}).
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RecordingManifest {
 
@@ -13,8 +19,9 @@ public class RecordingManifest {
     public String startedAt;
     public String endedAt;
     public String serverName;
+    /** Set by trace-reader when merging several servers' manifests; null in a file the agent wrote. */
+    public List<String> servers;
     public Agent agent;
-    public Filters filters;
     /** Set at stop. */
     public Long traceCount;
     public Long droppedTraces;
@@ -25,12 +32,5 @@ public class RecordingManifest {
         public String build;
         public String hook;
         public String jvm;
-    }
-
-    /** Optional, for shared servers: only traces matching these are recorded. */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class Filters {
-        public String principal;
-        public String httpSessionId;
     }
 }

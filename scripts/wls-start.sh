@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Start the AdminServer, wiring in the capture agent when its jar exists.
+# Start the AdminServer as a plain domain. The capture agent is installed by `capture enable`
+# (bin/setUserOverrides.sh), never by this script.
 #
 #   wls-start            foreground, Ctrl-C stops the server
 #   wls-start -b         background; waits until the server reports RUNNING
-#
-# Set CAPTURE_AGENT=0 to start without the agent even if the jar is built.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-require_env WLS_ADMIN_HOST WLS_ADMIN_PORT CAPTURE_OUT CAPTURE_AGENT_JAR
+require_env WLS_ADMIN_HOST WLS_ADMIN_PORT
 
 [ -f "$DOMAIN_HOME/config/config.xml" ] || die "no domain at $DOMAIN_HOME; run wls-domain first"
 
@@ -25,30 +24,8 @@ if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
   die "server already running with pid $(cat "$pid_file")"
 fi
 
-mkdir -p "$CAPTURE_OUT"
-
 java_options="${JAVA_OPTIONS:-}"
 java_options="$java_options -Djava.security.egd=file:/dev/./urandom"
-
-# Reflection into JDK internals by the serializer (Phase 2). Harmless without the agent.
-# Omit these on a JDK 8 domain.
-java_options="$java_options --add-opens=java.base/java.lang=ALL-UNNAMED"
-java_options="$java_options --add-opens=java.base/java.util=ALL-UNNAMED"
-java_options="$java_options --add-opens=java.base/java.time=ALL-UNNAMED"
-java_options="$java_options --add-opens=java.sql/java.sql=ALL-UNNAMED"
-java_options="$java_options --add-opens=java.logging/java.util.logging=ALL-UNNAMED"
-
-if [ "${CAPTURE_AGENT:-1}" != "0" ] && [ -f "$CAPTURE_AGENT_JAR" ]; then
-  # The JVM memory-maps the agent jar for the whole run; a `mvn install` that rewrites it
-  # under a running server ends in SIGBUS in libzip. Run from a private copy.
-  agent_jar="$LOG_DIR/capture-agent.running.jar"
-  cp "$CAPTURE_AGENT_JAR" "$agent_jar"
-  log "attaching agent $agent_jar (copy of $CAPTURE_AGENT_JAR)"
-  # CAPTURE_AGENT_ARGS appends extra agent options (e.g. hook=annotation for hook-equivalence runs).
-  java_options="$java_options -javaagent:$agent_jar=out=$CAPTURE_OUT${CAPTURE_AGENT_ARGS:+,$CAPTURE_AGENT_ARGS}"
-else
-  log "starting without capture agent"
-fi
 
 export JAVA_OPTIONS="$java_options"
 export WLS_REDIRECT_LOG=""

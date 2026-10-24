@@ -100,11 +100,12 @@ recording, keyed on `parentTraceId` + timing, and the viewer shows the server bo
 
 ### Recording scope across servers
 
-Each server runs its own agent and its own `RecordingControl`; `capture-start` on one server
-does not start the other. For a two-server scenario `capture.sh` is run against both (same
-name), and the recording directories are merged by the reader on `recording.name` and the
-overlapping time window. Recording ids differ per server (`rec-<timestamp>` on each), which
-is fine because `parentTraceId` links traces, not recordings.
+Each server runs its own agent and its own `RecordingControl`. The plugin starts one capture
+on every server JVM of the domain under one recording id, each server writes its traces and
+its own manifest (`recording-<server>.json`) into the same directory, and the reader merges
+the manifests. Across domains (another machine, another user) a recording would have to be
+merged on `recording.name` and the overlapping time window; `parentTraceId` links traces,
+not recordings.
 
 ### JMS specifics
 

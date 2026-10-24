@@ -1,6 +1,7 @@
 package io.capture.agent.span;
 
 import io.capture.agent.AgentLog;
+import io.capture.agent.AgentVersion;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -20,30 +21,13 @@ public final class RecordingControl implements RecordingControlMBean {
             server.registerMBean(new RecordingControl(), name);
             AgentLog.info("registered JMX MBean " + OBJECT_NAME);
         } catch (Throwable t) {
-            AgentLog.error("could not register " + OBJECT_NAME + "; capture-start will not work", t);
+            AgentLog.error("could not register " + OBJECT_NAME + "; captures cannot be started on this server", t);
         }
     }
 
     @Override
-    public String start(String name) {
-        return Recorder.start(name).id;
-    }
-
-    @Override
-    public String start(String name, String principal, String httpSessionId) {
-        return Recorder.start(name, principal, httpSessionId).id;
-    }
-
-    @Override
-    public String getPrincipalFilter() {
-        Recording recording = Recorder.active();
-        return recording == null ? null : recording.principalFilter;
-    }
-
-    @Override
-    public String getHttpSessionFilter() {
-        Recording recording = Recorder.active();
-        return recording == null ? null : recording.httpSessionFilter;
+    public String start(String recordingId, String name) {
+        return Recorder.start(recordingId, name).id;
     }
 
     @Override
@@ -88,5 +72,20 @@ public final class RecordingControl implements RecordingControlMBean {
     @Override
     public int getQueuedTraces() {
         return Recorder.queuedTraces();
+    }
+
+    @Override
+    public String getAgentBuild() {
+        return AgentVersion.BUILD;
+    }
+
+    @Override
+    public String getServerName() {
+        return WlsRuntime.serverName();
+    }
+
+    @Override
+    public String getOutputDirectory() {
+        return Recorder.config() == null ? null : Recorder.config().outDir.getAbsolutePath();
     }
 }

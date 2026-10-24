@@ -12,18 +12,13 @@
   <name>ejb-capture</name>
   <description>Java agent that records EJB and HTTP invocations on WebLogic as JSON traces, plus tooling.</description>
 
-  <!--
-    Modules are listed as they come into existence; Maven fails on a missing module directory.
-    Phase 0: sample-apps/common-dto, sample-apps/orders-ear/*, sample-apps/tax-ear/*
-    Phase 1: trace-model, capture-agent
-    Phase 7: trace-tools/*, replay-check
-  -->
+  <!-- trace-model, capture-agent, trace-reader and capture-maven-plugin compile for Java 8 (release 8); sample-apps for 21. -->
   <modules>
     <module>trace-model</module>
     <module>capture-agent</module>
-    <module>trace-tools</module>
+    <module>trace-reader</module>
+    <module>capture-maven-plugin</module>
     <module>sample-apps</module>
-    <module>replay-check</module>
   </modules>
 
   <properties>

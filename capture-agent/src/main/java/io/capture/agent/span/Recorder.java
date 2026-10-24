@@ -55,12 +55,10 @@ public final class Recorder {
         hook = instrumentationHook;
     }
 
+    /** The serializer runs with the documented ceilings of {@link SerializerConfig}; only the output directory is configurable. */
     public static void configure(AgentConfig agentConfig) {
         config = agentConfig;
-        serializerConfig = new SerializerConfig()
-                .withMaxDepth(agentConfig.maxDepth)
-                .withMaxElements(agentConfig.maxElements)
-                .withTypeAllowList(new TypeAllowList(agentConfig.types));
+        serializerConfig = new SerializerConfig();
         serializer = new JacksonGraphSerializer(serializerConfig);
         writer = new TraceWriter(agentConfig.outDir, TraceWriter.DEFAULT_CAPACITY);
     }
@@ -96,16 +94,12 @@ public final class Recorder {
         return w == null ? 0 : w.queued();
     }
 
-    public static Recording start(String name) {
-        return start(name, null, null);
-    }
-
     /**
-     * Instruments the bean classes, writes recording.json, then opens the recording window.
-     * Filters are optional and off when null: on a shared server they keep other traffic out.
+     * Instruments the classes, writes this server's manifest, then opens the recording window
+     * under the caller's id. A recording already active is replaced (and logged).
      */
-    public static synchronized Recording start(String name, String principalFilter, String httpSessionFilter) {
-        Recording recording = new Recording(name, principalFilter, httpSessionFilter);
+    public static synchronized Recording start(String recordingId, String name) {
+        Recording recording = new Recording(recordingId, name);
         WlsMetadata.reset();
         WlsMetadata.deployments();
         File dir = writer == null ? null : writer.recordingDir(recording);
@@ -121,9 +115,7 @@ public final class Recorder {
         if (previous != null) {
             AgentLog.warn("recording " + previous.id + " replaced by " + recording.id);
         }
-        AgentLog.info("RECORDING START id=" + recording.id + " name=" + recording.name + " dir=" + dir
-                + (recording.hasFilters() ? " filters: principal=" + recording.principalFilter
-                        + " httpSessionId=" + recording.httpSessionFilter : ""));
+        AgentLog.info("RECORDING START id=" + recording.id + " name=" + recording.name + " dir=" + dir);
         return recording;
     }
 
@@ -174,9 +166,6 @@ public final class Recorder {
             if (root) {
                 principal = WlsRuntime.principal();
                 httpSessionId = WlsRuntime.httpSessionId();
-                if (!recording.accepts(principal, httpSessionId)) {
-                    return 0L;
-                }
             }
             Class<?> bean = MethodSignatures.beanClass(self, beanClass);
             BeanMeta meta = WlsMetadata.of(bean);
@@ -224,9 +213,6 @@ public final class Recorder {
             if (root) {
                 principal = WlsRuntime.principal();
                 httpSessionId = WlsRuntime.httpSessionId();
-                if (!recording.accepts(principal, httpSessionId)) {
-                    return 0L;
-                }
             }
             BeanMeta meta = WlsMetadata.of(ci.beanClass);
             String txAttribute = ci.transactionAttribute != null ? ci.transactionAttribute
@@ -302,9 +288,6 @@ public final class Recorder {
         try {
             SpanStack stack = SpanStack.current();
             boolean root = stack.isEmpty();
-            if (root && !recording.accepts(principal, httpSessionId)) {
-                return false;
-            }
             long now = System.nanoTime();
             stack.push(recording, Span.KIND_HTTP, null, null, null, now, capture, propagation);
             if (root) {
@@ -375,9 +358,6 @@ public final class Recorder {
             if (root) {
                 principal = WlsRuntime.principal();
                 httpSessionId = WlsRuntime.httpSessionId();
-                if (!recording.accepts(principal, httpSessionId)) {
-                    return 0L;
-                }
             }
             String layer = ResourceLayers.layerOf(self == null ? null : self.getClass());
             long now = System.nanoTime();

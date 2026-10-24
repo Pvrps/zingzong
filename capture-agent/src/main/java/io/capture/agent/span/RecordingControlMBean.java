@@ -3,18 +3,11 @@ package io.capture.agent.span;
 /** JMX contract at {@code io.capture:type=Control}. Standard MBean naming. */
 public interface RecordingControlMBean {
 
-    /** Begins a recording window and returns its id. */
-    String start(String name);
-
     /**
-     * Begins a recording window restricted to one principal and/or one HTTP session; either
-     * may be null or empty for "no filter". For shared servers; local use needs neither.
+     * Begins a recording window under the given id (assigned by the caller: one capture has
+     * one id across every server of a domain) and returns it.
      */
-    String start(String name, String principal, String httpSessionId);
-
-    String getPrincipalFilter();
-
-    String getHttpSessionFilter();
+    String start(String recordingId, String name);
 
     /** Ends the active recording; returns its id or null if none was active. */
     String stop();
@@ -33,4 +26,12 @@ public interface RecordingControlMBean {
     long getWrittenTraces();
 
     int getQueuedTraces();
+
+    /** The agent's build stamp, to tell a loaded agent from the one installed on disk. */
+    String getAgentBuild();
+
+    String getServerName();
+
+    /** Where this agent writes recordings. */
+    String getOutputDirectory();
 }

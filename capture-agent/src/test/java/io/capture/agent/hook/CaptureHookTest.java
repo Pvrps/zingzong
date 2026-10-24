@@ -53,7 +53,7 @@ class CaptureHookTest {
         AgentConfig config = AgentConfig.parse("out=" + out.getAbsolutePath());
         AgentLog.init(config.outDir);
         Recorder.configure(config);
-        hook = new CaptureHook(instrumentation, config, CaptureHook.EjbStrategy.ANNOTATION);
+        hook = new CaptureHook(instrumentation, CaptureHook.EjbStrategy.ANNOTATION);
         Recorder.hook(hook);
     }
 
@@ -82,14 +82,14 @@ class CaptureHookTest {
 
     @Test
     void startInstallsAndStopRemovesTheHook() throws Exception {
-        Recording first = Recorder.start("lifecycle-1");
+        Recording first = Recorder.start("rec-lifecycle-1", "lifecycle-1");
         assertTrue(hook.isInstalled());
         new StatelessFixture().greet("a");
         Recorder.stop();
         assertFalse(hook.isInstalled());
         new StatelessFixture().greet("not recorded");
 
-        Recording second = Recorder.start("lifecycle-2");
+        Recording second = Recorder.start("rec-lifecycle-2", "lifecycle-2");
         new StatelessFixture().greet("b");
         Recorder.stop();
         assertTrue(Recorder.flush(5000));
@@ -110,33 +110,12 @@ class CaptureHookTest {
         assertEquals(Long.valueOf(0), manifest.droppedTraces);
         assertEquals("annotation", manifest.agent.hook);
         assertFalse("unknown".equals(manifest.agent.version), "version comes from build.properties: " + manifest.agent.version);
-        assertNull(manifest.filters, "no filters unless given");
     }
 
-    @Test
-    void principalFilterKeepsOtherTrafficOut() throws Exception {
-        // Outside WebLogic the principal resolves to null, so a filter for "weblogic" rejects every root span.
-        Recording filtered = Recorder.start("filtered", "weblogic", null);
-        new StatelessFixture().greet("ignored");
-        Recorder.stop();
-        Recording open = Recorder.start("open", null, null);
-        new StatelessFixture().greet("kept");
-        Recorder.stop();
-        assertTrue(Recorder.flush(5000));
-
-        assertEquals(0, traces(filtered).size());
-        assertEquals(1, traces(open).size());
-        io.capture.trace.RecordingManifest manifest;
-        try (FileInputStream in = new FileInputStream(new File(new File(out, filtered.id), "recording.json"))) {
-            manifest = TraceJson.read(in, io.capture.trace.RecordingManifest.class);
-        }
-        assertEquals("weblogic", manifest.filters.principal);
-        assertNull(manifest.filters.httpSessionId);
-    }
 
     @Test
     void oneTraceFilePerRootCallWithArgsResultAndSignature() throws Exception {
-        Recording recording = Recorder.start("files");
+        Recording recording = Recorder.start("rec-files", "files");
         assertEquals("hello world", new StatelessFixture().greet("world"));
         assertEquals(2, new SingletonFixture().count(1));
         assertEquals("plain", new PlainFixture().work());
@@ -162,7 +141,7 @@ class CaptureHookTest {
 
     @Test
     void nestedCallsFormOneTreeWithSelfInvocationsFlagged() throws Exception {
-        Recording recording = Recorder.start("tree");
+        Recording recording = Recorder.start("rec-tree", "tree");
         assertEquals("x+!!+", new OuterFixture().run("x"));
         assertTrue(Recorder.flush(5000));
 
@@ -196,7 +175,7 @@ class CaptureHookTest {
 
     @Test
     void exceptionsPassThroughAndCompleteTheTrace() throws Exception {
-        Recording recording = Recorder.start("exceptions");
+        Recording recording = Recorder.start("rec-exceptions", "exceptions");
         assertThrows(IllegalStateException.class, () -> new OuterFixture().explode());
         assertTrue(Recorder.flush(5000));
 
@@ -213,7 +192,7 @@ class CaptureHookTest {
 
     @Test
     void reportsInstrumentedTypesInTheLog() throws Exception {
-        Recording recording = Recorder.start("log");
+        Recording recording = Recorder.start("rec-log", "log");
         Class<?> late = Class.forName("com.acme.fixtures.LateFixture");
         assertEquals(4, late.getMethod("twice", int.class).invoke(late.getDeclaredConstructor().newInstance(), 2));
         new PlainFixture().work();

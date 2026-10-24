@@ -26,7 +26,6 @@ in
   packages = with pkgs; [
     wlsFhsRun
     jq
-    python3
     git
     curl
     coreutils
@@ -63,7 +62,7 @@ in
     WLS_ADMIN_USER = "weblogic";
     WLS_ADMIN_PASSWORD = "welcome1";
 
-    CAPTURE_AGENT_JAR = "${root}/capture-agent/target/capture-agent.jar";
+    # Where the lab keeps recordings (capture.out of the plugin).
     CAPTURE_OUT = "${localDir}/captures";
 
     # Embedded H2 for the sample apps; the driver is copied into $DOMAIN_HOME/lib by wls-domain.
@@ -89,16 +88,11 @@ in
     wls-start.exec = ''bash "$DEVENV_ROOT/scripts/wls-start.sh" "$@"'';
     wls-stop.exec = ''bash "$DEVENV_ROOT/scripts/wls-stop.sh" "$@"'';
     wls-deploy.exec = ''bash "$DEVENV_ROOT/scripts/wls-deploy.sh" "$@"'';
-    capture-start.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" start "$@"'';
-    capture-stop.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" stop "$@"'';
-    capture-status.exec = ''bash "$DEVENV_ROOT/scripts/capture.sh" status "$@"'';
-    trace-reader.exec = ''
-      if [ "''${1:-}" = export ]; then exec java -jar "$DEVENV_ROOT/trace-tools/trace-export/target/trace-export.jar" "$@"; fi
-      exec java -jar "$DEVENV_ROOT/trace-tools/trace-reader/target/trace-reader.jar" "$@"
+    # The product, driven as a user would: capture enable | disable | start.
+    # Needs `mvn -q install` first (the plugin and the agent come from the local repository).
+    capture.exec = ''
+      goal="''${1:?usage: capture enable|disable|start}"; shift
+      cd "$DEVENV_ROOT" && exec mvn -q io.capture:capture-maven-plugin:0.1.0-SNAPSHOT:"$goal" -Dcapture.domain="$DOMAIN_HOME" -Dcapture.out="$CAPTURE_OUT" "$@"
     '';
-    soap-tax.exec = ''bash "$DEVENV_ROOT/scripts/soap-tax.sh" "$@"'';
-    hook-diff.exec = ''bash "$DEVENV_ROOT/scripts/hook-diff.sh" "$@"'';
-    jndi-proof.exec = ''bash "$DEVENV_ROOT/scripts/jndi-proof.sh" "$@"'';
-    trace-view.exec = ''bash "$DEVENV_ROOT/scripts/trace-view.sh" "$@"'';
   };
 }

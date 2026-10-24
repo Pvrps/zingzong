@@ -50,19 +50,19 @@ set; `lib.sh` exports `JAVA_VENDOR=Oracle` (plain HotSpot settings).
 - `REST → OrderService.createOrder → InventoryService.reserve → PricingService.price →
   TaxService.computeTax` shows up as consecutive `INFO:` lines in
   `.local/logs/wls-start.out`; that is the Phase 0 smoke test.
-- T3 clients (Phase 7 `replay-check`): 14.1.2 rejects anonymous remote RMI
+- T3 clients (the prototype's replay harness, `docs/history/`): 14.1.2 rejects anonymous remote RMI
   (`BEA-000582`), so pass `Context.SECURITY_PRINCIPAL`/`SECURITY_CREDENTIALS`. A client
   that receives JPA entities needs `$ORACLE_HOME/oracle_common/modules/oracle.toplink/eclipselink.jar`
   for `IndirectList`, next to `wlthint3client.jar`, `common-dto` and `orders-api`.
 
 ## Agent jar and the running server
 
-The JVM keeps the `-javaagent` jar memory-mapped. Rebuilding `capture-agent.jar` with
-`mvn install` while the server runs corrupts that mapping and the next class load from
-the jar (for instance at `capture-start`) dies with `SIGBUS` in `libzip newEntry`
-(`hs_err_pid*.log` under the domain directory). `wls-start.sh` therefore copies the jar to
-`.local/logs/capture-agent.running.jar` and starts the server from the copy; rebuild freely,
-restart to pick the new jar up.
+The JVM keeps the `-javaagent` jar memory-mapped. Overwriting that file in place while the
+server runs corrupts the mapping and the next class load from the jar dies with `SIGBUS` in
+`libzip newEntry` (`hs_err_pid*.log` under the domain directory). The server runs from
+`<domain>/ejb-capture/capture-agent.jar`, which `capture:enable` replaces by rename (a new
+inode; the running JVM keeps the old one), never by writing into it; `mvn install` only
+touches `target/` and the local repository. Restart to pick a new build up.
 
 ## Domain
 

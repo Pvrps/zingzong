@@ -105,3 +105,11 @@ any agent (see `docs/HARDENING.md`, item 5). The only difference is in the tooli
 `jcmd VM.class_hierarchy` lists every loaded copy; JDK 8 has only `GC.class_histogram`, which
 shows a retained copy only through classes that still have live instances (the generated
 `*Impl` client objects and `OrdersApplication` do).
+
+## Exceptions (hardening item 3)
+
+Same spans, same `EJBException` wrapping at the invoker, same `sendError(500, "Request failed.")`
+from Jersey on both. JDK difference only: on JDK 21 the wrapping `EJBException`'s message carries
+the helpful `NullPointerException` text (`Cannot invoke "…getAddress()" because … is null`),
+computed by `getMessage()`; the NPE's own `detailMessage` field is null on both JDKs, and on JDK 8
+the message is null everywhere.

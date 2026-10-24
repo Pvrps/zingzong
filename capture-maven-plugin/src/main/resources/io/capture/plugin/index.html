@@ -311,10 +311,12 @@ async function refreshRecording() {
   if (state.recordingId !== id) return;
   const ordered = index.traces.slice();
   const missing = ordered.filter(t => !state.traces.has(t.id));
+  const t0 = performance.now();
   await Promise.all(missing.map(async t => {
     const trace = await api(`/api/recordings/${encodeURIComponent(id)}/traces/${encodeURIComponent(t.file)}`);
     state.traces.set(t.id, trace);
   }));
+  if (missing.length) console.info(`[capture] ${missing.length} trace(s), ${missing.reduce((n, t) => n + (t.spanCount || 0), 0)} spans fetched and parsed in ${(performance.now() - t0).toFixed(0)} ms`);
   if (state.recordingId !== id) return;
   const changed = !state.index || state.index.traces.length !== ordered.length || missing.length > 0;
   state.index = index;
@@ -423,7 +425,9 @@ function selectTrace(id, spanId) {
   if (row) row.scrollIntoView({ block: 'nearest' });
   const trace = state.traces.get(id);
   const root = trace.spans.find(s => s.parentId == null) || trace.spans[0];
+  const t0 = performance.now();
   renderTree();
+  console.info(`[capture] tree of ${trace.spans.length} spans rendered in ${(performance.now() - t0).toFixed(0)} ms`);
   selectSpan(spanId || (root && root.id));
 }
 
@@ -533,7 +537,9 @@ function selectSpan(id, focusPath) {
   document.querySelectorAll('.node').forEach(n => n.classList.toggle('selected', n.dataset.span === id));
   const node = document.querySelector(`.node[data-span="${CSS.escape(id || '')}"]`);
   if (node) node.scrollIntoView({ block: 'nearest' });
+  const t0 = performance.now();
   renderDetail(focusPath);
+  console.info(`[capture] span ${id} detail rendered in ${(performance.now() - t0).toFixed(0)} ms`);
   // a shareable link to what is on screen
   history.replaceState(null, '', `#r=${encodeURIComponent(state.recordingId)}&t=${encodeURIComponent(state.selectedTrace)}&s=${encodeURIComponent(id || '')}${focusPath ? '&p=' + encodeURIComponent(focusPath) : ''}`);
 }

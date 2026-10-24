@@ -196,3 +196,38 @@ is in `ClassValue`s (owned by the class), `SpanStack` drops its spans and trace 
 every trace, `HookListener` keeps class names as strings.
 
 **What changed**: nothing in the agent; the deploy script gained `--only`.
+
+## 6. Large payloads
+
+**Added**: a Create with 10 000 lines (alternating `WIDGET-1`/`GADGET-2`, quantity 1; 320 KB
+of JSON), 14 only (`rec-20261023-215836`, two such traces).
+
+**What the agent did**: recorded it whole. One trace of 20 006 spans (the resource, `createOrder`,
+10 000 × `InventoryService.reserve`, `price` → `computeTax` + `rateFor`, 10 000 ×
+`PricingService.unitPrice`), 32.3 MB on disk: 12.9 MB of `reserve` spans (~1.3 KB each, mostly
+the repeated bean metadata), 10.2 MB of `unitPrice`, the 10 000-line request DTO twice at 790 KB
+(`createOrder`'s argument and `price`'s), the HTTP root with the 320 KB request body. No ceiling
+fired: `maxElements` is 100 000, the body ceiling was not reached, no `@truncated` marker anywhere
+and no ceiling line in the agent log; the only serialization warnings are the pre-existing
+runtime-handle notes on the servlet request. 0 traces dropped.
+
+**Capture latency**: unrecorded, the request takes 0.23–0.36 s warm; recorded, 0.55–0.79 s
+(`createOrder` span 532 ms). About 250 ms for 20 006 spans, ~12 µs per span on the request
+thread (argument and result walks happen at span exit, on that thread; the file write is on the
+writer thread). The reader indexes the recording in 0.7 s (then cached) and streams the 32 MB
+trace in 40 ms.
+
+**Page**: measured in headless Chromium by the wall-clock gaps between the page's new
+`console.info('[capture] …')` timing lines (fetch+parse, tree, detail): browser start to both
+traces fetched and parsed, 0.56 s; lanes and the 20 006-row span tree, 0.13 s; first detail
+(includes the tree's first layout), 0.53 s; `createOrder`'s detail with the 10 000-element
+`lines` array, every element rendered as its own row, 0.68 s. Roughly two seconds from a cold
+browser to the fully rendered 10 000-line span, nothing summarized. Usable, so arrays are still
+rendered eagerly and no ceiling moved.
+
+**Where the limit is**: not the page at this size. At the element ceiling (100 000) the detail
+would be ~1.6 M DOM nodes and lazy array rendering would be due; before that, the agent builds
+each trace in memory before writing it (a 200 000-span trace would be ~320 MB of JSON nodes on
+the server's heap), which is the ceiling to watch first. Neither was pushed here.
+
+**What changed**: only the timing lines in the page.

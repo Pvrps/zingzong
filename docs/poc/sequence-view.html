@@ -1,0 +1,1661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ejb-capture · recording view POC</title>
+<style>
+  :root { --bg:#f3f4f6; --panel:#fff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --strong:#cbd5e1;
+    --web:#0f766e; --ejb:#2563eb; --mdb:#ea580c; --queue:#64748b; --client:#64748b;
+    --err:#dc2626; --err-soft:#fef2f2; --sel:#2563eb; --sel-soft:rgba(37,99,235,.08); --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; font:13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, system-ui, sans-serif; color:var(--fg); background:var(--bg); overflow:hidden; }
+  header { display:flex; gap:16px; align-items:center; padding:0 18px; background:var(--panel); border-bottom:1px solid var(--line); height:46px; white-space:nowrap; overflow:hidden; }
+  header h1 { font-size:15px; margin:0; } header .meta { color:var(--muted); font-size:12px; }
+  .legend { margin-left:auto; display:flex; gap:18px; font-size:11.5px; color:var(--muted); align-items:center; }
+  .legend svg { vertical-align:middle; margin-right:5px; }
+  main { height: calc(100vh - 46px); }
+  #zoomwrap { transform-origin: 0 0; }
+  #win { position:fixed; right:24px; top:70px; width:440px; height:70vh; min-width:300px; min-height:160px; background:var(--panel); border:1px solid var(--strong); border-radius:10px; box-shadow:0 12px 40px rgba(15,23,42,.18); display:flex; flex-direction:column; resize:both; overflow:hidden; z-index:20; }
+  #win[hidden] { display:none; }
+  #win .titlebar { display:flex; align-items:center; gap:8px; padding:8px 10px 8px 14px; border-bottom:1px solid var(--line); background:#f8fafc; cursor:move; user-select:none; border-radius:10px 10px 0 0; }
+  #win .titlebar b { flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #win .titlebar button { border:none; background:transparent; font-size:16px; color:var(--muted); cursor:pointer; width:26px; height:26px; border-radius:6px; } #win .titlebar button:hover { background:#e5e7eb; color:var(--fg); }
+  #btn-details { margin-left:14px; border:1px solid var(--strong); background:#fff; border-radius:6px; padding:3px 10px; font:inherit; font-size:12px; cursor:pointer; color:var(--fg); }
+  #seq { position:relative; overflow:auto; height:100%; }
+  #lanes { position:sticky; top:0; z-index:3; background:var(--panel); border-bottom:1px solid var(--line); }
+  .apps, .heads { display:flex; }
+  .app { height:20px; font:600 10.5px/20px -apple-system, system-ui, sans-serif; letter-spacing:.07em; text-transform:uppercase; color:#475569; text-align:center; background:#eef0f3; border-right:2px solid #fff; }
+  .app.plain { background:transparent; }
+  .lane-h { height:54px; padding:5px 8px 0; border-right:1px solid var(--line); overflow:hidden; border-bottom:3px solid var(--strong); }
+  .lane-h .name { font-weight:600; font-size:12px; line-height:1.2; overflow-wrap:anywhere; max-height:29px; overflow:hidden; }
+  .lane-h .kind { font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lane-h.web { border-bottom-color:var(--web); } .lane-h.ejb { border-bottom-color:var(--ejb); } .lane-h.mdb { border-bottom-color:var(--mdb); } .lane-h.queue, .lane-h.client { border-bottom-color:var(--strong); }
+  #body { position:relative; padding-bottom:60px; }
+  #body svg { position:absolute; left:0; top:0; pointer-events:none; }
+  .lifeline { stroke:#dde1e6; stroke-width:1; }
+  .act { stroke:#fff; stroke-width:1; } .act.web { fill:var(--web); } .act.ejb { fill:var(--ejb); } .act.mdb { fill:var(--mdb); } .act.queue, .act.client { fill:var(--queue); }
+  .call { fill:none; stroke:#475569; stroke-width:1.6; } .call.failed { stroke:var(--err); }
+  .ret { fill:none; stroke:#94a3b8; stroke-width:1.2; stroke-dasharray:5 3; } .ret.failed { stroke:var(--err); }
+  .hop { fill:none; stroke:#475569; stroke-width:1.6; stroke-dasharray:1.5 4; stroke-linecap:round; }
+  .entry { position:absolute; left:0; right:0; height:40px; display:flex; align-items:center; gap:10px; padding:0 16px; background:#e9ecf1; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font-size:13px; }
+  .entry .n { font-weight:700; color:var(--muted); } .entry .t { font-weight:700; } .entry .m { color:var(--muted); font-size:12px; } .entry .syn { font-size:11px; color:var(--muted); border:1px dashed var(--strong); border-radius:4px; padding:0 6px; }
+  .row { position:absolute; left:0; right:0; cursor:pointer; }
+  .row:hover { background:rgba(37,99,235,.04); } .row.selected { background:var(--sel-soft); }
+  .lbl { position:absolute; top:2px; font-size:12.5px; white-space:nowrap; line-height:1.3; overflow:hidden; text-overflow:ellipsis; }
+  .lbl.flip { text-align:right; }
+  .lbl .m { font-weight:600; } .lbl .sub { color:var(--muted); font-size:12px; }
+  .tag { display:inline-block; font-size:10px; font-weight:700; padding:0 5px; border-radius:999px; margin-left:6px; vertical-align:1px; border:1px solid var(--strong); color:#475569; background:#fff; }
+  .tag.ok { color:var(--web); border-color:#99d6c7; } .tag.bad { color:#fff; background:var(--err); border-color:var(--err); } .tag.hop { color:#334155; background:#f1f5f9; }
+  .dur { position:absolute; right:14px; top:4px; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .rlbl { position:absolute; top:1px; font-size:11px; color:var(--muted); white-space:nowrap; }
+  /* panel */
+  aside { flex:1; overflow:auto; padding:10px 18px 30px; min-width:0; }
+  aside h2 { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px; font-weight:600; }
+  aside h3 { margin:0 0 6px; font-size:16px; letter-spacing:-.01em; }
+  .chips { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { display:inline-block; font-size:10.5px; line-height:16px; padding:0 7px; border-radius:999px; border:1px solid var(--line); color:var(--muted); background:#fff; white-space:nowrap; }
+  .chip.err { color:#fff; background:var(--err); border-color:var(--err); font-weight:600; }
+  .path { font-size:12px; color:var(--muted); line-height:1.7; } .path b { color:var(--fg); font-weight:600; } .path .hopl { font-size:11px; color:#334155; background:#f1f5f9; border-radius:4px; padding:0 5px; }
+  .facts { display:grid; grid-template-columns:max-content 1fr; gap:3px 12px; font-size:12px; } .facts dt { color:var(--muted); } .facts dd { margin:0; font-family:var(--mono); font-size:11.5px; word-break:break-all; }
+  pre.val { margin:0; font:12px/1.5 var(--mono); background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:10px 12px; white-space:pre-wrap; word-break:break-word; max-height:360px; overflow:auto; }
+  pre.val .t { color:#94a3b8; } pre.val .k { color:#475569; } pre.val .s { color:#1d4ed8; } pre.val .n { color:#7c3aed; }
+  .val-h { display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin:8px 0 3px; } .val-h code { font-family:var(--mono); }
+  .ex { background:var(--err-soft); border:1px solid #fecaca; border-radius:8px; padding:8px 12px; font-size:12.5px; } .ex b { color:var(--err); }
+  .list .item { display:grid; grid-template-columns:28px 1fr auto; gap:1px 8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; cursor:pointer; }
+  .list .item:hover { border-color:var(--strong); } .list .seq { color:var(--muted); } .list .title { font-weight:600; } .list .dur { position:static; } .list .sub { grid-column:2/4; color:var(--muted); font-size:11.5px; }
+  .hint { color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<header><h1 id="title">recording</h1><span id="meta" class="meta"></span>
+  <button id="btn-details" title="show the details window">Details</button><span class="legend">
+    <span><svg width="34" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#475569" stroke-width="1.6"/><path d="M26,1 L33,5 L26,9 z" fill="#475569"/></svg>call</span>
+    <span><svg width="34" height="10"><line x1="8" y1="5" x2="34" y2="5" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5 3"/><path d="M8,1 L1,5 L8,9 z" fill="#fff" stroke="#94a3b8"/></svg>return</span>
+    <span><svg width="34" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#475569" stroke-width="1.6" stroke-dasharray="1.5 4" stroke-linecap="round"/><path d="M26,1 L33,5 L26,9 z" fill="#475569"/></svg>continues on another thread</span>
+    <span><svg width="14" height="10"><rect x="2" y="1" width="10" height="8" rx="2" fill="#dc2626"/></svg>failed</span>
+  </span>
+</header>
+<main id="main">
+  <section id="seq"><div id="zoomwrap"><div id="lanes"><div class="apps" id="apps"></div><div class="heads" id="heads"></div></div><div id="body"></div></div></section>
+</main>
+<div id="win"><div class="titlebar" id="win-title"><b id="win-name">Details</b><button id="win-close" title="close">×</button></div><aside id="panel"></aside></div>
+<script>
+const DATA =
+[
+  {
+    "id": "t-0859eb45",
+    "startedAt": "2026-10-24T02:11:59.807Z",
+    "durationMs": 27,
+    "parentTraceId": null,
+    "parentSpanId": null,
+    "spans": [
+      {
+        "id": "s1",
+        "parentId": null,
+        "startMs": 0,
+        "durMs": 27.987325,
+        "comp": {
+          "name": "client",
+          "type": "CLIENT"
+        },
+        "method": "POST /orders/api/orders",
+        "invocation": null,
+        "remote": false,
+        "tx": null,
+        "iface": null,
+        "signature": null,
+        "http": {
+          "method": "POST",
+          "path": "/orders/api/orders",
+          "status": 201,
+          "requestBody": "{\"customer\":{\"name\":\"John DOe\",\"email\":\"ada@example.com\",\"loyaltyTier\":\"GOLD\",\"address\":{\"street\":\"Keizersgracht 1\",\"city\":\"Amsterdam\",\"region\":\"NH\",\"postalCode\":\"1015 CC\",\"country\":\"NL\"}},\"lines\":[{\"sku\":\"WIDGET-1\",\"quantity\":3},{\"sku\":\"GADGET-2\",\"quantity\":1}],\"paymentMethod\":{\"type\":\"CARD\",\"lastFour\":\"4242\",\"expiry\":\"2028-06\"},\"attributes\":{\"channel\":\"web\",\"campaign\":\"autumn-2026\"},\"deliveryDate\":\"2026-10-31\"}",
+          "responseBody": "{\"id\":143716,\"status\":\"CREATED\",\"customerName\":\"John DOe\",\"currency\":\"EUR\",\"subtotal\":123.74,\"tax\":25.99,\"total\":149.73,\"createdAt\":\"2026-10-23T22:11:59.826913\",\"deliveryDate\":\"2026-10-31\",\"paymentSummary\":\"card ****4242 exp 2028-06\"}",
+          "contentType": "application/json"
+        },
+        "exception": null,
+        "args": [],
+        "result": null,
+        "thread": "0"
+      },
+      {
+        "id": "s2",
+        "parentId": "s1",
+        "startMs": 2.592858,
+        "durMs": 20.947896,
+        "comp": {
+          "name": "OrdersResource",
+          "type": "REST",
+          "app": null
+        },
+        "method": "create",
+        "invocation": null,
+        "remote": false,
+        "tx": null,
+        "iface": null,
+        "signature": "javax.ws.rs.core.Response create(java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "{\"customer\":{\"name\":\"John DOe\",\"email\":\"ada@example.com\",\"loyaltyTier\":\"GOLD\",\"address\":{\"street\":\"Keizersgracht 1\",\"city\":\"Amsterdam\",\"region\":\"NH\",\"postalCode\":\"1015 CC\",\"country\":\"NL\"}},\"lines\":[{\"sku\":\"WIDGET-1\",\"quantity\":3},{\"sku\":\"GADGET-2\",\"quantity\":1}],\"paymentMethod\":{\"type\":\"CARD\",\"lastFour\":\"4242\",\"expiry\":\"2028-06\"},\"attributes\":{\"channel\":\"web\",\"campaign\":\"autumn-2026\"},\"deliveryDate\":\"2026-10-31\"}"
+        ],
+        "result": {
+          "@type": "org.glassfish.jersey.message.internal.OutboundJaxrsResponse",
+          "@serializable": false,
+          "context": {
+            "@type": "org.glassfish.jersey.message.internal.OutboundMessageContext",
+            "@serializable": false,
+            "runtimeDelegateDecorator": {
+              "@type": "org.glassfish.jersey.internal.RuntimeDelegateDecorator$ConfigurableRuntimeDelegate",
+              "@serializable": false,
+              "runtimeDelegate": {
+                "@type": "org.glassfish.jersey.server.internal.RuntimeDelegateImpl",
+                "@serializable": false,
+                "hps": [
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.DateProvider",
+                    "@serializable": false,
+                    "@id": 4
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.NewCookieProvider",
+                    "@serializable": false,
+                    "@id": 7
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.CookieProvider",
+                    "@serializable": false,
+                    "@id": 5
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.LinkProvider",
+                    "@serializable": false
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.MediaTypeProvider",
+                    "@serializable": false,
+                    "@id": 3
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.UriProvider",
+                    "@serializable": false,
+                    "@id": 2
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.CacheControlProvider",
+                    "@serializable": false,
+                    "@id": 1
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.StringHeaderProvider",
+                    "@serializable": false,
+                    "@id": 6
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.EntityTagProvider",
+                    "@serializable": false,
+                    "@id": 8
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.LocaleProvider",
+                    "@serializable": false
+                  }
+                ],
+                "map": {
+                  "@type": "java.util.WeakHashMap",
+                  "@entries": [
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@3f00e23e",
+                        "toString": "class javax.ws.rs.core.CacheControl"
+                      },
+                      "value": {
+                        "@ref": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@46c00568",
+                        "toString": "class java.net.URI"
+                      },
+                      "value": {
+                        "@ref": 2
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@16c51b18",
+                        "toString": "class javax.ws.rs.core.MediaType"
+                      },
+                      "value": {
+                        "@ref": 3
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@12aba8be",
+                        "toString": "class java.util.Date"
+                      },
+                      "value": {
+                        "@ref": 4
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@36741d33",
+                        "toString": "class javax.ws.rs.core.Cookie"
+                      },
+                      "value": {
+                        "@ref": 5
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@6d6f6e28",
+                        "toString": "class java.lang.String"
+                      },
+                      "value": {
+                        "@ref": 6
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@edf23bb",
+                        "toString": "class javax.ws.rs.core.NewCookie"
+                      },
+                      "value": {
+                        "@ref": 7
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@2031a8f7",
+                        "toString": "class javax.ws.rs.core.EntityTag"
+                      },
+                      "value": {
+                        "@ref": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "configuration": null
+            },
+            "headers": {},
+            "committingOutputStream": {
+              "@handle": "org.glassfish.jersey.message.internal.CommittingOutputStream",
+              "kind": "stream",
+              "identity": "org.glassfish.jersey.message.internal.CommittingOutputStream@363cfc6f",
+              "toString": "org.glassfish.jersey.message.internal.CommittingOutputStream@363cfc6f"
+            },
+            "configuration": null,
+            "mediaTypeCache": {
+              "@type": "org.glassfish.jersey.internal.util.collection.Values$LazyValueImpl",
+              "@serializable": false,
+              "lock": {
+                "@type": "java.lang.Object",
+                "@serializable": false
+              },
+              "delegate": {
+                "@type": "org.glassfish.jersey.message.internal.OutboundMessageContext$$Lambda/0x000072ba9522fd50",
+                "@serializable": false,
+                "@skipped": [
+                  {
+                    "field": "arg$1",
+                    "reason": "compiler-injected (synthetic)"
+                  }
+                ]
+              },
+              "value": null
+            },
+            "entity": "{\"id\":143716,\"status\":\"CREATED\",\"customerName\":\"John DOe\",\"currency\":\"EUR\",\"subtotal\":123.74,\"tax\":25.99,\"total\":149.73,\"createdAt\":\"2026-10-23T22:11:59.826913\",\"deliveryDate\":\"2026-10-31\",\"paymentSummary\":\"card ****4242 exp 2028-06\"}",
+            "entityType": {
+              "@type": "javax.ws.rs.core.GenericType",
+              "@serializable": false,
+              "type": {
+                "@handle": "java.lang.Class",
+                "kind": "class reference",
+                "identity": "java.lang.Class@6d6f6e28",
+                "toString": "class java.lang.String"
+              },
+              "rawType": {
+                "@handle": "java.lang.Class",
+                "kind": "class reference",
+                "identity": "java.lang.Class@6d6f6e28",
+                "toString": "class java.lang.String"
+              }
+            },
+            "entityAnnotations": [],
+            "entityStream": {
+              "@handle": "org.glassfish.jersey.message.internal.CommittingOutputStream",
+              "kind": "stream",
+              "identity": "org.glassfish.jersey.message.internal.CommittingOutputStream@363cfc6f",
+              "toString": "org.glassfish.jersey.message.internal.CommittingOutputStream@363cfc6f"
+            }
+          },
+          "status": "CREATED",
+          "closed": false,
+          "buffered": false
+        },
+        "thread": "0"
+      },
+      {
+        "id": "s3",
+        "parentId": "s2",
+        "startMs": 6.755039,
+        "durMs": 15.80297,
+        "comp": {
+          "name": "OrderService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "createOrder",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.api.OrderServiceLocal",
+        "signature": "com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)",
+        "http": null,
+        "exception": null,
+        "args": [
+          {
+            "@type": "com.acme.common.dto.CreateOrderRequest",
+            "customer": {
+              "@type": "com.acme.common.dto.Customer",
+              "name": "John DOe",
+              "email": "ada@example.com",
+              "loyaltyTier": "GOLD",
+              "address": {
+                "@type": "com.acme.common.dto.Address",
+                "street": "Keizersgracht 1",
+                "city": "Amsterdam",
+                "region": "NH",
+                "postalCode": "1015 CC",
+                "country": "NL"
+              }
+            },
+            "lines": [
+              {
+                "@type": "com.acme.common.dto.OrderLineRequest",
+                "sku": "WIDGET-1",
+                "quantity": 3
+              },
+              {
+                "@type": "com.acme.common.dto.OrderLineRequest",
+                "sku": "GADGET-2",
+                "quantity": 1
+              }
+            ],
+            "attributes": {
+              "channel": "web",
+              "campaign": "autumn-2026"
+            },
+            "requestedDeliveryDate": "2026-10-31",
+            "requestedAt": "2026-10-24T02:11:59.810131670Z",
+            "paymentMethod": {
+              "@type": "com.acme.common.dto.CardPayment",
+              "lastFourDigits": "4242",
+              "expiry": "2028-06"
+            }
+          }
+        ],
+        "result": {
+          "@type": "com.acme.common.model.Order",
+          "id": 143716,
+          "customerName": "John DOe",
+          "customerEmail": "ada@example.com",
+          "status": "CREATED",
+          "createdAt": "2026-10-23T22:11:59.826913",
+          "deliveryDate": "2026-10-31",
+          "currency": "EUR",
+          "subtotal": "123.74",
+          "tax": "25.99",
+          "total": "149.73",
+          "paymentSummary": "card ****4242 exp 2028-06",
+          "lines": {
+            "@lazy": true,
+            "loaded": false
+          },
+          "audit": {
+            "@type": "com.acme.common.model.AuditTrail",
+            "@serializable": false,
+            "entries": "",
+            "lock": {
+              "@type": "java.lang.Object",
+              "@serializable": false
+            },
+            "openedAt": "2026-10-24T02:11:59.829090226Z",
+            "entryCount": 0
+          },
+          "@skipped": [
+            {
+              "field": "_persistence_primaryKey",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_cacheKey",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_listener",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_fetchGroup",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_shouldRefreshFetchGroup",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_session",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_relationshipInfo",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_href",
+              "reason": "weaver-injected (EclipseLink)"
+            },
+            {
+              "field": "_persistence_links",
+              "reason": "weaver-injected (EclipseLink)"
+            }
+          ]
+        },
+        "thread": "0"
+      },
+      {
+        "id": "s4",
+        "parentId": "s3",
+        "startMs": 8.430332,
+        "durMs": 0.369418,
+        "comp": {
+          "name": "InventoryService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "reserve",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.InventoryService",
+        "signature": "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "WIDGET-1",
+          3
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.Reservation",
+          "reservationId": "738b253b-9249-405d-9ba1-3505ca7d1e3b",
+          "sku": "WIDGET-1",
+          "quantity": 3,
+          "warehouse": "WH-AMS",
+          "reservedUntil": "2026-10-24T00:11:59.815670076"
+        },
+        "thread": "0"
+      },
+      {
+        "id": "s5",
+        "parentId": "s3",
+        "startMs": 11.679287,
+        "durMs": 0.568778,
+        "comp": {
+          "name": "InventoryService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "reserve",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.InventoryService",
+        "signature": "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "GADGET-2",
+          1
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.Reservation",
+          "reservationId": "1189a613-61f9-4584-a259-820c3e794ce5",
+          "sku": "GADGET-2",
+          "quantity": 1,
+          "warehouse": "WH-AMS",
+          "reservedUntil": "2026-10-24T00:11:59.819146010"
+        },
+        "thread": "0"
+      },
+      {
+        "id": "s6",
+        "parentId": "s3",
+        "startMs": 13.015051,
+        "durMs": 5.835794,
+        "comp": {
+          "name": "PricingService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "price",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.PricingService",
+        "signature": "com.acme.common.dto.PriceQuote price(com.acme.common.dto.CreateOrderRequest)",
+        "http": null,
+        "exception": null,
+        "args": [
+          {
+            "@type": "com.acme.common.dto.CreateOrderRequest",
+            "customer": {
+              "@type": "com.acme.common.dto.Customer",
+              "name": "John DOe",
+              "email": "ada@example.com",
+              "loyaltyTier": "GOLD",
+              "address": {
+                "@type": "com.acme.common.dto.Address",
+                "street": "Keizersgracht 1",
+                "city": "Amsterdam",
+                "region": "NH",
+                "postalCode": "1015 CC",
+                "country": "NL"
+              }
+            },
+            "lines": [
+              {
+                "@type": "com.acme.common.dto.OrderLineRequest",
+                "sku": "WIDGET-1",
+                "quantity": 3
+              },
+              {
+                "@type": "com.acme.common.dto.OrderLineRequest",
+                "sku": "GADGET-2",
+                "quantity": 1
+              }
+            ],
+            "attributes": {
+              "channel": "web",
+              "campaign": "autumn-2026"
+            },
+            "requestedDeliveryDate": "2026-10-31",
+            "requestedAt": "2026-10-24T02:11:59.810131670Z",
+            "paymentMethod": {
+              "@type": "com.acme.common.dto.CardPayment",
+              "lastFourDigits": "4242",
+              "expiry": "2028-06"
+            }
+          }
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.PriceQuote",
+          "currency": "EUR",
+          "lineTotals": {
+            "WIDGET-1": "37.50",
+            "GADGET-2": "99.99"
+          },
+          "subtotal": "123.74",
+          "tax": {
+            "@type": "com.acme.common.dto.TaxResult",
+            "jurisdiction": "NL-NH",
+            "rate": "0.21",
+            "tax": "25.99",
+            "computedAt": "2026-10-24T02:11:59.823258472Z"
+          },
+          "total": "149.73"
+        },
+        "thread": "0"
+      },
+      {
+        "id": "s7",
+        "parentId": "s6",
+        "startMs": 16.052628,
+        "durMs": 0.320738,
+        "comp": {
+          "name": "TaxService",
+          "type": "EJB",
+          "app": "tax-ear",
+          "dest": null
+        },
+        "method": "computeTax",
+        "invocation": "REMOTE",
+        "remote": true,
+        "tx": "REQUIRED",
+        "iface": "com.acme.tax.api.TaxService",
+        "signature": "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
+        "http": null,
+        "exception": null,
+        "args": [
+          {
+            "@type": "com.acme.common.dto.TaxRequest",
+            "country": "NL",
+            "region": "NH",
+            "category": "GOODS",
+            "amount": "123.74"
+          }
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.TaxResult",
+          "jurisdiction": "NL-NH",
+          "rate": "0.21",
+          "tax": "25.99",
+          "computedAt": "2026-10-24T02:11:59.823258472Z"
+        },
+        "thread": "0"
+      },
+      {
+        "id": "s8",
+        "parentId": "s6",
+        "startMs": 18.209488,
+        "durMs": 0.242959,
+        "comp": {
+          "name": "RateLookup",
+          "type": "EJB2",
+          "app": "tax-ear",
+          "dest": null
+        },
+        "method": "rateFor",
+        "invocation": "REMOTE",
+        "remote": true,
+        "tx": "REQUIRED",
+        "iface": "com.acme.tax.api.RateLookup",
+        "signature": "java.math.BigDecimal rateFor(java.lang.String, java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "NL",
+          "NH"
+        ],
+        "result": "0.21",
+        "thread": "0"
+      },
+      {
+        "id": "s9",
+        "parentId": "s3",
+        "startMs": 20.04263,
+        "durMs": 0.07909,
+        "comp": {
+          "name": "PricingService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "unitPrice",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.PricingService",
+        "signature": "java.math.BigDecimal unitPrice(java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "WIDGET-1"
+        ],
+        "result": "12.50",
+        "thread": "0"
+      },
+      {
+        "id": "s10",
+        "parentId": "s3",
+        "startMs": 20.191449,
+        "durMs": 0.05574,
+        "comp": {
+          "name": "PricingService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "unitPrice",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.PricingService",
+        "signature": "java.math.BigDecimal unitPrice(java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "GADGET-2"
+        ],
+        "result": "99.99",
+        "thread": "0"
+      }
+    ]
+  },
+  {
+    "id": "t-fa16dd45",
+    "startedAt": "2026-10-24T02:12:02.580Z",
+    "durationMs": 22,
+    "parentTraceId": null,
+    "parentSpanId": null,
+    "spans": [
+      {
+        "id": "s1",
+        "parentId": null,
+        "startMs": 0,
+        "durMs": 22.082881,
+        "comp": {
+          "name": "client",
+          "type": "CLIENT"
+        },
+        "method": "POST /orders/api/orders/143716/confirm",
+        "invocation": null,
+        "remote": false,
+        "tx": null,
+        "iface": null,
+        "signature": null,
+        "http": {
+          "method": "POST",
+          "path": "/orders/api/orders/143716/confirm",
+          "status": 200,
+          "requestBody": "{\"confirmedBy\":\"ada\",\"notes\":\"please gift-wrap\"}",
+          "responseBody": "{\"orderId\":143716,\"status\":\"CONFIRMED\",\"confirmedAt\":\"2026-10-24T02:12:02.583545383Z\",\"messages\":[\"Confirmed by ada\",\"Notes: please gift-wrap\"]}",
+          "contentType": "application/json"
+        },
+        "exception": null,
+        "args": [],
+        "result": null,
+        "thread": "6"
+      },
+      {
+        "id": "s2",
+        "parentId": "s1",
+        "startMs": 1.103855,
+        "durMs": 20.215069,
+        "comp": {
+          "name": "OrdersResource",
+          "type": "REST",
+          "app": null
+        },
+        "method": "confirm",
+        "invocation": null,
+        "remote": false,
+        "tx": null,
+        "iface": null,
+        "signature": "javax.ws.rs.core.Response confirm(long, java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          143716,
+          "{\"confirmedBy\":\"ada\",\"notes\":\"please gift-wrap\"}"
+        ],
+        "result": {
+          "@type": "org.glassfish.jersey.message.internal.OutboundJaxrsResponse",
+          "@serializable": false,
+          "context": {
+            "@type": "org.glassfish.jersey.message.internal.OutboundMessageContext",
+            "@serializable": false,
+            "runtimeDelegateDecorator": {
+              "@type": "org.glassfish.jersey.internal.RuntimeDelegateDecorator$ConfigurableRuntimeDelegate",
+              "@serializable": false,
+              "runtimeDelegate": {
+                "@type": "org.glassfish.jersey.server.internal.RuntimeDelegateImpl",
+                "@serializable": false,
+                "hps": [
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.DateProvider",
+                    "@serializable": false,
+                    "@id": 4
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.NewCookieProvider",
+                    "@serializable": false,
+                    "@id": 7
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.CookieProvider",
+                    "@serializable": false,
+                    "@id": 5
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.LinkProvider",
+                    "@serializable": false
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.MediaTypeProvider",
+                    "@serializable": false,
+                    "@id": 3
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.UriProvider",
+                    "@serializable": false,
+                    "@id": 2
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.CacheControlProvider",
+                    "@serializable": false,
+                    "@id": 1
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.StringHeaderProvider",
+                    "@serializable": false,
+                    "@id": 6
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.EntityTagProvider",
+                    "@serializable": false,
+                    "@id": 8
+                  },
+                  {
+                    "@type": "org.glassfish.jersey.message.internal.LocaleProvider",
+                    "@serializable": false
+                  }
+                ],
+                "map": {
+                  "@type": "java.util.WeakHashMap",
+                  "@entries": [
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@3f00e23e",
+                        "toString": "class javax.ws.rs.core.CacheControl"
+                      },
+                      "value": {
+                        "@ref": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@46c00568",
+                        "toString": "class java.net.URI"
+                      },
+                      "value": {
+                        "@ref": 2
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@16c51b18",
+                        "toString": "class javax.ws.rs.core.MediaType"
+                      },
+                      "value": {
+                        "@ref": 3
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@12aba8be",
+                        "toString": "class java.util.Date"
+                      },
+                      "value": {
+                        "@ref": 4
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@36741d33",
+                        "toString": "class javax.ws.rs.core.Cookie"
+                      },
+                      "value": {
+                        "@ref": 5
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@6d6f6e28",
+                        "toString": "class java.lang.String"
+                      },
+                      "value": {
+                        "@ref": 6
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@edf23bb",
+                        "toString": "class javax.ws.rs.core.NewCookie"
+                      },
+                      "value": {
+                        "@ref": 7
+                      }
+                    },
+                    {
+                      "key": {
+                        "@handle": "java.lang.Class",
+                        "kind": "class reference",
+                        "identity": "java.lang.Class@2031a8f7",
+                        "toString": "class javax.ws.rs.core.EntityTag"
+                      },
+                      "value": {
+                        "@ref": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "configuration": null
+            },
+            "headers": {},
+            "committingOutputStream": {
+              "@handle": "org.glassfish.jersey.message.internal.CommittingOutputStream",
+              "kind": "stream",
+              "identity": "org.glassfish.jersey.message.internal.CommittingOutputStream@5ad36522",
+              "toString": "org.glassfish.jersey.message.internal.CommittingOutputStream@5ad36522"
+            },
+            "configuration": null,
+            "mediaTypeCache": {
+              "@type": "org.glassfish.jersey.internal.util.collection.Values$LazyValueImpl",
+              "@serializable": false,
+              "lock": {
+                "@type": "java.lang.Object",
+                "@serializable": false
+              },
+              "delegate": {
+                "@type": "org.glassfish.jersey.message.internal.OutboundMessageContext$$Lambda/0x000072ba9522fd50",
+                "@serializable": false,
+                "@skipped": [
+                  {
+                    "field": "arg$1",
+                    "reason": "compiler-injected (synthetic)"
+                  }
+                ]
+              },
+              "value": null
+            },
+            "entity": "{\"orderId\":143716,\"status\":\"CONFIRMED\",\"confirmedAt\":\"2026-10-24T02:12:02.583545383Z\",\"messages\":[\"Confirmed by ada\",\"Notes: please gift-wrap\"]}",
+            "entityType": {
+              "@type": "javax.ws.rs.core.GenericType",
+              "@serializable": false,
+              "type": {
+                "@handle": "java.lang.Class",
+                "kind": "class reference",
+                "identity": "java.lang.Class@6d6f6e28",
+                "toString": "class java.lang.String"
+              },
+              "rawType": {
+                "@handle": "java.lang.Class",
+                "kind": "class reference",
+                "identity": "java.lang.Class@6d6f6e28",
+                "toString": "class java.lang.String"
+              }
+            },
+            "entityAnnotations": [],
+            "entityStream": {
+              "@handle": "org.glassfish.jersey.message.internal.CommittingOutputStream",
+              "kind": "stream",
+              "identity": "org.glassfish.jersey.message.internal.CommittingOutputStream@5ad36522",
+              "toString": "org.glassfish.jersey.message.internal.CommittingOutputStream@5ad36522"
+            }
+          },
+          "status": "OK",
+          "closed": false,
+          "buffered": false
+        },
+        "thread": "6"
+      },
+      {
+        "id": "s3",
+        "parentId": "s2",
+        "startMs": 1.830131,
+        "durMs": 18.969716,
+        "comp": {
+          "name": "OrderService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "confirmOrder",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.api.OrderServiceLocal",
+        "signature": "com.acme.common.dto.ConfirmResult confirmOrder(com.acme.common.dto.ConfirmRequest)",
+        "http": null,
+        "exception": null,
+        "args": [
+          {
+            "@type": "com.acme.common.dto.ConfirmRequest",
+            "orderId": 143716,
+            "confirmedBy": "ada",
+            "confirmedAt": "2026-10-24T02:12:02.582Z",
+            "notes": "please gift-wrap"
+          }
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.ConfirmResult",
+          "orderId": 143716,
+          "status": "CONFIRMED",
+          "confirmedAt": "2026-10-24T02:12:02.583545383Z",
+          "messages": [
+            "Confirmed by ada",
+            "Notes: please gift-wrap"
+          ]
+        },
+        "thread": "6"
+      }
+    ]
+  },
+  {
+    "id": "t-1e50874a",
+    "startedAt": "2026-10-24T02:12:02.584Z",
+    "durationMs": 0,
+    "parentTraceId": "t-fa16dd45",
+    "parentSpanId": "s3",
+    "spans": [
+      {
+        "id": "s1",
+        "parentId": null,
+        "startMs": 0,
+        "durMs": 0.970805,
+        "comp": {
+          "name": "OrderService",
+          "type": "EJB",
+          "app": "orders-ear",
+          "dest": null
+        },
+        "method": "notifyAsync",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.orders.api.OrderServiceLocal",
+        "signature": "void notifyAsync(long, java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          143716,
+          "CONFIRMED"
+        ],
+        "result": null,
+        "thread": "8"
+      }
+    ]
+  },
+  {
+    "id": "t-a26b3192",
+    "startedAt": "2026-10-24T02:12:02.605Z",
+    "durationMs": 7,
+    "parentTraceId": "t-fa16dd45",
+    "parentSpanId": "s3",
+    "spans": [
+      {
+        "id": "s1",
+        "parentId": null,
+        "startMs": 0,
+        "durMs": 7.275777,
+        "comp": {
+          "name": "OrderEventListener",
+          "type": "MDB",
+          "app": "notify-ear",
+          "dest": "jms/OrderEvents"
+        },
+        "method": "onMessage",
+        "invocation": "MESSAGE",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "javax.jms.MessageListener",
+        "signature": "void onMessage(javax.jms.Message)",
+        "http": null,
+        "exception": null,
+        "args": [
+          {
+            "@type": "weblogic.jms.common.TextMessageImpl",
+            "@jms": "TextMessage",
+            "headers": {
+              "JMSMessageID": "ID:<147312.1792807922584.0>",
+              "JMSTimestamp": 1792807922584,
+              "JMSDeliveryMode": 2,
+              "JMSPriority": 4,
+              "JMSExpiration": 0,
+              "JMSRedelivered": false,
+              "JMSDestination": "OrdersJMSModule!OrderEvents"
+            },
+            "properties": {
+              "orderId": 143716,
+              "by": "ada",
+              "event": "CONFIRMED",
+              "JMS_BEA_DeliveryTime": 1792807922584,
+              "JMSXDeliveryCount": 1
+            },
+            "text": "{\"orderId\":143716,\"event\":\"CONFIRMED\",\"by\":\"ada\"}"
+          }
+        ],
+        "result": null,
+        "thread": "5"
+      },
+      {
+        "id": "s2",
+        "parentId": "s1",
+        "startMs": 1.203804,
+        "durMs": 0.240059,
+        "comp": {
+          "name": "NotificationService",
+          "type": "EJB",
+          "app": "notify-ear",
+          "dest": null
+        },
+        "method": "record",
+        "invocation": "LOCAL",
+        "remote": false,
+        "tx": "REQUIRED",
+        "iface": "com.acme.notify.NotificationService",
+        "signature": "java.lang.String record(long, java.lang.String, java.lang.String)",
+        "http": null,
+        "exception": null,
+        "args": [
+          143716,
+          "CONFIRMED",
+          "ID:<147312.1792807922584.0>"
+        ],
+        "result": "N-2",
+        "thread": "5"
+      }
+    ]
+  },
+  {
+    "id": "t-595a031b",
+    "startedAt": "2026-10-24T02:12:04.446Z",
+    "durationMs": 8,
+    "parentTraceId": null,
+    "parentSpanId": null,
+    "spans": [
+      {
+        "id": "s1",
+        "parentId": null,
+        "startMs": 0,
+        "durMs": 8.676561,
+        "comp": {
+          "name": "client",
+          "type": "CLIENT"
+        },
+        "method": "POST /tax/TaxWebService",
+        "invocation": null,
+        "remote": false,
+        "tx": null,
+        "iface": null,
+        "signature": null,
+        "http": {
+          "method": "POST",
+          "path": "/tax/TaxWebService",
+          "status": 200,
+          "requestBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tax=\"http://acme.com/tax\"><soapenv:Body><tax:computeTax><country>NL</country><region>NH</region><category>GOODS</category><amount>123.74</amount></tax:computeTax></soapenv:Body></soapenv:Envelope>",
+          "responseBody": "<?xml version='1.0' encoding='UTF-8'?><S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Header><WorkContext xmlns=\"http://oracle.com/weblogic/soap/workarea/\">rO0ABXdOABBpby5jYXB0dXJlLnRyYWNlAAAA9wAAACN3ZWJsb2dpYy53b3JrYXJlYS5TdHJpbmdXb3JrQ29udGV4dAANdC01OTVhMDMxYi9zMQAA</WorkContext></S:Header><S:Body><ns0:computeTaxResponse xmlns:ns0=\"http://acme.com/tax\"><quote><jurisdiction>NL-NH</jurisdiction><rate>0.21</rate><tax>25.99</tax><computedAt>2026-10-24T02:12:04.448422986Z</computedAt></quote></ns0:computeTaxResponse></S:Body></S:Envelope>",
+          "contentType": "text/xml; charset=utf-8"
+        },
+        "exception": null,
+        "args": [],
+        "result": null,
+        "thread": "2"
+      },
+      {
+        "id": "s2",
+        "parentId": "s1",
+        "startMs": 0.961696,
+        "durMs": 1.526733,
+        "comp": {
+          "name": "TaxWebService",
+          "type": "SOAP",
+          "app": null
+        },
+        "method": "computeTax",
+        "invocation": null,
+        "remote": false,
+        "tx": null,
+        "iface": null,
+        "signature": "com.acme.tax.ws.TaxQuote computeTax(java.lang.String, java.lang.String, java.lang.String, java.math.BigDecimal)",
+        "http": null,
+        "exception": null,
+        "args": [
+          "NL",
+          "NH",
+          "GOODS",
+          "123.74"
+        ],
+        "result": {
+          "@type": "com.acme.tax.ws.TaxQuote",
+          "@serializable": false,
+          "jurisdiction": "NL-NH",
+          "rate": "0.21",
+          "tax": "25.99",
+          "computedAt": "2026-10-24T02:12:04.448422986Z"
+        },
+        "thread": "2"
+      },
+      {
+        "id": "s3",
+        "parentId": "s2",
+        "startMs": 1.683393,
+        "durMs": 0.514227,
+        "comp": {
+          "name": "TaxService",
+          "type": "EJB",
+          "app": "tax-ear",
+          "dest": null
+        },
+        "method": "computeTax",
+        "invocation": "REMOTE",
+        "remote": true,
+        "tx": "REQUIRED",
+        "iface": "com.acme.tax.api.TaxService",
+        "signature": "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
+        "http": null,
+        "exception": null,
+        "args": [
+          {
+            "@type": "com.acme.common.dto.TaxRequest",
+            "country": "NL",
+            "region": "NH",
+            "category": "GOODS",
+            "amount": "123.74"
+          }
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.TaxResult",
+          "jurisdiction": "NL-NH",
+          "rate": "0.21",
+          "tax": "25.99",
+          "computedAt": "2026-10-24T02:12:04.448422986Z"
+        },
+        "thread": "2"
+      }
+    ]
+  },
+  {
+    "id": "t-example",
+    "startedAt": "2026-10-24T02:12:06.100Z",
+    "durationMs": 31,
+    "parentTraceId": null,
+    "parentSpanId": null,
+    "synthetic": true,
+    "spans": [
+      {
+        "id": "s1",
+        "parentId": null,
+        "startMs": 0,
+        "durMs": 31,
+        "comp": {
+          "name": "client",
+          "type": "CLIENT"
+        },
+        "method": "POST /orders/api/orders/143716/return",
+        "http": {
+          "method": "POST",
+          "path": "/orders/api/orders/143716/return",
+          "status": 200,
+          "requestBody": "{\"reason\":\"damaged\"}",
+          "responseBody": "{\"orderId\":143716,\"refund\":123.74}"
+        },
+        "args": [],
+        "result": null,
+        "thread": "3"
+      },
+      {
+        "id": "s2",
+        "parentId": "s1",
+        "startMs": 0.4,
+        "durMs": 30,
+        "comp": {
+          "name": "OrdersResource",
+          "type": "REST",
+          "app": "orders-ear"
+        },
+        "method": "returnOrder",
+        "args": [
+          "{\"reason\":\"damaged\"}"
+        ],
+        "result": null,
+        "thread": "3"
+      },
+      {
+        "id": "s3",
+        "parentId": "s2",
+        "startMs": 1.1,
+        "durMs": 28,
+        "comp": {
+          "name": "OrderService",
+          "type": "EJB",
+          "app": "orders-ear"
+        },
+        "method": "returnOrder",
+        "invocation": "LOCAL",
+        "tx": "REQUIRED",
+        "signature": "Refund returnOrder(long, String)",
+        "args": [
+          143716,
+          "damaged"
+        ],
+        "result": {
+          "@type": "com.acme.common.dto.Refund",
+          "orderId": 143716,
+          "amount": "123.74"
+        },
+        "thread": "3"
+      },
+      {
+        "id": "s4",
+        "parentId": "s3",
+        "startMs": 2,
+        "durMs": 0.9,
+        "comp": {
+          "name": "OrderService",
+          "type": "EJB",
+          "app": "orders-ear"
+        },
+        "method": "findOrder",
+        "invocation": "LOCAL",
+        "tx": "REQUIRED",
+        "args": [
+          143716
+        ],
+        "result": {
+          "@type": "com.acme.common.model.Order",
+          "id": 143716,
+          "status": "CONFIRMED"
+        },
+        "thread": "3"
+      },
+      {
+        "id": "s5",
+        "parentId": "s3",
+        "startMs": 4,
+        "durMs": 22,
+        "comp": {
+          "name": "TaxService",
+          "type": "EJB",
+          "app": "tax-ear"
+        },
+        "method": "refundTax",
+        "invocation": "REMOTE",
+        "remote": true,
+        "tx": "REQUIRED",
+        "args": [
+          {
+            "@type": "com.acme.tax.api.TaxRequest",
+            "country": "NL",
+            "region": "NH",
+            "amount": "123.74"
+          }
+        ],
+        "result": {
+          "@type": "com.acme.tax.api.TaxResult",
+          "tax": "25.99"
+        },
+        "thread": "3"
+      },
+      {
+        "id": "s6",
+        "parentId": "s5",
+        "startMs": 9,
+        "durMs": 1.4,
+        "comp": {
+          "name": "OrderService",
+          "type": "EJB",
+          "app": "orders-ear"
+        },
+        "method": "findOrder",
+        "invocation": "REMOTE",
+        "remote": true,
+        "tx": "REQUIRED",
+        "args": [
+          143716
+        ],
+        "result": {
+          "@type": "com.acme.common.model.Order",
+          "id": 143716,
+          "status": "CONFIRMED"
+        },
+        "thread": "3"
+      },
+      {
+        "id": "s7",
+        "parentId": "s5",
+        "startMs": 12,
+        "durMs": 0.3,
+        "comp": {
+          "name": "RateLookup",
+          "type": "EJB2",
+          "app": "tax-ear"
+        },
+        "method": "rateFor",
+        "invocation": "REMOTE",
+        "remote": true,
+        "args": [
+          "NL",
+          "NH"
+        ],
+        "result": "0.21",
+        "thread": "3"
+      },
+      {
+        "id": "s8",
+        "parentId": "s3",
+        "startMs": 27,
+        "durMs": 0.5,
+        "comp": {
+          "name": "InventoryService",
+          "type": "EJB",
+          "app": "orders-ear"
+        },
+        "method": "release",
+        "invocation": "LOCAL",
+        "tx": "REQUIRED",
+        "args": [
+          "WIDGET-1",
+          3
+        ],
+        "result": null,
+        "exception": {
+          "className": "com.acme.orders.api.InsufficientStockException",
+          "message": "nothing reserved for WIDGET-1"
+        },
+        "thread": "3"
+      }
+    ]
+  }
+]
+;
+</script>
+<script>
+'use strict';
+// ---- model -----------------------------------------------------------------------------------
+// The agent records "EJB" without the session type today; the POC infers it (the real page would read it from the container).
+const kindOf = c => c.type === 'EJB' ? (/Cart/.test(c.name) ? 'STATEFUL' : 'STATELESS') : c.type;
+const KIND_TEXT = { CLIENT: 'caller', REST: 'REST resource', SOAP: 'SOAP endpoint', STATELESS: 'stateless EJB', STATEFUL: 'stateful EJB', EJB2: 'EJB 2.x', MDB: 'message-driven bean', QUEUE: 'JMS queue' };
+const CAT = { CLIENT: 'client', REST: 'web', SOAP: 'web', STATELESS: 'ejb', STATEFUL: 'ejb', EJB2: 'ejb', MDB: 'mdb', QUEUE: 'queue' };
+const traces = DATA.slice();
+const byTrace = new Map(traces.map(t => [t.id, t]));
+for (const t of traces) { t.byId = new Map(t.spans.map(s => [s.id, s])); for (const s of t.spans) { s.trace = t; s.kind = kindOf(s.comp); s.parent = s.parentId ? t.byId.get(s.parentId) : null; s.args = s.args || []; } }
+for (const t of traces) for (const s of t.spans) if (!s.comp.app && (s.comp.type === 'REST' || s.comp.type === 'SOAP')) { const k = t.spans.find(x => x.parentId === s.id && x.comp.app); if (k) s.comp.app = k.comp.app; }
+for (const t of traces) if (t.parentTraceId) { t.cause = byTrace.get(t.parentTraceId).byId.get(t.parentSpanId); (t.cause.spawns = t.cause.spawns || []).push(t); }
+const entries = traces.filter(t => !t.cause).sort((a, b) => a.startedAt.localeCompare(b.startedAt)); entries.forEach((t, i) => t.seq = i + 1);
+const lanes = [], laneOf = new Map();
+function lane(kind, name, app) { const k = `${kind}:${name}`; if (!laneOf.has(k)) { const l = { key: k, kind, name, app, i: lanes.length }; lanes.push(l); laneOf.set(k, l); } return laneOf.get(k); }
+for (const t of traces) for (const s of t.spans) {
+  if (s.comp.type === 'MDB' && s.comp.dest) s.queue = lane('QUEUE', s.comp.dest, 'JMS');
+  s.lane = lane(s.kind, s.comp.name, s.comp.type === 'CLIENT' ? 'client' : s.comp.app || '?');
+}
+const appOrder = []; for (const l of lanes) if (!appOrder.includes(l.app)) appOrder.push(l.app);
+if (appOrder.includes('JMS')) { appOrder.splice(appOrder.indexOf('JMS'), 1); const mdb = lanes.find(l => l.kind === 'MDB'); appOrder.splice(mdb ? appOrder.indexOf(mdb.app) : appOrder.length, 0, 'JMS'); }
+const kindOrder = ['CLIENT', 'REST', 'SOAP', 'STATELESS', 'STATEFUL', 'EJB2', 'MDB', 'QUEUE'];
+lanes.sort((a, b) => appOrder.indexOf(a.app) - appOrder.indexOf(b.app) || kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind) || a.i - b.i); lanes.forEach((l, i) => l.i = i);
+// ---- rows: one continuous diagram; continuations nest under the call that caused them --------------
+const CALL = 38, RET = 22, HOP = 30, ENTRY = 40, GAP = 14, DUR_COL = 84;
+const laneX = l => l.x;  // lane centres; widths come from the names (fitLanes)
+let LANES_W = 0;
+const measure = (() => { const c = document.createElement("canvas").getContext("2d"); return (text, font) => { c.font = font; return c.measureText(text).width; }; })();
+const segments = name => name.replace(/([a-z])([A-Z])/g, "$1\u200b$2").replace(/\//g, "/\u200b").split("\u200b");
+function fitLanes() {
+  const avail = document.getElementById("seq").clientWidth - 16 - DUR_COL;
+  // what each lane needs so that nothing is cut: its longest name segment (names wrap at camelCase), and its kind line
+  for (const l of lanes) l.need = Math.ceil(Math.max(...segments(l.name).map(s => measure(s, "600 12px -apple-system, system-ui, sans-serif")), measure(KIND_TEXT[l.kind], "10.5px -apple-system, system-ui, sans-serif"), 64)) + 18;
+  const natural = lanes.reduce((n, l) => n + l.need, 0), extra = Math.max(0, (avail - natural) / lanes.length);
+  let x = 0; for (const l of lanes) { l.w = l.need + extra; l.x = x + l.w / 2; x += l.w; } LANES_W = x;
+  // narrower than the lanes need: scale everything down rather than scroll or cut
+  const scale = Math.min(1, (avail + 16 + DUR_COL) / (LANES_W + DUR_COL)); state.scale = scale;
+  const wrap = document.getElementById("zoomwrap"); wrap.style.zoom = scale;
+}
+const rows = []; let yy = GAP;
+function emit(s, from, hop) {
+  const t = s.trace, root = t.spans[0];
+  const resource = s === root && s.comp.type === 'CLIENT' ? t.spans.find(x => x.parent === root && (x.comp.type === 'REST' || x.comp.type === 'SOAP')) : null;
+  const to = resource ? resource.lane : s.lane;
+  const row = { kind: 'call', span: s, y: yy, h: CALL, from, to, hop, resource }; s.row = row; rows.push(row); yy += CALL;
+  const kids = t.spans.filter(x => x !== resource && (x.parent === s || (resource && x.parent === resource))).map(x => ({ at: x.startMs, span: x }));
+  for (const c of s.spawns || []) kids.push({ at: s.startMs + (Date.parse(c.startedAt) - Date.parse(t.startedAt)), spawn: c });
+  kids.sort((a, b) => a.at - b.at);
+  for (const k of kids) {
+    if (k.span) emit(k.span, to, null);
+    else {
+      const c = k.spawn, croot = c.spans[0], delay = Date.parse(c.startedAt) - Date.parse(t.startedAt);
+      if (croot.queue) { rows.push({ kind: 'hop', span: s, child: c, y: yy, h: HOP, from: to, to: croot.queue, delay }); yy += HOP; emit(croot, croot.queue, { kind: 'JMS', delay }); }
+      else emit(croot, to, { kind: '@Asynchronous', delay });
+    }
+  }
+  const ret = { kind: 'ret', span: s, y: yy, h: RET, from: to, to: from, resource }; s.ret = ret; rows.push(ret); yy += RET;
+}
+for (const t of entries) { t.y = yy; rows.push({ kind: 'entry', trace: t, y: yy, h: ENTRY }); yy += ENTRY + 6; emit(t.spans[0], null, null); t.yEnd = yy; yy += GAP; }
+const H = yy;
+for (const t of traces) for (const s of t.spans) { let n = 0; for (let p = s.parent || (s.trace.cause && !s.parent ? s.trace.cause : null); p; p = p.parent || (p.trace.cause && !p.parent ? p.trace.cause : null)) if (p.row && p.row.to === (s.row ? s.row.to : s.lane)) n++; s.nest = n; }
+// ---- render --------------------------------------------------------------------------------------
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); 
+const fmt = ms => ms < 10 ? ms.toFixed(2) + ' ms' : ms < 1000 ? ms.toFixed(1) + ' ms' : (ms / 1000).toFixed(2) + ' s';
+const svgNS = 'http://www.w3.org/2000/svg', mk = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const state = { sel: null, scale: 1 };
+const label = s => s.comp.type === 'CLIENT' ? s.method : `${s.comp.name}.${s.method}`;
+function brief(v, max) {
+  max = max || 70;
+  const one = (x, d) => { if (x == null) return 'null'; if (typeof x === 'string') return JSON.stringify(x.length > 40 ? x.slice(0, 38) + '…' : x); if (typeof x !== 'object') return String(x);
+    if (Array.isArray(x)) return d > 1 ? `[${x.length}]` : `[${x.map(e => one(e, d + 1)).join(', ')}]`;
+    const type = x['@type'] ? x['@type'].split('.').pop() : '', keys = Object.keys(x).filter(k => !k.startsWith('@')); return d > 1 ? `${type}{…}` : `${type}{${keys.map(k => `${k}: ${one(x[k], d + 1)}`).join(', ')}}`; };
+  const s = one(v, 0); return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+function renderLanes() {
+  fitLanes();
+  const apps = document.getElementById('apps'), heads = document.getElementById('heads'); apps.innerHTML = ''; heads.innerHTML = '';
+  for (const app of appOrder) { const a = el("div", "app" + (app === "client" || app === "JMS" ? " plain" : ""), app === "client" ? "" : app); a.style.width = lanes.filter(l => l.app === app).reduce((n, l) => n + l.w, 0) + "px"; apps.appendChild(a); }
+  for (const l of lanes) { const h = el('div', 'lane-h ' + CAT[l.kind]); h.style.width = l.w + "px"; h.title = `${l.name} · ${KIND_TEXT[l.kind]}`; h.innerHTML = `<div class="name">${segments(l.name).map(esc).join("\u200b")}</div><div class="kind">${esc(KIND_TEXT[l.kind])}</div>`; heads.appendChild(h); }
+  document.getElementById("lanes").style.width = LANES_W + DUR_COL + "px";
+}
+function renderBody() {
+  const W = LANES_W + DUR_COL, body = document.getElementById('body'); body.innerHTML = ''; body.style.width = W + 'px'; body.style.height = H + 'px';
+  const svg = mk('svg', { width: W, height: H }, body), defs = mk('defs', {}, svg);
+  for (const [id, c] of Object.entries({ call: '#475569', fail: '#dc2626' })) { const m = mk('marker', { id: 'arr-' + id, viewBox: '0 0 8 8', refX: 7.5, refY: 4, markerWidth: 7, markerHeight: 7, orient: 'auto' }, defs); mk('path', { d: 'M0,1 L7,4 L0,7 z', fill: c }, m); }
+  for (const [id, c] of Object.entries({ ret: '#94a3b8', retfail: '#dc2626' })) { const m = mk('marker', { id: 'arr-' + id, viewBox: '0 0 8 8', refX: 7.5, refY: 4, markerWidth: 8, markerHeight: 8, orient: 'auto' }, defs); mk('path', { d: 'M0.5,1 L7,4 L0.5,7 z', fill: '#fff', stroke: c }, m); }
+  for (const t of entries) for (const l of lanes) mk('line', { class: 'lifeline', x1: laneX(l), y1: t.y + ENTRY, x2: laneX(l), y2: t.yEnd }, svg);
+  for (const t of traces) for (const s of t.spans) { if (!s.row || !s.ret) continue; const l = s.row.to, off = s.nest * 6; mk('rect', { class: 'act ' + CAT[l.kind], x: laneX(l) - 4 + off, y: s.row.y + 24, width: 8, height: s.ret.y + 12 - (s.row.y + 24), rx: 2 }, svg); }
+  for (const r of rows) {
+    if (r.kind === 'entry') {
+      const t = r.trace, root = t.spans[0], h = el('div', 'entry'); h.style.top = r.y + 'px'; h.style.width = W + 'px';
+      h.innerHTML = `<span class="n">#${t.seq}</span><span class="t">${esc(label(root))}</span><span class="m">${esc(t.startedAt.replace('T', ' ').replace('Z', ''))} · ${fmt(t.durationMs)}${root.http ? ` · HTTP ${root.http.status}` : ''}</span>${t.synthetic ? '<span class="syn">synthetic example: a → b → c → b, a self-call, a failure</span>' : ''}`;
+      body.appendChild(h); continue;
+    }
+    const div = el('div', 'row' + (state.sel === r.span && r.kind !== 'hop' ? ' selected' : '')); div.style.top = r.y + 'px'; div.style.height = r.h + 'px'; div.style.width = W + 'px';
+    div.addEventListener('click', () => select(r.span)); body.appendChild(div);
+    const s = r.span, x1 = r.from ? laneX(r.from) + (r.kind === 'ret' ? s.nest : (s.parent ? s.parent.nest : 0)) * 6 : 10, x2 = r.to ? laneX(r.to) + (r.kind === 'ret' ? (s.parent ? s.parent.nest : 0) : s.nest) * 6 : 10;
+    if (r.kind === 'hop') {
+      const y = r.y + 19; mk('line', { class: 'hop', x1: x1 + 5, y1: y, x2: x2 - 6, y2: y, 'marker-end': 'url(#arr-call)' }, svg);
+      const lbl = el('div', 'lbl'); lbl.style.left = (Math.min(x1, x2) + 14) + 'px'; lbl.style.top = '1px'; lbl.innerHTML = `<span class="m">send</span> <span class="sub">${esc(r.to.name)}</span><span class="tag hop">continues on another thread · +${fmt(r.delay)}</span>`; div.appendChild(lbl); continue;
+    }
+    if (r.kind === 'ret') {
+      const y = r.y + 12, failed = !!s.exception; if (!r.to) { mk('line', { class: 'ret' + (failed ? ' failed' : ''), x1: x1 - 6, y1: y, x2: 16, y2: y, 'marker-end': `url(#arr-${failed ? 'retfail' : 'ret'})` }, svg); }
+      else if (r.from === r.to) mk('path', { class: 'ret' + (failed ? ' failed' : ''), d: `M${x2 + 12},${y - 8} H${x2 + 28} V${y} H${x2 + 10}`, 'marker-end': `url(#arr-${failed ? 'retfail' : 'ret'})` }, svg);
+      else mk('line', { class: 'ret' + (failed ? ' failed' : ''), x1: x1 + (x2 > x1 ? 5 : -5), y1: y, x2: x2 + (x2 > x1 ? -7 : 7), y2: y, 'marker-end': `url(#arr-${failed ? 'retfail' : 'ret'})` }, svg);
+      const note = failed ? `<span class="tag bad">✗ ${esc(s.exception.className.split('.').pop())}</span>` : s.http ? `<span class="tag ${s.http.status < 400 ? 'ok' : 'bad'}">${s.http.status}</span>` : '';
+      if (note) { const rl = el('div', 'rlbl'); rl.style.left = (Math.min(x1, x2) + 14) + 'px'; rl.innerHTML = note; div.appendChild(rl); }
+      continue;
+    }
+    const y = r.y + 24, failed = !!s.exception, self = r.from === r.to;
+    const cls = (r.hop ? 'hop' : 'call') + (failed ? ' failed' : '');
+    if (!r.from) mk('line', { class: cls, x1: 10, y1: y, x2: x2 - 6, y2: y, 'marker-end': `url(#arr-${failed ? 'fail' : 'call'})` }, svg);
+    else if (self) mk('path', { class: cls, d: `M${x1 + 5},${y - 10} H${x1 + 30} V${y} H${x1 + 12}`, 'marker-end': `url(#arr-${failed ? 'fail' : 'call'})` }, svg);
+    else mk('line', { class: cls, x1: x1 + (x2 > x1 ? 5 : -5), y1: y, x2: x2 + (x2 > x1 ? -6 : 6), y2: y, 'marker-end': `url(#arr-${failed ? 'fail' : 'call'})` }, svg);
+    const lbl = el('div', 'lbl'); const lx = Math.min(x1, x2) + (self ? 40 : 14), room = W - DUR_COL - 10 - lx;
+    if (room < 240) { lbl.classList.add('flip'); const right = Math.max(DUR_COL + 10, W - Math.max(x1, x2) + 14); lbl.style.right = right + 'px'; lbl.style.maxWidth = (W - right - 30) + 'px'; } else { lbl.style.left = lx + 'px'; lbl.style.maxWidth = room + 'px'; }
+    const tag = s.remote ? '<span class="tag">REMOTE</span>' : '';
+    const hopTag = r.hop ? `<span class="tag hop">on another thread (${r.hop.kind}) · +${fmt(r.hop.delay)}</span>` : '';
+    lbl.innerHTML = `<span class="m">${esc(s.method)}</span>${r.resource ? `<span class="sub"> · ${esc(r.resource.comp.name)}.${esc(r.resource.method)}</span>` : ''}${tag}${hopTag}`;
+    lbl.title = s.comp.type === 'CLIENT' ? (s.http && s.http.requestBody ? brief(safeJson(s.http.requestBody), 160) : '') : `${s.method}(${s.args.map(a => brief(a, 40)).join(', ')})${s.exception ? ' ✗ ' + s.exception.message : ' → ' + brief(s.result, 80)}`;
+    div.appendChild(lbl); div.appendChild(el('div', 'dur', fmt(s.durMs)));
+  }
+}
+function safeJson(x) { try { return JSON.parse(x); } catch (e) { return x; } }
+function render() { renderLanes(); renderBody(); }
+function select(s) { state.sel = s; renderBody(); renderPanel(); if (s) showWin(); if (s && s.row) { const seq = document.getElementById('seq'); if ((s.row.y - 100) * state.scale < seq.scrollTop || (s.row.y + 60) * state.scale > seq.scrollTop + seq.clientHeight) seq.scrollTo({ top: (s.row.y - 120) * state.scale }); } }
+// ---- the details window: draggable, resizable (native handle), closable ------------------------------
+const win = document.getElementById("win");
+let winDrag = null;
+document.getElementById("win-title").addEventListener("mousedown", ev => { if (ev.target.tagName === "BUTTON") return; const r = win.getBoundingClientRect(); winDrag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top }; ev.preventDefault(); });
+window.addEventListener("mousemove", ev => { if (!winDrag) return; const w = win.offsetWidth, h = win.offsetHeight; win.style.left = Math.max(0, Math.min(window.innerWidth - 60, ev.clientX - winDrag.dx)) + "px"; win.style.top = Math.max(46, Math.min(window.innerHeight - 40, ev.clientY - winDrag.dy)) + "px"; win.style.right = "auto"; });
+window.addEventListener("mouseup", () => { winDrag = null; });
+document.getElementById("win-close").addEventListener("click", () => { win.hidden = true; });
+document.getElementById("btn-details").addEventListener("click", () => { win.hidden = !win.hidden; });
+function showWin() { win.hidden = false; }
+window.addEventListener("resize", render);
+// ---- panel content ---------------------------------------------------------------------------------
+function pretty(v) { const json = JSON.stringify(v, null, 2); return esc(json).replace(/^(\s*)("[^"]+"): /gm, (m, sp, k) => `${sp}<span class="${k === '&quot;@type&quot;' ? 't' : 'k'}">${k}</span>: `).replace(/: (&quot;[^\n]*&quot;)(,?)$/gm, ': <span class="s">$1</span>$2').replace(/: (-?\d[\d.]*|true|false)(,?)$/gm, ': <span class="n">$1</span>$2'); }
+function chainOf(s) { const p = []; for (let x = s; x;) { p.unshift({ span: x }); if (x.parent) x = x.parent; else if (x.trace.cause) { p.unshift({ hop: x.comp.type === 'MDB' ? 'JMS' : '@Asynchronous' }); x = x.trace.cause; } else x = null; } return p; }
+function entryOf(s) { let t = s.trace; while (t.cause) t = t.cause.trace; return t; }
+function renderPanel() {
+  const p = document.getElementById("panel"); p.innerHTML = ""; const s = state.sel;
+  document.getElementById("win-name").textContent = s ? label(s) : "Details";
+  if (!s) {
+    p.appendChild(el("h3", "", "Reading the diagram"));
+    p.appendChild(el('p', 'hint', 'Time runs down. Each lane is one service, grouped under its application. A solid arrow is a call, the dashed arrow under it is its return; the bar between them is how long the service was busy with it. Work that moved to another thread (JMS, @Asynchronous) is drawn right under the call that started it, marked "continues on another thread". Click any call for its input and output.'));
+    p.appendChild(el('h2', '', 'Entry points')); const list = el('div', 'list');
+    for (const t of entries) { const root = t.spans[0], it = el('div', 'item'); it.innerHTML = `<span class="seq">#${t.seq}</span><span class="title">${esc(label(root))}</span><span class="dur">${fmt(t.durationMs)}</span><span class="sub">${esc(t.startedAt.replace('T', ' ').replace('Z', ''))}${root.http ? ' · HTTP ' + root.http.status : ''}${t.synthetic ? ' · synthetic example' : ''}</span>`; it.addEventListener('click', () => select(root)); list.appendChild(it); }
+    p.appendChild(list); return;
+  }
+  const isReq = s.comp.type === 'CLIENT', res = s.row && s.row.resource, k = isReq ? (res ? res.kind : 'CLIENT') : s.kind;
+  const chips = el('div', 'chips');
+  chips.innerHTML = `<span class="chip">${esc(KIND_TEXT[k])}</span>` + (s.comp.app || (res && res.comp.app) ? `<span class="chip">${esc(s.comp.app || res.comp.app)}</span>` : '') + (s.invocation ? `<span class="chip">${esc(s.invocation)}</span>` : '') + (s.tx ? `<span class="chip">tx ${esc(s.tx)}</span>` : '') + (s.http ? `<span class="chip ${s.http.status < 400 ? '' : 'err'}">HTTP ${s.http.status}</span>` : '') + (s.exception ? `<span class="chip err">✗ ${esc(s.exception.className.split('.').pop())}</span>` : '');
+  p.appendChild(chips);
+  p.appendChild(el('h2', '', 'How we got here')); const path = el('div', 'path'); let depth = 0; const e = entryOf(s);
+  path.innerHTML = `<div class="hint">entry point #${e.seq}</div>`;
+  for (const step of chainOf(s)) { if (step.hop) { path.innerHTML += `<div style="padding-left:${depth * 14}px"><span class="hopl">↓ another thread (${step.hop})</span></div>`; continue; } path.innerHTML += `<div style="padding-left:${depth * 14}px">${depth ? '↳ ' : ''}${step.span === s ? '<b>' + esc(label(step.span)) + '</b>' : esc(label(step.span))}</div>`; depth++; }
+  p.appendChild(path);
+  p.appendChild(el('h2', '', 'Facts')); const facts = el('dl', 'facts'); const f = []; const fact = (kk, v) => { if (v) f.push(`<dt>${esc(kk)}</dt><dd>${esc(v)}</dd>`); };
+  fact('duration', fmt(s.durMs)); fact('started', `${fmt(s.startMs - s.trace.spans[0].startMs)} into ${s.trace.cause ? 'its thread' : 'the request'}`); fact('thread', `ExecuteThread ${s.thread}`); fact('signature', s.signature || (res && res.signature)); fact('interface', s.iface); fact('request', s.http && `${s.http.method} ${s.http.path}`); if (res) fact('resource method', label(res));
+  facts.innerHTML = f.join(''); p.appendChild(facts);
+  if (s.exception) { p.appendChild(el('h2', '', 'Exception')); const ex = el('div', 'ex'); ex.innerHTML = `<b>${esc(s.exception.className)}</b><br>${esc(s.exception.message || '')}`; p.appendChild(ex); }
+  p.appendChild(el('h2', '', 'Input'));
+  if (isReq) { const pre = el('pre', 'val'); pre.innerHTML = s.http && s.http.requestBody ? pretty(safeJson(s.http.requestBody)) : '<span class="t">no request body</span>'; p.appendChild(pre); }
+  else if (!s.args.length) p.appendChild(el('p', 'hint', 'no arguments'));
+  else s.args.forEach((a, i) => { const h = el('div', 'val-h'); h.innerHTML = `<span>argument ${i}</span><code>${esc(a && a['@type'] ? a['@type'] : typeof a)}</code>`; p.appendChild(h); const pre = el('pre', 'val'); pre.innerHTML = pretty(a); p.appendChild(pre); });
+  p.appendChild(el('h2', '', 'Output'));
+  if (isReq) { const pre = el('pre', 'val'); pre.innerHTML = s.http && s.http.responseBody ? pretty(safeJson(s.http.responseBody)) : '<span class="t">no response body</span>'; p.appendChild(pre); }
+  else if (s.exception) p.appendChild(el('p', 'hint', 'none: the call threw'));
+  else { const pre = el('pre', 'val'); pre.innerHTML = s.result === null ? '<span class="t">void / null</span>' : pretty(s.result); p.appendChild(pre); }
+  if (s.spawns) { p.appendChild(el('h2', '', 'Continued on another thread')); for (const c of s.spawns) { const a = el('a', '', `↓ ${label(c.spans[0])} (${c.spans[0].queue ? 'JMS' : '@Asynchronous'}, +${fmt(Date.parse(c.startedAt) - Date.parse(s.trace.startedAt))})`); a.style.cssText = 'display:block;cursor:pointer;color:var(--ejb);margin:2px 0'; a.addEventListener('click', () => select(c.spans[0])); p.appendChild(a); } }
+}
+document.getElementById('title').textContent = 'unnamed · rec-20261023-221155';
+document.getElementById('meta').textContent = `${entries.length} entry points · ${traces.length} threads of work · ${traces[0].startedAt.replace('T', ' ')} → +${fmt(Math.max(...traces.map(t => Date.parse(t.startedAt) + t.durationMs)) - Date.parse(traces[0].startedAt))} · AdminServer`;
+render(); renderPanel();
+const want = /^#s=(\d+)\.(\d+)/.exec(location.hash); if (want) select(DATA[Number(want[1]) - 1].spans[Number(want[2])]);
+</script>
+</body>
+</html>

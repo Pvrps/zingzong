@@ -58,19 +58,25 @@ mvn capture:start   -Dcapture.domain=/path/to/domain
    the state is *ready*. The home view lists all recordings under the output directory,
    newest first, with a REC marker on the active one and a **Delete** per finished recording
    (confirmed inline; it removes the directory). Clicking a recording opens three panes:
-   the traces grouped by HTTP session (a trace started on another thread by `@Asynchronous`
-   or JMS sits indented under the trace that caused it), the **call flow** of the selected
-   trace, and the selected call in full. The flow is a chart: one card per call, callers on
-   the left, callees to the right in call order, elbow arrows between them; a dashed amber
-   arrow is a REMOTE call and the card names the EAR it entered, a dashed violet card is a
-   trace this call started on another thread (click it to follow). Every card shows its
-   duration and where it sat in the trace's time. A card's `▾ n` folds the calls below it;
-   four or more consecutive calls of the same method that called nothing further and did not
-   fail are drawn as one `×N` card, which expands to the individual calls on click (nothing
-   is dropped; the card says what it stands for). The call pane shows the facts, then
-   Arguments, Result, Exception and HTTP sections with the values as captured, markers
-   highlighted, and lineage links to where a value came from or went. While a recording is
-   active the page refreshes once a second and new traces appear as they land.
+   (confirmed inline; it removes the directory). Clicking a recording opens it as one
+   continuous **sequence diagram**: a lane per component that took part (REST and SOAP
+   resources, session beans with their type, message-driven beans, JMS queues, data sources),
+   grouped under their application; time runs down. Each entry point (a request, or any work
+   nothing in the recording caused) is a heading; under it every call is a solid arrow from
+   caller to callee and a dashed arrow back when it returns, the bar between them being how
+   long the callee was busy; the HTTP status rides on the return to the client, a failure is a
+   red return with the exception. Work that continued on another thread (`@Asynchronous`, JMS)
+   is drawn right under the call that started it, marked "continues on another thread", so an
+   MDB's `onMessage` sits under the request that produced the message. SQL through a data
+   source is a call into the data source's lane, labelled with the statement, returning the
+   rows read or the update count. Four or more consecutive identical calls that called nothing
+   further and did not fail are one `×N` row until you draw them one by one; nothing is
+   dropped. The diagram always fits the window width (it scales down when the lanes need
+   more). Clicking a call opens the **details window** (draggable, resizable, closable): how we
+   got here, facts, then Arguments, Result, Exception, HTTP, SQL with parameters and result,
+   the values as captured with markers highlighted and lineage links to where a value came from
+   or went. While a recording is active the page refreshes once a second and new work appears
+   as it completes.
 
 Parameters, all `-D`: `capture.domain` (required), `capture.port` (default 8077),
 `capture.out` (default `~/.ejb-capture/<domain directory name>`). There are no others; the
@@ -106,7 +112,9 @@ the application runs as before and no new trace files appear.
 
 One directory per recording (`rec-<timestamp>`), one JSON file per trace, written when the
 trace's root call completes, plus one manifest per server. Every argument, result, exception,
-HTTP header and body is recorded as it crossed the boundary: no masking, no allow-lists.
+HTTP header and body is recorded as it crossed the boundary, and so is every SQL statement
+executed through a data source (which data source, the statement, its bound parameters, the
+update count or the rows read): no masking, no allow-lists.
 Cycles become `@ref`, unloaded lazy collections `@lazy`, runtime handles `@handle`, objects
 that are not serializable are marked `@serializable: false`, and any safety ceiling that is
 hit leaves a `@truncated` marker with counts. The page highlights all of these.

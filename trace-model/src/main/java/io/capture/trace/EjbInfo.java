@@ -10,6 +10,8 @@ public class EjbInfo {
 
     public static final String INVOCATION_LOCAL = "LOCAL";
     public static final String INVOCATION_REMOTE = "REMOTE";
+    /** A message-driven bean: delivered by the container from a destination, no client view. */
+    public static final String INVOCATION_MESSAGE = "MESSAGE";
 
     public String app;
     public String module;
@@ -19,9 +21,11 @@ public class EjbInfo {
     /** The business interface the call came in through, when known. JSON key: "interface". */
     @JsonProperty("interface")
     public String interfaceName;
-    /** LOCAL or REMOTE, when known. */
+    /** LOCAL, REMOTE or MESSAGE, when known. */
     public String invocation;
     public List<String> jndiNames;
+    /** For a message-driven bean: the destination it listens on, as configured. */
+    public String destination;
     public String method;
     /** Java-style signature: "ReturnType name(ParamType, ...)" with fully qualified names. */
     public String signature;

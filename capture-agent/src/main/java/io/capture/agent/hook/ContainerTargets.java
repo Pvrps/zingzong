@@ -9,13 +9,19 @@ package io.capture.agent.hook;
  */
 public final class ContainerTargets {
 
-    /** One verified shape of the container: the static {@code invoke(Invokable, BaseXObject, InvocationWrapper, Object[], int)} pair. */
+    /**
+     * One verified shape of the container: the static
+     * {@code invoke(Invokable, BaseXObject, InvocationWrapper, Object[], int)} pair for session
+     * beans, and the listener whose {@code onMessage(javax.jms.Message)} every MDB delivery passes.
+     */
     public static final class Target {
         public final String versions;
         public final String[] invokers;
+        public final String messageListener;
 
-        Target(String versions, String... invokers) {
+        Target(String versions, String messageListener, String... invokers) {
             this.versions = versions;
+            this.messageListener = messageListener;
             this.invokers = invokers;
         }
     }
@@ -23,6 +29,7 @@ public final class ContainerTargets {
     /** Newest first. 12.2.1.4.0 and 14.1.2.0.0 share one shape (same classes, methods, even line numbers). */
     static final Target[] KNOWN = {
             new Target("WebLogic 12.2.1.4.0 and 14.1.2.0.0",
+                    "weblogic.ejb.container.internal.MDListener",
                     "weblogic.ejb.container.internal.SessionLocalMethodInvoker",
                     "weblogic.ejb.container.internal.SessionRemoteMethodInvoker"),
     };
@@ -33,7 +40,7 @@ public final class ContainerTargets {
     /** The target whose classes this JVM can resolve, or null (then: annotation hook). */
     public static Target resolve() {
         for (Target target : KNOWN) {
-            boolean all = true;
+            boolean all = resolvable(target.messageListener);
             for (String name : target.invokers) {
                 all &= resolvable(name);
             }
@@ -46,6 +53,9 @@ public final class ContainerTargets {
 
     static boolean isNamedInvoker(String typeName) {
         for (Target target : KNOWN) {
+            if (typeName.equals(target.messageListener)) {
+                return true;
+            }
             for (String name : target.invokers) {
                 if (name.equals(typeName)) {
                     return true;

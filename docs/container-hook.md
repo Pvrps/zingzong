@@ -218,3 +218,44 @@ The rule is "a subclass of `weblogic.utils.classloaders.*`"; the first two are w
 and 14.1.2.0.0 use for deployed modules (WebLogic also loads each application class in an
 analysis loader of the same kind before the real one, which is why the same class is logged as
 instrumented twice per install on 14.1.2).
+
+## Message-driven beans and thread handoffs (both versions)
+
+### MDB choke point (`MessageAdvice`)
+
+`jcmd <pid> Thread.print` while `OrderEventListener.onMessage` slept (`confirmedBy=dump`), 14.1.2.0.0;
+`javap` shows the same members in 12.2.1.4.0:
+
+```
+com.acme.notify.OrderEventListener.onMessage(OrderEventListener.java:33)
+jdk.proxy9.$Proxy261.onMessage
+weblogic.ejb.container.internal.MDListener.execute(MDListener.java:459)
+weblogic.ejb.container.internal.MDListener.transactionalOnMessage(MDListener.java:370)
+weblogic.ejb.container.internal.MDListener.onMessage(MDListener.java:306)          <- hooked
+weblogic.jms.client.JMSSession.onMessage(JMSSession.java:5172)
+weblogic.work.SelfTuningWorkManagerImpl$WorkAdapterImpl.run
+```
+
+| member | gives |
+| --- | --- |
+| `public void MDListener.onMessage(javax.jms.Message)` | the advised method; the message is its argument |
+| `MDListener.info` (private final `MessageDrivenBeanInfo`) → `getBeanClassName()`, `getClassLoader()`, `getDestinationName()` | the bean class in its own loader; `ejb.destination` |
+| runtime MBean `com.bea:Type=MessageDrivenEJBRuntime,Name=<ejb>_<destination>,...` with attribute `EJBName` | app and module: the MBean is named per destination, so `WlsMetadata` matches on the attribute when the name key misses |
+
+`execute(boolean)` and `transactionalOnMessage(Message, boolean)` are package-private and would
+do too; `onMessage` is the public entry and the one that sees every delivery. MDBs have no client
+view: `ejb.invocation` is `MESSAGE`, `ejb.interface` is `javax.jms.MessageListener`, `jndiNames` is
+absent.
+
+### WorkContext (`WlsWorkContextPropagation`)
+
+`weblogic.workarea.WorkContextHelper.getWorkContextHelper().getWorkContextMap()` →
+`WorkContextMap.put(String, WorkContext, int)` / `get(String)` / `remove(String)`,
+`PrimitiveContextFactory.create(String)`, `PrimitiveWorkContext.get()` (`com.bea.core.workarea.jar`).
+The agent's key is `io.capture.trace`, value `<traceId>/<spanId>`, updated at every span push and
+pop, removed when the trace ends. Propagation mode: `LOCAL | WORK | RMI | JMS_QUEUE | JMS_TOPIC |
+SOAP | MIME_HEADER` composed from the named constants, because on both versions
+`PropagationMode.GLOBAL == DEFAULT == 212`, which leaves out `WORK` (2), the flag that follows a
+work-manager handoff; with GLOBAL the `@Asynchronous` worker saw nothing while the MDB did.
+Verified handoffs: `@Asynchronous` (`AsyncExecutor.run` under `weblogic.work.WorkAreaContextWrap.run`)
+and JMS to an MDB in the same server. RMI is in the mode but not verified across servers.

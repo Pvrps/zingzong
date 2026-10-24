@@ -23,18 +23,20 @@ final class TraceBuilder {
     final long startNanos;
     final long startedAtMillis;
     final String parentTraceId;
+    final String parentSpanId;
     private final List<Span> spans = new ArrayList<Span>();
     private int nextOrder;
     private String principal;
     private String httpSessionId;
     private long endNs;
 
-    TraceBuilder(Recording recording, long startNanos, String parentTraceId) {
+    TraceBuilder(Recording recording, long startNanos, String parentTraceId, String parentSpanId) {
         this.recording = recording;
         this.id = "t-" + UUID.randomUUID().toString().substring(0, 8);
         this.startNanos = startNanos;
         this.startedAtMillis = System.currentTimeMillis();
         this.parentTraceId = parentTraceId;
+        this.parentSpanId = parentSpanId;
     }
 
     int nextOrder() {
@@ -75,6 +77,7 @@ final class TraceBuilder {
         trace.trace.httpSessionId = httpSessionId;
         trace.trace.serverName = WlsRuntime.serverName();
         trace.trace.parentTraceId = parentTraceId;
+        trace.trace.parentSpanId = parentSpanId;
         List<TraceInfo.Deployment> deployments = WlsMetadata.deployments();
         trace.trace.deployments = deployments.isEmpty() ? null : new ArrayList<TraceInfo.Deployment>(deployments);
         List<Span> ordered = new ArrayList<Span>(spans);

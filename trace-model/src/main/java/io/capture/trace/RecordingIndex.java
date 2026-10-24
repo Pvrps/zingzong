@@ -26,6 +26,7 @@ public class RecordingIndex {
         public String principal;
         public String httpSessionId;
         public String parentTraceId;
+        public String parentSpanId;
         public String rootKind;
         /** "OrderServiceBean.createOrder" or "POST /orders/api/orders". */
         public String rootLabel;

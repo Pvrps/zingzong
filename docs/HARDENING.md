@@ -56,3 +56,41 @@ self-tuning pool served the 8 clients on 2–3 threads, one request after anothe
 2-second calls took 8 s). The lab start script now sets `-Dweblogic.threadpool.MinPoolSize=16`
 so the pool starts wide; with it the same 8 calls take 2.5 s. The checker counts distinct
 threads so a serialised run cannot pass as evidence again.
+
+## 2. Async and messaging
+
+**Added**: `OrderService.notifyAsync` (`@Asynchronous`, called by `confirmOrder` through the
+bean's own local view) and `notify-ear`: `OrderEventListener`, an MDB on `jms/OrderEvents`
+that hands each event to a stateless `NotificationService`; `confirmOrder` publishes a
+`TextMessage` to that queue. Domain side: `scripts/jms-resources.py` (an XA connection factory
+`jms/OrdersCF`, the queue, a JMS server), `wls-domain --add-jms` for existing domains, and the
+data source on `EmulateTwoPhaseCommit` (one-phase cannot commit with the XA send; H2 rejects
+LLR's table name).
+
+**What the agent did, before**: three unrelated traces per Confirm. `notifyAsync` a root of its
+own on a work-manager thread, `NotificationService.record` a root on a JMS thread, and the MDB's
+`onMessage` not captured at all: message delivery does not pass the session invokers.
+
+**What changed**:
+- `MDListener.onMessage(Message)` is the third container choke point (`MessageAdvice`,
+  `ContainerTargets`); an MDB span has `invocation: MESSAGE`, `interface:
+  javax.jms.MessageListener`, `destination`, and its runtime MBean is found by the `EJBName`
+  attribute (the MBean is named `<ejb>_<destination>`).
+- A `javax.jms.Message` argument is recorded as its API view (`JmsMessages`: headers,
+  properties, text / map / object body; a bytes or stream body is not read because reading
+  consumes it, which is marked). This is the serializer's one use of getters, documented there:
+  the vendor object's fields describe the session, not the payload.
+- `TracePropagation` is implemented over WebLogic's WorkContext (`WlsWorkContextPropagation`):
+  the active span is published on every push/pop, removed at trace end, and a span opening on
+  an empty stack with the key present records `parentTraceId` / `parentSpanId`. The first run
+  linked only the MDB: `PropagationMode.GLOBAL` (212) omits `WORK`, so the `@Asynchronous`
+  worker got no context until the mode was composed from the named flags.
+- Reader and page: a child trace joins its parent's lane after the parent, marked `↳` with a
+  "caused by #4 / s3" link; the causing span's pane lists "handed off to another thread: #3
+  notifyAsync · #5 OrderEventListener.onMessage"; a child's root says what caused it.
+
+After (`rec-20261023-213036`): Confirm yields `#4 POST …/confirm → confirmOrder (s3)`,
+`↳#3 OrderService.notifyAsync` and `↳#5 OrderEventListener.onMessage → NotificationService.record`,
+both with `parentTraceId = t(#4)`, `parentSpanId = s3`, the message view carrying
+`{"orderId":143699,"event":"CONFIRMED","by":"ann"}` with its JMS headers and properties.
+Cross-server handoffs stay out of scope (`docs/trace-propagation.md`).

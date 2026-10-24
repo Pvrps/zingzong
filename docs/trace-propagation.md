@@ -1,3 +1,8 @@
+> **Status**: the in-JVM part is implemented (hardening item 2, `WlsWorkContextPropagation`):
+> `@Asynchronous` calls and JMS deliveries to MDBs within one server carry `parentTraceId` and
+> `parentSpanId`, the page draws them under the causing trace. Cross-server propagation (T3 to
+> another server, JMS across servers) remains the design below, unimplemented and unverified.
+
 # Cross-server trace propagation (design, not yet implemented)
 
 Status: designed in Phase 3, scheduled last (PLAN.md, Phase 3 step 6). The agent exposes the

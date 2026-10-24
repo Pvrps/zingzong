@@ -38,6 +38,9 @@ final class OpenSpan {
     final String interfaceName;
     final String invocation;
     final String transactionAttribute;
+    /** Message-driven bean spans: the destination, and the resolved onMessage (set after construction). */
+    String destination;
+    MethodSignatures.MethodInfo methodInfo;
 
     OpenSpan(String id, OpenSpan parent, int order, String kind, String layer, String beanClass, String method,
              long startNs, long enteredAtNanos, Object http, Object container,
@@ -100,6 +103,7 @@ final class OpenSpan {
             span.ejb.interfaceName = interfaceName;
             span.ejb.invocation = invocation;
             span.ejb.transactionAttribute = transactionAttribute;
+            span.ejb.destination = destination;
             if (meta != null) {
                 span.app = meta.app;
                 span.module = meta.module;

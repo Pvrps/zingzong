@@ -1,32 +1,42 @@
 package io.capture.agent.span;
 
 /**
- * Extension point for cross-server trace stitching (T3 remote calls, JMS). Not implemented
- * yet; see docs/trace-propagation.md for the design. {@link SpanStack} calls it at the two
- * places where a trace id enters or leaves a thread.
+ * Carries "which trace and span caused this" across a thread handoff inside one server:
+ * an {@code @Asynchronous} call, a JMS message consumed by an MDB. {@link SpanStack} calls
+ * {@link #publish} whenever the active span changes and {@link #clear} when the trace ends;
+ * a span opening on an empty stack asks {@link #inbound} and, when something is there,
+ * the new trace records it as {@code parentTraceId} / {@code parentSpanId}.
+ * Cross-server propagation is out of scope; see docs/trace-propagation.md.
  */
 public interface TracePropagation {
 
-    /**
-     * Called when a span opens on an empty stack. Returns a trace id carried in from another
-     * server (via WorkContext) that this new trace should reference as parentTraceId, or null.
-     */
-    String inboundTraceId();
+    /** What a handoff carried in: trace id and causing span id, or null. */
+    final class Inbound {
+        public final String traceId;
+        public final String spanId;
 
-    /** Called once a root span has opened a trace: make the id visible to outbound calls. */
-    void publish(String traceId);
+        public Inbound(String traceId, String spanId) {
+            this.traceId = traceId;
+            this.spanId = spanId;
+        }
+    }
 
-    /** Called when the trace completes on this thread. */
+    Inbound inbound();
+
+    /** The active span of the thread's trace changed (a push or a pop): make it visible to handoffs. */
+    void publish(String traceId, String spanId);
+
+    /** The trace completed on this thread. */
     void clear();
 
     TracePropagation NONE = new TracePropagation() {
         @Override
-        public String inboundTraceId() {
+        public Inbound inbound() {
             return null;
         }
 
         @Override
-        public void publish(String traceId) {
+        public void publish(String traceId, String spanId) {
         }
 
         @Override

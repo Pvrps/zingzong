@@ -134,7 +134,7 @@ public final class ContainerInvocation {
         }
     }
 
-    static Object call(Object target, String getter) {
+    public static Object call(Object target, String getter) {
         if (target == null) {
             return null;
         }
@@ -147,7 +147,7 @@ public final class ContainerInvocation {
         }
     }
 
-    static Object fieldUp(Object target, String name) {
+    public static Object fieldUp(Object target, String name) {
         for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
             try {
                 Field f = c.getDeclaredField(name);

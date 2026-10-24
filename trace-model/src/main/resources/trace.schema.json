@@ -34,6 +34,7 @@
         "httpSessionId": { "type": ["string", "null"] },
         "serverName": { "type": ["string", "null"] },
         "parentTraceId": { "type": ["string", "null"] },
+        "parentSpanId": { "type": ["string", "null"] },
         "deployments": {
           "type": "array",
           "items": {
@@ -112,6 +113,7 @@
         "interface": { "type": "string" },
         "invocation": { "type": "string", "enum": ["LOCAL", "REMOTE"] },
         "jndiNames": { "type": "array", "items": { "type": "string" } },
+        "destination": { "type": "string" },
         "method": { "type": "string" },
         "signature": { "type": "string" },
         "transactionAttribute": { "type": "string" }

@@ -44,6 +44,11 @@ public final class Recorder {
     private static volatile GraphSerializer serializer = new JacksonGraphSerializer(serializerConfig);
     private static volatile TraceWriter writer;
     private static volatile TracePropagation propagation = TracePropagation.NONE;
+
+    /** How traces link across threads of this server; WebLogic's WorkContext when present. */
+    public static void propagation(TracePropagation tracePropagation) {
+        propagation = tracePropagation;
+    }
     private static volatile InstrumentationHook hook = InstrumentationHook.NONE;
     private static final AtomicBoolean containerWarned = new AtomicBoolean();
 
@@ -259,6 +264,75 @@ public final class Recorder {
                 AgentLog.error("container exit handling failed", t);
             } catch (Throwable ignored) {
                 // never into the business call
+            }
+        }
+    }
+
+
+    // ---- message-driven beans ----------------------------------------------------------------
+
+    /**
+     * Container hook, {@code MDListener.onMessage}: the listener's {@code MessageDrivenBeanInfo}
+     * names the bean class (in its own loader) and the destination; the message is the argument.
+     */
+    public static long enterMessage(Object listener, Object message) {
+        Recording recording = ACTIVE.get();
+        if (recording == null) {
+            return 0L;
+        }
+        try {
+            Object info = ContainerInvocation.fieldUp(listener, "info");
+            String className = info == null ? null : String.valueOf(ContainerInvocation.call(info, "getBeanClassName"));
+            ClassLoader loader = info == null ? null : (ClassLoader) ContainerInvocation.call(info, "getClassLoader");
+            if (className == null || loader == null) {
+                if (containerWarned.compareAndSet(false, true)) {
+                    AgentLog.warn("message hook: listener not recognised (" + describe(listener) + "); delivery not recorded");
+                }
+                return 0L;
+            }
+            Class<?> bean = Class.forName(className, false, loader);
+            SpanStack stack = SpanStack.current();
+            boolean root = stack.isEmpty();
+            String principal = root ? WlsRuntime.principal() : null;
+            BeanMeta meta = WlsMetadata.of(bean);
+            Object destination = ContainerInvocation.call(info, "getDestinationName");
+            MethodSignatures.MethodInfo onMessage = MethodSignatures.resolve(bean, "onMessage", "(Ljavax/jms/Message;)V");
+            String txAttribute = EjbAnnotations.transactionAttribute(bean, onMessage.method);
+            long now = System.nanoTime();
+            OpenSpan span = stack.push(recording, Span.KIND_EJB, null, bean.getName(), "onMessage", now, null, message, meta,
+                    "javax.jms.MessageListener", io.capture.trace.EjbInfo.INVOCATION_MESSAGE, txAttribute, propagation);
+            span.destination = destination == null ? null : destination.toString();
+            span.methodInfo = onMessage;
+            if (root) {
+                stack.trace().principal(principal);
+            }
+            return now == 0L ? 1L : now;
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    public static void exitMessage(long token, Object message, Throwable thrown) {
+        if (token == 0L) {
+            return;
+        }
+        try {
+            SpanStack stack = SpanStack.current();
+            OpenSpan open = stack.top();
+            if (open == null || open.container != message) {
+                stack.reset();
+                return;
+            }
+            long durationNs = System.nanoTime() - open.enteredAtNanos;
+            Span span = open.toSpan(durationNs);
+            fill(span, open.methodInfo, new Object[]{message}, null, thrown);
+            complete(stack, span);
+        } catch (Throwable t) {
+            try {
+                SpanStack.current().reset();
+                AgentLog.error("message exit handling failed", t);
+            } catch (Throwable ignored) {
+                // never into the delivery
             }
         }
     }

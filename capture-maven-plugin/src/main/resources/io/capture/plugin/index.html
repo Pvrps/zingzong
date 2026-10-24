@@ -29,6 +29,9 @@
   .trace .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .trace .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
   .trace .sub { grid-column: 2 / 4; color: var(--muted); font-size: 11px; }
+  .trace.child { margin-left: 14px; border-left: 2px solid #f6ad55; }
+  .trace .cause, .spawned a { color: #7b341e; text-decoration: underline; cursor: pointer; }
+  .spawned { margin: 6px 0; font: 12px system-ui, sans-serif; background: var(--badge); border: 1px solid var(--badge-line); border-radius: 3px; padding: 2px 6px; display: inline-block; }
 
   /* tree */
   .node { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; white-space: nowrap; border: 1px solid transparent; }
@@ -391,11 +394,20 @@ function renderLanes() {
     for (const id of session.traceIds) {
       const t = byId.get(id);
       if (!t) continue;
-      const row = el('div', 'trace');
+      const row = el('div', 'trace' + (t.parentTraceId ? ' child' : ''));
       row.dataset.trace = id;
-      row.innerHTML = `<span class="seq">#${t.seq}</span><span class="label">${esc(t.rootLabel || '?')}</span><span class="dur">${t.durationMs} ms</span>` +
+      const parent = t.parentTraceId ? byId.get(t.parentTraceId) : null;
+      row.innerHTML = `<span class="seq">${t.parentTraceId ? '↳' : ''}#${t.seq}</span><span class="label">${esc(t.rootLabel || '?')}</span><span class="dur">${t.durationMs} ms</span>` +
         `<span class="sub">${esc(t.startedAt || '')}${t.principal ? ' · ' + esc(t.principal) : ''}${t.failed ? ' · <span class="badge err">failed</span>' : ''}` +
-        `${t.warningCount ? ' · ' + t.warningCount + ' warning' + (t.warningCount === 1 ? '' : 's') : ''}${t.parentTraceId ? ' · child of ' + esc(t.parentTraceId) : ''}</span>`;
+        `${t.warningCount ? ' · ' + t.warningCount + ' warning' + (t.warningCount === 1 ? '' : 's') : ''}</span>`;
+      if (t.parentTraceId) {
+        const sub = row.querySelector('.sub');
+        sub.appendChild(document.createTextNode(' · caused by '));
+        const a = el('a', 'cause', `${parent ? '#' + parent.seq : t.parentTraceId}${t.parentSpanId ? ' / ' + t.parentSpanId : ''}`);
+        a.title = `${t.parentTraceId}${t.parentSpanId ? ' / ' + t.parentSpanId : ''}: the span that handed this work to another thread`;
+        a.addEventListener('click', (e) => { e.stopPropagation(); if (parent) jumpTo(t.parentTraceId, t.parentSpanId || rootOf(t.parentTraceId)); });
+        sub.appendChild(a);
+      }
       row.title = `${t.id} · ${t.spanCount} spans`;
       row.addEventListener('click', () => selectTrace(id));
       lane.appendChild(row);
@@ -544,6 +556,29 @@ function renderDetail(focusPath) {
   const head = el('div', 'detail-head');
   head.innerHTML = `<b>${esc(spanLabel(span))}</b> <span class="path">${esc(trace.trace.id)} / ${esc(span.id)}</span>`;
   body.appendChild(head);
+  // Thread handoffs: what this span caused on other threads, and (for a root) what caused it.
+  const spawned = state.index.traces.filter(t => t.parentTraceId === trace.trace.id && (t.parentSpanId || rootOf(trace.trace.id)) === span.id);
+  if (spawned.length) {
+    const box = el('div', 'spawned');
+    box.appendChild(document.createTextNode('→ handed off to another thread: '));
+    spawned.forEach((t, i) => {
+      if (i) box.appendChild(document.createTextNode(' · '));
+      const a = el('a', '', `#${t.seq} ${t.rootLabel}`);
+      a.addEventListener('click', () => jumpTo(t.id, rootOf(t.id)));
+      box.appendChild(a);
+    });
+    body.appendChild(box);
+  }
+  if (span.parentId == null && trace.trace.parentTraceId) {
+    const parent = state.index.traces.find(t => t.id === trace.trace.parentTraceId);
+    const box = el('div', 'spawned');
+    box.appendChild(document.createTextNode('← caused by '));
+    const a = el('a', '', parent ? `#${parent.seq} ${parent.rootLabel} / ${trace.trace.parentSpanId || 'root'}` : trace.trace.parentTraceId);
+    if (parent) a.addEventListener('click', () => jumpTo(parent.id, trace.trace.parentSpanId || rootOf(parent.id)));
+    box.appendChild(a);
+    box.appendChild(document.createTextNode(' on another thread (@Asynchronous or JMS within this server)'));
+    body.appendChild(box);
+  }
   const json = el('div', 'json');
   const badges = lineageBadges(trace.trace.id, span.id);
   renderValue(json, span, '', 0, badges);

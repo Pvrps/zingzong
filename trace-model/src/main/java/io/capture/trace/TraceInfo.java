@@ -16,6 +16,8 @@ public class TraceInfo {
     public String serverName;
     /** Set when the trace was started by a span carrying a foreign trace id (cross-server). */
     public String parentTraceId;
+    /** The span of that trace that was active when the handoff happened. */
+    public String parentSpanId;
     public List<Deployment> deployments;
 
     /** An application deployed on the server, from the domain configuration: where its EAR/WAR lives. */

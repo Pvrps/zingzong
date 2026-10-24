@@ -25,6 +25,7 @@ deploy_dir="$LOCAL_DIR/deploy$WLS_LOG_SUFFIX"
 apps=(
   "tax-ear:$deploy_dir/tax-ear.ear"
   "orders-ear:$deploy_dir/orders-ear.ear"
+  "notify-ear:$deploy_dir/notify-ear.ear"
 )
 
 deployer() {
@@ -38,12 +39,12 @@ if [ "$build" = "1" ]; then
   log "building sample apps"
   profile=""; [ "$WLS_VERSION" = "12" ] && profile="-Pjava8"
   # clean: switching the target release between the two labs does not invalidate compiled classes otherwise
-  (cd "$DEVENV_ROOT" && mvn -q $profile -pl sample-apps/orders-ear/orders-ear,sample-apps/tax-ear/tax-ear -am clean package -DskipTests)
+  (cd "$DEVENV_ROOT" && mvn -q $profile -pl sample-apps/orders-ear/orders-ear,sample-apps/tax-ear/tax-ear,sample-apps/notify-ear/notify-ear -am clean package -DskipTests)
 fi
 
 if [ "$undeploy" = "0" ]; then
   mkdir -p "$deploy_dir"
-  for ear in tax-ear orders-ear; do
+  for ear in tax-ear orders-ear notify-ear; do
     built="$DEVENV_ROOT/sample-apps/$ear/$ear/target/$ear.ear"
     [ -f "$built" ] || die "missing $built; run without --no-build"
     cp "$built" "$deploy_dir/$ear.ear"

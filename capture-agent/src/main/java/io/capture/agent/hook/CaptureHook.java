@@ -106,8 +106,15 @@ public final class CaptureHook implements InstrumentationHook {
         return typeName.equals(FILTER_CHAIN) || typeName.equals(SERVLET_STUB) || ContainerTargets.isNamedInvoker(typeName);
     }
 
+    /** The container classes this hook advises for EJBs: the session invokers and the MDB listener. */
     private String[] invokers() {
-        return target == null ? new String[0] : target.invokers;
+        if (target == null) {
+            return new String[0];
+        }
+        String[] all = new String[target.invokers.length + 1];
+        System.arraycopy(target.invokers, 0, all, 0, target.invokers.length);
+        all[target.invokers.length] = target.messageListener;
+        return all;
     }
 
     @Override
@@ -259,12 +266,16 @@ public final class CaptureHook implements InstrumentationHook {
                             .include(ClassLoader.getSystemClassLoader())
                             .advice(businessMethods, EjbAdvice.class.getName()));
         } else {
-            for (String invoker : invokers()) {
+            for (String invoker : target.invokers) {
                 builder = builder.type(named(invoker))
                         .transform(new AgentBuilder.Transformer.ForAdvice()
                                 .include(ClassLoader.getSystemClassLoader())
                                 .advice(named("invoke").and(isStatic()).and(takesArguments(5)), ContainerAdvice.class.getName()));
             }
+            builder = builder.type(named(target.messageListener))
+                    .transform(new AgentBuilder.Transformer.ForAdvice()
+                            .include(ClassLoader.getSystemClassLoader())
+                            .advice(named("onMessage").and(not(isStatic())).and(takesArguments(1)), MessageAdvice.class.getName()));
         }
         return builder
                 .type(ownedBy(resourceTypes, "resource"))

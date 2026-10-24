@@ -12,8 +12,8 @@ import java.util.Deque;
  * (local EJB calls, and WebLogic's same-server remote path) form the tree naturally.
  *
  * Cross-server stitching hooks in through {@link TracePropagation}: an inbound trace id on
- * an empty stack becomes {@code parentTraceId}, and a newly opened trace id is published
- * for outbound calls. See docs/trace-propagation.md.
+ * an empty stack becomes {@code parentTraceId}/{@code parentSpanId}, and the active span is published
+ * for handoffs to other threads. See docs/trace-propagation.md.
  */
 final class SpanStack {
 
@@ -65,18 +65,18 @@ final class SpanStack {
             // New trace: either nothing is open, or the recording changed under an open stack
             // (start/stop mid-call); the stale spans are abandoned.
             open.clear();
-            // EXTENSION POINT (cross-server stitching, docs/trace-propagation.md): a trace id
-            // carried in by WorkContext becomes parentTraceId; our id is published for
-            // outbound T3/JMS calls. TracePropagation.NONE until Phase 3 step 6 is implemented.
-            String inbound = propagation.inboundTraceId();
-            trace = new TraceBuilder(recording, nowNanos, inbound);
-            propagation.publish(trace.id);
+            // A handoff from another thread of this server (@Asynchronous, JMS to an MDB) carries
+            // the causing trace and span in: docs/trace-propagation.md.
+            TracePropagation.Inbound inbound = propagation.inbound();
+            trace = new TraceBuilder(recording, nowNanos, inbound == null ? null : inbound.traceId,
+                    inbound == null ? null : inbound.spanId);
         }
         OpenSpan parent = open.peek();
         int order = trace.nextOrder();
         OpenSpan span = new OpenSpan(trace.spanId(order), parent, order, kind, layer, beanClass, method,
                 nowNanos - trace.startNanos, nowNanos, http, container, meta, interfaceName, invocation, transactionAttribute);
         open.push(span);
+        propagation.publish(trace.id, span.id);
         return span;
     }
 
@@ -91,6 +91,7 @@ final class SpanStack {
         open.pop();
         trace.add(completed);
         if (!open.isEmpty()) {
+            propagation.publish(trace.id, open.peek().id);
             return null;
         }
         Trace finished = trace.build();

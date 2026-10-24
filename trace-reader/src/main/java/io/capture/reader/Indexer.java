@@ -36,6 +36,7 @@ public final class Indexer {
         s.principal = loaded.trace.trace.principal;
         s.httpSessionId = loaded.trace.trace.httpSessionId;
         s.parentTraceId = loaded.trace.trace.parentTraceId;
+        s.parentSpanId = loaded.trace.trace.parentSpanId;
         Span root = loaded.root();
         s.rootKind = root == null ? null : root.kind;
         s.rootLabel = Labels.span(root);

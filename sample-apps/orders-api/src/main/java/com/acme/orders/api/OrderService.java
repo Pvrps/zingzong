@@ -13,4 +13,7 @@ public interface OrderService {
     ConfirmResult confirmOrder(ConfirmRequest request) throws OrderNotFoundException;
 
     Order findOrder(long orderId) throws OrderNotFoundException;
+
+    /** Fire-and-forget follow-up work for an order event; runs on another thread (@Asynchronous). */
+    void notifyAsync(long orderId, String event);
 }

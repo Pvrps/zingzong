@@ -8,8 +8,19 @@ require_env DOMAIN_NAME WLS_ADMIN_PORT WLS_LISTEN_ADDRESS WLS_ADMIN_USER WLS_ADM
 wlst="$ORACLE_HOME/oracle_common/common/bin/wlst.sh"
 [ -x "$wlst" ] || die "WLST not found at $wlst; run wls-install first"
 
+export JMS_RESOURCES_PY="$DEVENV_ROOT/scripts/jms-resources.py"
+export WLST_PROPERTIES="-Dpython.cachedir=$TMP_DIR/wlst-cache ${WLST_PROPERTIES:-}"
+
+if [ "${1:-}" = "--add-jms" ]; then
+  # Offline edit of an existing domain (server stopped): the JMS resources newer samples need.
+  [ -f "$DOMAIN_HOME/config/config.xml" ] || die "no domain at $DOMAIN_HOME"
+  log "adding JMS resources to $DOMAIN_HOME (offline)"
+  oracle_run "$wlst" "$DEVENV_ROOT/scripts/add-jms.py" 2>&1 | grep -E "JMS resources|Error|rror:" || true
+  exit 0
+fi
+
 if [ -f "$DOMAIN_HOME/config/config.xml" ] && [ "${1:-}" != "--force" ]; then
-  log "domain already exists at $DOMAIN_HOME (pass --force to recreate)"
+  log "domain already exists at $DOMAIN_HOME (pass --force to recreate, --add-jms to add the JMS resources)"
   exit 0
 fi
 
@@ -19,7 +30,6 @@ if [ -d "$DOMAIN_HOME" ]; then
 fi
 mkdir -p "$(dirname "$DOMAIN_HOME")"
 
-export WLST_PROPERTIES="-Dpython.cachedir=$TMP_DIR/wlst-cache ${WLST_PROPERTIES:-}"
 export CONFIG_JVM_ARGS="-Djava.security.egd=file:/dev/./urandom ${CONFIG_JVM_ARGS:-}"
 
 log "running WLST create-domain.py"

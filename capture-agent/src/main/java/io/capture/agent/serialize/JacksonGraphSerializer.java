@@ -69,6 +69,11 @@ public final class JacksonGraphSerializer implements GraphSerializer {
 
     // ---- writing -------------------------------------------------------------------------
 
+    /** A nested value written as part of a composite view (JmsMessages). */
+    JsonNode writeValue(Object value, SerializationContext ctx) {
+        return write(value, ctx);
+    }
+
     private JsonNode write(Object value, SerializationContext ctx) {
         if (value == null) {
             return NullNode.getInstance();
@@ -145,6 +150,9 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         }
         if (value instanceof Throwable) {
             return writeThrowable((Throwable) value, info, ctx);
+        }
+        if (info.jmsMessage) {
+            return JmsMessages.write(value, info, this, ctx);
         }
         return writeObject(value, info, ctx);
     }

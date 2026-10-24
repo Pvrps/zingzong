@@ -21,6 +21,7 @@
     <module>tax-api</module>
     <module>tax-ear</module>
     <module>orders-ear</module>
+    <module>notify-ear</module>
   </modules>
 
   <dependencies>

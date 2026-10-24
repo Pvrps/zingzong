@@ -49,6 +49,8 @@ final class TypeInfo {
     final boolean entity;
     /** Non-null for a non-walkable runtime handle; see {@link InfrastructureTypes}. */
     final String handleKind;
+    /** True when the type implements javax.jms.Message: recorded as its API view ({@link JmsMessages}). */
+    final boolean jmsMessage;
     final LazyKind lazyKind;
     /** isInstantiated() / wasInitialized() / getHibernateLazyInitializer(), per kind. */
     final Method lazyStateMethod;
@@ -65,6 +67,7 @@ final class TypeInfo {
         this.serializable = Serializable.class.isAssignableFrom(type);
         this.entity = hasAnnotationNamed(type, "javax.persistence.Entity") || hasAnnotationNamed(type, "jakarta.persistence.Entity");
         this.handleKind = InfrastructureTypes.handleKind(hierarchy);
+        this.jmsMessage = JmsMessages.isMessage(hierarchy);
 
         Class<?> lazyInterface;
         if ((lazyInterface = find(hierarchy, ECLIPSELINK_CONTAINER)) != null) {
@@ -172,7 +175,7 @@ final class TypeInfo {
         }
     }
 
-    private static Set<Class<?>> hierarchyOf(Class<?> type) {
+    static Set<Class<?>> hierarchyOf(Class<?> type) {
         Set<Class<?>> result = new LinkedHashSet<Class<?>>();
         addHierarchy(type, result);
         return result;

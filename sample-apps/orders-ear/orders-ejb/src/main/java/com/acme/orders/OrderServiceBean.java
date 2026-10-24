@@ -12,8 +12,16 @@ import com.acme.orders.api.OrderNotFoundException;
 import com.acme.orders.api.OrderServiceLocal;
 import com.acme.orders.api.OrderServiceRemote;
 
+import javax.ejb.Asynchronous;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
+import javax.jms.Connection;
+import javax.jms.ConnectionFactory;
+import javax.jms.MessageProducer;
+import javax.jms.Queue;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+import javax.naming.InitialContext;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.Instant;
@@ -35,6 +43,10 @@ public class OrderServiceBean implements OrderServiceLocal, OrderServiceRemote {
 
     @EJB
     private PricingService pricing;
+
+    /** The bean's own local view: a call through it goes through the container (and, for notifyAsync, to another thread). */
+    @EJB
+    private OrderServiceLocal self;
 
     @Override
     public Order createOrder(CreateOrderRequest request) throws InsufficientStockException {
@@ -84,7 +96,56 @@ public class OrderServiceBean implements OrderServiceLocal, OrderServiceRemote {
         if (request.getNotes() != null && !request.getNotes().isEmpty()) {
             messages.add("Notes: " + request.getNotes());
         }
-        return new ConfirmResult(order.getId(), order.getStatus(), Instant.now(), messages);
+        ConfirmResult result = new ConfirmResult(order.getId(), order.getStatus(), Instant.now(), messages);
+        self.notifyAsync(order.getId(), "CONFIRMED");
+        publishEvent(order.getId(), "CONFIRMED", request.getConfirmedBy());
+        return result;
+    }
+
+    @Asynchronous
+    @Override
+    public void notifyAsync(long orderId, String event) {
+        Order order = em.find(Order.class, orderId);
+        if (order != null && "Dump".equals(order.getCustomerName())) {
+            try {
+                Thread.sleep(8000); // customer "Dump": hold the async call open for a thread dump
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        LOG.info("OrderService.notifyAsync " + event + " for " + orderId + " on " + Thread.currentThread().getName()
+                + (order == null ? " (no such order)" : " total=" + order.getTotal()));
+    }
+
+    /**
+     * Publishes the event to jms/OrderEvents (consumed by notify-ear's MDB). Best effort: a domain
+     * without the JMS resources (see scripts/jms-resources.py) just logs and goes on.
+     */
+    private static void publishEvent(long orderId, String event, String by) {
+        Connection connection = null;
+        try {
+            InitialContext ctx = new InitialContext();
+            ConnectionFactory factory = (ConnectionFactory) ctx.lookup("jms/OrdersCF");
+            Queue queue = (Queue) ctx.lookup("jms/OrderEvents");
+            connection = factory.createConnection();
+            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+            MessageProducer producer = session.createProducer(queue);
+            TextMessage message = session.createTextMessage("{\"orderId\":" + orderId + ",\"event\":\"" + event + "\",\"by\":\"" + by + "\"}");
+            message.setLongProperty("orderId", orderId);
+            message.setStringProperty("event", event);
+            message.setStringProperty("by", by);
+            producer.send(message);
+        } catch (Exception e) {
+            LOG.warning("OrderService: event not published (JMS not configured?): " + e);
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (Exception ignored) {
+                    // closing
+                }
+            }
+        }
     }
 
     /** attributes.delayMillis holds the call open inside the bean, for thread dumps of the EJB container. */

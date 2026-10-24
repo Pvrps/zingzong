@@ -139,6 +139,20 @@ public final class WlsMetadata {
         if (names.isEmpty()) {
             names = server.queryNames(new ObjectName("com.bea:Type=*EJBRuntime,Name=" + ejbName + ",*"), null);
         }
+        if (names.isEmpty()) {
+            // A message-driven bean's runtime MBean is named <ejb>_<destination> (one per
+            // destination); the EJB name is only in its EJBName attribute.
+            names = new java.util.LinkedHashSet<ObjectName>();
+            for (ObjectName any : server.queryNames(new ObjectName("com.bea:Type=*EJBRuntime,*"), null)) {
+                try {
+                    if (ejbName.equals(server.getAttribute(any, "EJBName"))) {
+                        names.add(any);
+                    }
+                } catch (Exception ignored) {
+                    // not an EJB runtime after all
+                }
+            }
+        }
         for (ObjectName name : names) {
             String app = name.getKeyProperty("ApplicationRuntime");
             String moduleId = name.getKeyProperty("EJBComponentRuntime");

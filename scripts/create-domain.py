@@ -49,7 +49,9 @@ cd(ds_path)
 create(ds_name, 'JDBCDataSourceParams')
 cd('JDBCDataSourceParams/NO_NAME_0')
 set('JNDIName', 'jdbc/OrdersDS')
-set('GlobalTransactionsProtocol', 'OnePhaseCommit')
+# EmulateTwoPhaseCommit: lets the non-XA H2 data source take part in one transaction with the XA JMS
+# send (LoggingLastResource would be the production choice, but H2 rejects its WL_LLR_* table name).
+set('GlobalTransactionsProtocol', 'EmulateTwoPhaseCommit')
 
 cd(ds_path)
 create(ds_name, 'JDBCDriverParams')
@@ -74,6 +76,11 @@ set('TestTableName', 'SQL SELECT 1')
 
 cd('/JDBCSystemResource/%s' % ds_name)
 set('Target', 'AdminServer')
+
+# JMS for the notify-ear sample (scripts/jms-resources.py).
+import os
+execfile(os.path.join(os.path.dirname(env('JMS_RESOURCES_PY')), 'jms-resources.py'))
+add_jms_resources()
 
 writeDomain(domain_home)
 closeTemplate()

@@ -6,6 +6,7 @@ import io.capture.agent.hook.FallbackHook;
 import io.capture.agent.hook.InstrumentationHook;
 import io.capture.agent.span.Recorder;
 import io.capture.agent.span.RecordingControl;
+import io.capture.agent.span.WlsWorkContextPropagation;
 
 import java.io.File;
 import java.lang.instrument.Instrumentation;
@@ -46,6 +47,9 @@ public final class AgentBootstrap {
                 ? new FallbackHook(new CaptureHook(inst, CaptureHook.EjbStrategy.CONTAINER, target), annotation)
                 : annotation;
         Recorder.hook(chosen);
+        if (server == ServerDetection.Server.WEBLOGIC) {
+            Recorder.propagation(WlsWorkContextPropagation.create());
+        }
         AgentLog.info("capture-agent ready, recording off");
     }
 

@@ -55,8 +55,8 @@ public final class EnableMojo extends AbstractTraceMojo {
                 say("         For each such server add to servers/<name>/data/nodemanager/startup.properties:");
                 say("           Arguments=" + NodeManagerSettings.propertiesValue(OverridesBlock.javaOptions(jar, outputDirectory, javaMajor)));
             }
-        } catch (IOException e) {
-            throw new MojoExecutionException("enable failed: " + e.getMessage(), e);
+        } catch (IOException failure) {
+            throw new MojoExecutionException("enable failed: " + failure.getMessage(), failure);
         }
         DomainState state = monitor.evaluate();
         report(state);

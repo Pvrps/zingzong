@@ -22,16 +22,16 @@ public class ResultSet {
         final ResultSet wrapper = new ResultSet();
         wrapper.stmt = statement;
         wrapper.remaining = rows;
-        return (java.sql.ResultSet) Proxy.newProxyInstance(ResultSet.class.getClassLoader(), new Class<?>[]{java.sql.ResultSet.class}, (p, m, a) -> {
-            if (m.getName().equals("next")) {
+        return (java.sql.ResultSet) Proxy.newProxyInstance(ResultSet.class.getClassLoader(), new Class<?>[]{java.sql.ResultSet.class}, (proxy, method, arguments) -> {
+            if (method.getName().equals("next")) {
                 boolean more = wrapper.remaining-- > 0;
-                return wrapper.postInvocationHandler("next", a, more);
+                return wrapper.postInvocationHandler("next", arguments, more);
             }
-            if (m.getName().equals("close")) {
+            if (method.getName().equals("close")) {
                 wrapper.close();
                 return null;
             }
-            return m.getReturnType() == boolean.class ? false : m.getReturnType().isPrimitive() ? 0 : null;
+            return method.getReturnType() == boolean.class ? false : method.getReturnType().isPrimitive() ? 0 : null;
         });
     }
 }

@@ -51,8 +51,8 @@ public final class SessionBeanInfoStub implements BeanInfo {
         return names;
     }
 
-    public boolean isLocalClientView(Class<?> iface) {
-        return iface == businessLocal;
+    public boolean isLocalClientView(Class<?> businessInterface) {
+        return businessInterface == businessLocal;
     }
 
     public boolean isStateless() {

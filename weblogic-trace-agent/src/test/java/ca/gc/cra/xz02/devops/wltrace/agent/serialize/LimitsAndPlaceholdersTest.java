@@ -98,12 +98,12 @@ class LimitsAndPlaceholdersTest {
         Graphs graphs = new Graphs(new SerializationCeilings().withMaxDepth(3));
         Node chain = new Node("d0", new Node("d1", new Node("d2", new Node("d3", new Node("d4", null)))));
 
-        Graphs.Result r = graphs.write(chain);
-        JsonNode cut = r.node.get("next").get("next").get("next");
-        assertEquals(Node.class.getName(), cut.get("@unserializable").asText(), r.json());
-        assertTrue(cut.get("reason").asText().startsWith("depth ceiling 3 reached"), r.json());
+        Graphs.Result result = graphs.write(chain);
+        JsonNode cut = result.node.get("next").get("next").get("next");
+        assertEquals(Node.class.getName(), cut.get("@unserializable").asText(), result.json());
+        assertTrue(cut.get("reason").asText().startsWith("depth ceiling 3 reached"), result.json());
         assertTrue(cut.has("identity"));
-        assertTrue(r.hasWarning("$.next.next.next", "depth ceiling 3"), r.warnings());
+        assertTrue(result.hasWarning("$.next.next.next", "depth ceiling 3"), result.warnings());
     }
 
     @Test
@@ -111,68 +111,68 @@ class LimitsAndPlaceholdersTest {
         Graphs graphs = new Graphs(new SerializationCeilings().withMaxElements(3));
         List<Integer> ten = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
 
-        Graphs.Result r = graphs.write(ten);
-        assertEquals(4, r.node.size(), r.json());
-        assertEquals(7, r.node.get(3).get("@truncated").asInt());
-        assertEquals("elements", r.node.get(3).get("what").asText());
-        assertTrue(r.hasWarning("$", "7 of 10 elements dropped"), r.warnings());
+        Graphs.Result result = graphs.write(ten);
+        assertEquals(4, result.node.size(), result.json());
+        assertEquals(7, result.node.get(3).get("@truncated").asInt());
+        assertEquals("elements", result.node.get(3).get("what").asText());
+        assertTrue(result.hasWarning("$", "7 of 10 elements dropped"), result.warnings());
 
-        Graphs.Result arr = graphs.write(new String[]{"a", "b", "c", "d", "e"});
-        assertEquals(2, arr.node.get(3).get("@truncated").asInt());
+        Graphs.Result arrayResult = graphs.write(new String[]{"a", "b", "c", "d", "e"});
+        assertEquals(2, arrayResult.node.get(3).get("@truncated").asInt());
 
         Map<String, Integer> map = new java.util.LinkedHashMap<>();
         for (int i = 0; i < 5; i++) {
             map.put("k" + i, i);
         }
-        Graphs.Result m = graphs.write(map);
-        assertEquals(2, m.node.get("@truncated").asInt(), m.json());
-        assertEquals("entries", m.node.get("what").asText());
-        assertFalse(m.node.has("k3"));
+        Graphs.Result mapResult = graphs.write(map);
+        assertEquals(2, mapResult.node.get("@truncated").asInt(), mapResult.json());
+        assertEquals("entries", mapResult.node.get("what").asText());
+        assertFalse(mapResult.node.has("k3"));
     }
 
     @Test
     void stringCeilingLeavesPrefixLengthAndDroppedCount() throws Exception {
         Graphs graphs = new Graphs(new SerializationCeilings().withMaxStringLength(5));
-        Graphs.Result r = graphs.write(new Node("abcdefghij", null));
-        JsonNode label = r.node.get("label");
-        assertEquals("abcde", label.get("@text").asText(), r.json());
+        Graphs.Result result = graphs.write(new Node("abcdefghij", null));
+        JsonNode label = result.node.get("label");
+        assertEquals("abcde", label.get("@text").asText(), result.json());
         assertEquals(10, label.get("length").asInt());
         assertEquals(5, label.get("@truncated").asInt());
         assertEquals("chars", label.get("what").asText());
-        assertTrue(r.hasWarning("$.label", "5 of 10 chars dropped"), r.warnings());
+        assertTrue(result.hasWarning("$.label", "5 of 10 chars dropped"), result.warnings());
     }
 
     @Test
     void loggersAreWalkedLikeAnyObject() {
         Graphs graphs = new Graphs();
-        Graphs.Result r = graphs.write(new WithLogger());
-        JsonNode logger = r.node.get("logger");
-        assertEquals("java.util.logging.Logger", logger.get("@type").asText(), r.json());
+        Graphs.Result result = graphs.write(new WithLogger());
+        JsonNode logger = result.node.get("logger");
+        assertEquals("java.util.logging.Logger", logger.get("@type").asText(), result.json());
         assertEquals("test", logger.get("name").asText());
         assertFalse(logger.has("@unserializable"));
-        assertEquals("x", r.node.get("name").asText());
+        assertEquals("x", result.node.get("name").asText());
     }
 
     @Test
     void runtimeHandlesAreTypedReferencesAndNonSerializableDataIsWalkedFlagged() throws Exception {
         WithHandles value = new WithHandles();
         try {
-            Graphs.Result r = new Graphs().write(value);
-            String[][] expected = {{"executor", "executor"}, {"lock", "lock"}, {"thread", "thread"}, {"loader", "class loader"}, {"stream", "stream"}};
-            for (String[] e : expected) {
-                JsonNode handle = r.node.get(e[0]);
-                assertTrue(handle.has("@handle"), e[0] + ": " + r.json());
-                assertEquals(e[1], handle.get("kind").asText(), e[0]);
-                assertTrue(handle.get("identity").asText().contains("@"), e[0]);
-                assertTrue(handle.has("toString"), e[0]);
-                assertTrue(r.hasWarning("$." + e[0], "runtime handle"), r.warnings());
+            Graphs.Result result = new Graphs().write(value);
+            String[][] expectedHandles = {{"executor", "executor"}, {"lock", "lock"}, {"thread", "thread"}, {"loader", "class loader"}, {"stream", "stream"}};
+            for (String[] fieldAndKind : expectedHandles) {
+                JsonNode handle = result.node.get(fieldAndKind[0]);
+                assertTrue(handle.has("@handle"), fieldAndKind[0] + ": " + result.json());
+                assertEquals(fieldAndKind[1], handle.get("kind").asText(), fieldAndKind[0]);
+                assertTrue(handle.get("identity").asText().contains("@"), fieldAndKind[0]);
+                assertTrue(handle.has("toString"), fieldAndKind[0]);
+                assertTrue(result.hasWarning("$." + fieldAndKind[0], "runtime handle"), result.warnings());
             }
-            JsonNode data = r.node.get("data");
-            assertEquals(PlainData.class.getName(), data.get("@type").asText(), r.json());
+            JsonNode data = result.node.get("data");
+            assertEquals(PlainData.class.getName(), data.get("@type").asText(), result.json());
             assertFalse(data.get("@serializable").asBoolean());
             assertEquals("not serializable but plain data", data.get("label").asText());
             assertEquals(3, data.get("count").asInt());
-            assertEquals(5, r.warnings.size(), r.warnings());
+            assertEquals(5, result.warnings.size(), result.warnings());
         } finally {
             value.executor.shutdownNow();
         }
@@ -182,9 +182,9 @@ class LimitsAndPlaceholdersTest {
     void vendorInternalsAreWalkedTooWithWeaverFieldsListedAsSkipped() {
         Holder holder = new Holder();
         holder.payload = new org.eclipse.persistence.internal.helper.DatabaseField("X");
-        Graphs.Result r = new Graphs().write(holder);
-        JsonNode field = r.node.get("payload");
-        assertEquals("org.eclipse.persistence.internal.helper.DatabaseField", field.get("@type").asText(), r.json());
+        Graphs.Result result = new Graphs().write(holder);
+        JsonNode field = result.node.get("payload");
+        assertEquals("org.eclipse.persistence.internal.helper.DatabaseField", field.get("@type").asText(), result.json());
         assertEquals("X", field.get("name").asText());
         assertFalse(field.has("@unserializable"));
     }
@@ -195,19 +195,19 @@ class LimitsAndPlaceholdersTest {
         ex.addSuppressed(new IllegalStateException("while cleaning up"));
         Graphs graphs = new Graphs();
 
-        Graphs.Result r = graphs.write(ex);
-        assertEquals(CustomException.class.getName(), r.node.get("@type").asText(), r.json());
-        assertEquals("outer", r.node.get("detailMessage").asText());
-        assertEquals("GIZMO-3", r.node.get("sku").asText(), "an exception's own fields are data");
-        assertEquals(9, r.node.get("requested").asInt());
-        assertEquals(ex.getStackTrace().length, r.node.get("stackTrace").size(), "full stack, no top-N");
-        assertTrue(r.node.get("stackTrace").get(0).asText().contains("LimitsAndPlaceholdersTest"));
-        assertEquals("inner", r.node.get("cause").get("detailMessage").asText());
-        assertTrue(r.node.get("cause").get("cause").isNull(), "cause == this sentinel reads as no cause");
-        assertEquals("while cleaning up", r.node.get("suppressedExceptions").get(0).get("detailMessage").asText());
+        Graphs.Result result = graphs.write(ex);
+        assertEquals(CustomException.class.getName(), result.node.get("@type").asText(), result.json());
+        assertEquals("outer", result.node.get("detailMessage").asText());
+        assertEquals("GIZMO-3", result.node.get("sku").asText(), "an exception's own fields are data");
+        assertEquals(9, result.node.get("requested").asInt());
+        assertEquals(ex.getStackTrace().length, result.node.get("stackTrace").size(), "full stack, no top-N");
+        assertTrue(result.node.get("stackTrace").get(0).asText().contains("LimitsAndPlaceholdersTest"));
+        assertEquals("inner", result.node.get("cause").get("detailMessage").asText());
+        assertTrue(result.node.get("cause").get("cause").isNull(), "cause == this sentinel reads as no cause");
+        assertEquals("while cleaning up", result.node.get("suppressedExceptions").get(0).get("detailMessage").asText());
         List<String> skipped = new ArrayList<>();
-        if (r.node.has("@skipped")) {
-            for (JsonNode s : r.node.get("@skipped")) {
+        if (result.node.has("@skipped")) {
+            for (JsonNode s : result.node.get("@skipped")) {
                 skipped.add(s.get("field").asText());
             }
         }
@@ -217,7 +217,7 @@ class LimitsAndPlaceholdersTest {
         } else {
             assertTrue(skipped.contains("backtrace") && skipped.contains("depth"), "JVM-internal fields listed: " + skipped);
         }
-        assertTrue(r.warnings.isEmpty(), r.warnings());
+        assertTrue(result.warnings.isEmpty(), result.warnings());
     }
 
     @Test
@@ -226,13 +226,13 @@ class LimitsAndPlaceholdersTest {
         holder.bytes = new byte[]{1, 2, 3, 4, 5, 6};
         Graphs graphs = new Graphs(new SerializationCeilings().withMaxBytes(4));
 
-        Graphs.Result r = graphs.write(holder);
-        JsonNode bytes = r.node.get("bytes");
-        assertEquals("AQIDBA==", bytes.get("@bytes").asText(), r.json());
+        Graphs.Result result = graphs.write(holder);
+        JsonNode bytes = result.node.get("bytes");
+        assertEquals("AQIDBA==", bytes.get("@bytes").asText(), result.json());
         assertEquals(6, bytes.get("length").asInt());
         assertEquals(2, bytes.get("@truncated").asInt());
         assertEquals("bytes", bytes.get("what").asText());
-        assertTrue(r.hasWarning("$.bytes", "2 of 6 bytes dropped"), r.warnings());
+        assertTrue(result.hasWarning("$.bytes", "2 of 6 bytes dropped"), result.warnings());
 
         holder.bytes = new byte[]{1, 2};
         assertEquals("AQI=", new Graphs().write(holder).node.get("bytes").get("@bytes").asText(), "under the ceiling: no truncation marker");
@@ -260,9 +260,9 @@ class LimitsAndPlaceholdersTest {
         holder.byObjectKey.put(Arrays.asList(1, 2), "list-key");
         Graphs graphs = new Graphs();
 
-        Graphs.Result r = graphs.write(holder);
-        JsonNode map = r.node.get("byObjectKey");
-        assertEquals("java.util.HashMap", map.get("@type").asText(), r.json());
+        Graphs.Result result = graphs.write(holder);
+        JsonNode map = result.node.get("byObjectKey");
+        assertEquals("java.util.HashMap", map.get("@type").asText(), result.json());
         assertEquals("list-key", map.get("@entries").get(0).get("value").asText());
         assertEquals(2, map.get("@entries").get(0).get("key").size());
     }
@@ -270,13 +270,13 @@ class LimitsAndPlaceholdersTest {
     @Test
     void failuresInsideTheGraphBecomeMarkedNodesAndNeverThrow() {
         Graphs graphs = new Graphs();
-        Graphs.Result r = graphs.write(new HostileToString());
+        Graphs.Result result = graphs.write(new HostileToString());
 
-        JsonNode items = r.node.get("items");
-        assertNotNull(items, r.json());
-        assertEquals(HostileCollection.class.getName(), items.get("@unserializable").asText(), r.json());
+        JsonNode items = result.node.get("items");
+        assertNotNull(items, result.json());
+        assertEquals(HostileCollection.class.getName(), items.get("@unserializable").asText(), result.json());
         assertEquals("java.lang.IllegalStateException: iterator exploded", items.get("reason").asText());
-        assertTrue(r.hasWarning("$.items", "IllegalStateException: iterator exploded"), r.warnings());
-        assertEquals(1, r.warnings.size(), r.warnings());
+        assertTrue(result.hasWarning("$.items", "IllegalStateException: iterator exploded"), result.warnings());
+        assertEquals(1, result.warnings.size(), result.warnings());
     }
 }

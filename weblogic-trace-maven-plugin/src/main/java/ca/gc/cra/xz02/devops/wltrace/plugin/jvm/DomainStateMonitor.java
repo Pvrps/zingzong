@@ -87,7 +87,7 @@ public final class DomainStateMonitor {
         boolean blockPresent;
         try {
             blockPresent = OverridesBlock.isPresent(domain.overridesFile());
-        } catch (IOException e) {
+        } catch (IOException failure) {
             blockPresent = false;
         }
         Path installed = domain.installedAgentJar();
@@ -172,7 +172,7 @@ public final class DomainStateMonitor {
         List<LocalJvms.Candidate> candidates;
         try {
             candidates = jvms.list();
-        } catch (Exception e) {
+        } catch (Exception failure) {
             return;
         }
         Set<String> alive = new HashSet<>();
@@ -280,7 +280,7 @@ public final class DomainStateMonitor {
                 properties.load(in);
                 return Optional.ofNullable(properties.getProperty("build"));
             }
-        } catch (IOException e) {
+        } catch (IOException failure) {
             return Optional.empty();
         }
     }

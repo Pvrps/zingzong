@@ -1,6 +1,6 @@
 package ca.gc.cra.xz02.devops.wltrace.viewer.web;
 
-import ca.gc.cra.xz02.devops.wltrace.viewer.recording.Recordings;
+import ca.gc.cra.xz02.devops.wltrace.viewer.recording.RecordingCatalog;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
@@ -30,7 +30,7 @@ public final class ViewerServer {
      */
     public static ViewerServer start(Path recordings, int port, DomainControl control) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 16);
-        Recordings catalog = new Recordings(recordings);
+        RecordingCatalog catalog = new RecordingCatalog(recordings);
         server.createContext("/", new PageHandler());
         server.createContext("/api/state", new StateHandler(control, recordings));
         server.createContext("/api/control", new ControlHandler(control));

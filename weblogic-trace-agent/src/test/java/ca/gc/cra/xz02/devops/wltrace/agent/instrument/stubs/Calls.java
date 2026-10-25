@@ -78,9 +78,9 @@ public final class Calls {
     }
 
     private static InvocationWrapper wrapper(GreeterBean bean, String method, boolean local) {
-        for (Method m : Greeter.class.getMethods()) {
-            if (m.getName().equals(method)) {
-                return new InvocationWrapper(new MethodDescriptorStub("orders-ear", "orders-ejb.jar", "Greeter", m,
+        for (Method candidate : Greeter.class.getMethods()) {
+            if (candidate.getName().equals(method)) {
+                return new InvocationWrapper(new MethodDescriptorStub("orders-ear", "orders-ejb.jar", "Greeter", candidate,
                         TransactionAttributeType.REQUIRED, local), bean);
             }
         }
@@ -89,11 +89,11 @@ public final class Calls {
 
     /** A local view's generated client object implements the business interface itself. */
     private static Object localInvokable() {
-        return Proxy.newProxyInstance(Calls.class.getClassLoader(), new Class<?>[]{Greeter.class}, (p, m, a) -> null);
+        return Proxy.newProxyInstance(Calls.class.getClassLoader(), new Class<?>[]{Greeter.class}, (proxy, method, arguments) -> null);
     }
 
     /** A remote view's generated client object implements only the generated {@code *RIntf}. */
     private static Object remoteInvokable() {
-        return Proxy.newProxyInstance(Calls.class.getClassLoader(), new Class<?>[]{GreeterBean_x1y2z3_GreeterRIntf.class}, (p, m, a) -> null);
+        return Proxy.newProxyInstance(Calls.class.getClassLoader(), new Class<?>[]{GreeterBean_x1y2z3_GreeterRIntf.class}, (proxy, method, arguments) -> null);
     }
 }

@@ -41,8 +41,8 @@ public final class DisableMojo extends AbstractTraceMojo {
             } else {
                 say("nothing to delete at " + install);
             }
-        } catch (IOException e) {
-            throw new MojoExecutionException("disable failed: " + e.getMessage(), e);
+        } catch (IOException failure) {
+            throw new MojoExecutionException("disable failed: " + failure.getMessage(), failure);
         }
         DomainState after = monitor.evaluate();
         report(after);

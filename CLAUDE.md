@@ -33,12 +33,11 @@ load and check scripts) is the sibling repository `../weblogic-trace-lab`.
 - `weblogic-trace-agent` tests run against stubs named like the WebLogic targets (`src/test/java/weblogic/...`), serializer fixtures in `src/test/java/ca/gc/cra/xz02/devops/wltrace/agent/fixtures/` and recordings captured on the lab's 14.1.2 domain under `src/test/resources/captures/`. EclipseLink and `javaee-api` are test-scoped only. No test may depend on the lab.
 - Verification against real servers happens in the lab: `mvn -q install` here, then in `../weblogic-trace-lab` `wltrace enable` → `wls-start -b` → `wls-deploy` → `wltrace start` → the page (Start, the three sample buttons, Stop) → `wltrace disable`, on the 14 domain and with `WLS_VERSION=12` on the 12 domain.
 
-## Code documentation
-- Javadoc states what a class or method does and any constraint a caller must know, in one to three sentences, present tense, no history, no rationale essays, no restating the signature.
-- A private method gets a comment only when its name is not enough. Comments inside methods explain a non-obvious why, never a what.
-- No comment narrates a phase, a session, a finding or a decision; that belongs in architecture/.
-- Every public class in main sources has a Javadoc; every test class has one line saying what it proves.
-
 ## Style
-- Small classes, explicit names, no frameworks beyond ByteBuddy/Jackson/JUnit in the agent; the plugin uses the JDK's `com.sun.net.httpserver`, no web framework, and a page of four plain files (`index.html`, `style.css`, `app.js`, `diagram.js`) with no build step.
-- When an internal WebLogic class is referenced, record the version, build and stack frame in architecture/HOOKS.md for both 12.2.1.4 and 14.1.2.
+- Names say what they hold: `containerInvocation` not `ci`, `businessInterface` not `iface`, `dataSourceName` not `ds`, `builder` not `sb`. No abbreviations except universally known ones (`id`, `url`, `jdbc`, `jms`, `ejb`, `http`).
+- Every field that can be final is final; classes not designed for extension are final; constructors take all collaborators. The only static mutable state in the agent is `TraceRuntime`.
+- Java 8 idioms: diamond operator, lambdas and method references, `Optional` for absent return values, streams where they read more clearly than a loop; loops remain where early exit, index arithmetic or exception handling makes them clearer. Exception: the `*Advice` classes contain no lambdas or method references, because ByteBuddy inlines them into the target method.
+- Javadoc says what a class or method does and any constraint a caller must know, in present tense, as long as that takes and no longer: a sentence for a simple method, a short paragraph for a class with rules a caller can get wrong. No history, no rationale essays, no restating the signature. Comments inside methods explain a non-obvious why. Every main package has a `package-info.java` that says what lives there and how its classes relate.
+- Test names state the behaviour (`recordsLazyCollectionAsUnloadedWithoutInstantiating`, not `testLazy`); every test class has one line saying what it proves.
+- No frameworks beyond ByteBuddy and Jackson in the agent; the viewer uses the JDK's `com.sun.net.httpserver`, no web framework, and a page of four plain files (`index.html`, `style.css`, `app.js`, `diagram.js`) with no build step.
+- When an internal WebLogic class is referenced, record the version, build and stack frame in docs/architecture/HOOKS.md for both 12.2.1.4 and 14.1.2.

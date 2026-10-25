@@ -29,7 +29,7 @@ public final class NodeManagerSettings {
             Properties settings = new Properties();
             settings.load(in);
             return "false".equalsIgnoreCase(settings.getProperty("StartScriptEnabled", "true").trim());
-        } catch (IOException e) {
+        } catch (IOException failure) {
             return false;
         }
     }

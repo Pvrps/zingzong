@@ -10,11 +10,11 @@ class ManifestFilesTest {
 
     @Test
     void manifestNamesPerServerButNotTheIndex() {
-        assertTrue(RecordingDir.MANIFEST_FILE.matcher("recording.json").matches());
-        assertTrue(RecordingDir.MANIFEST_FILE.matcher("recording-AdminServer.json").matches());
-        assertTrue(RecordingDir.MANIFEST_FILE.matcher("recording-ms_1.json").matches());
-        assertFalse(RecordingDir.MANIFEST_FILE.matcher("recording-index.json").matches());
-        assertFalse(RecordingDir.MANIFEST_FILE.matcher("lineage.json").matches());
-        assertFalse(RecordingDir.MANIFEST_FILE.matcher("000001-t-abc.json").matches());
+        assertTrue(RecordingDirectory.MANIFEST_FILE.matcher("recording.json").matches());
+        assertTrue(RecordingDirectory.MANIFEST_FILE.matcher("recording-AdminServer.json").matches());
+        assertTrue(RecordingDirectory.MANIFEST_FILE.matcher("recording-ms_1.json").matches());
+        assertFalse(RecordingDirectory.MANIFEST_FILE.matcher("recording-index.json").matches());
+        assertFalse(RecordingDirectory.MANIFEST_FILE.matcher("lineage.json").matches());
+        assertFalse(RecordingDirectory.MANIFEST_FILE.matcher("000001-t-abc.json").matches());
     }
 }

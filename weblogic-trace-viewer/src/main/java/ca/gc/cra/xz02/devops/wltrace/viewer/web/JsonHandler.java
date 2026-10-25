@@ -26,8 +26,8 @@ abstract class JsonHandler implements HttpHandler {
     public final void handle(HttpExchange exchange) throws IOException {
         try {
             handle(exchange, exchange.getRequestURI().getPath());
-        } catch (Exception e) {
-            json(exchange, 500, error(String.valueOf(e)));
+        } catch (Exception failure) {
+            json(exchange, 500, error(String.valueOf(failure)));
         } finally {
             exchange.close();
         }

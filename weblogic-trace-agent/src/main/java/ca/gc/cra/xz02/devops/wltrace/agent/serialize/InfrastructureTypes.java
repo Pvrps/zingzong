@@ -3,11 +3,10 @@ package ca.gc.cra.xz02.devops.wltrace.agent.serialize;
 import java.util.Set;
 
 /**
- * Non-walkable runtime handles. These are the only objects the serializer does not walk
- * field by field; each becomes a typed reference with identity and toString
- * ({@code @handle}). The test for inclusion is "walking its fields describes the JVM or the
- * OS, not the payload", never "sensitive" or "uninteresting". Everything else, including
- * loggers, JPA and framework objects and container classes, is walked like any other object.
+ * The runtime handles the serializer does not walk field by field; each becomes a {@code @handle}
+ * marker with its class, kind, identity and toString. The test for inclusion is "walking its
+ * fields describes the JVM or the OS, not the payload", never "sensitive" or "uninteresting":
+ * loggers, JPA and framework objects and container classes are walked like any other object.
  * Matched against every class and interface in the object's hierarchy, by name.
  */
 final class InfrastructureTypes {
@@ -57,12 +56,12 @@ final class InfrastructureTypes {
     private InfrastructureTypes() {
     }
 
-    /** The handle category, or null when the object is walkable. */
+    /** The handle kind of a type with any of the handle types in its hierarchy, or null when the object is walkable. */
     static String handleKind(Set<Class<?>> hierarchy) {
-        for (Class<?> c : hierarchy) {
-            String n = c.getName();
+        for (Class<?> member : hierarchy) {
+            String name = member.getName();
             for (String[] handle : HANDLES) {
-                if (n.equals(handle[0])) {
+                if (name.equals(handle[0])) {
                     return handle[1];
                 }
             }

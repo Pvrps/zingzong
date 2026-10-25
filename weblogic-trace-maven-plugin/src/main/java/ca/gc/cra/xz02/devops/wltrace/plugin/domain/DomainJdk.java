@@ -33,7 +33,7 @@ public final class DomainJdk {
             }
             String text = new String(Files.readAllBytes(domainEnv), StandardCharsets.UTF_8);
             return domain.platform().javaHomeIn(text);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException unreadable) {
             return Optional.empty();
         }
     }

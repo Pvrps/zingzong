@@ -32,8 +32,8 @@ public final class StartMojo extends AbstractTraceMojo {
         ViewerServer viewer;
         try {
             viewer = ViewerServer.start(outputDirectory, port, new MonitoredDomainControl(monitor));
-        } catch (IOException e) {
-            throw new MojoExecutionException("cannot listen on 127.0.0.1:" + port + ": " + e.getMessage());
+        } catch (IOException failure) {
+            throw new MojoExecutionException("cannot listen on 127.0.0.1:" + port + ": " + failure.getMessage());
         }
         say("page: " + viewer.url() + "  (Ctrl-C to stop)");
         if (!openBrowser(viewer.url())) {
@@ -47,7 +47,7 @@ public final class StartMojo extends AbstractTraceMojo {
         }));
         try {
             done.await();
-        } catch (InterruptedException e) {
+        } catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
         }
     }

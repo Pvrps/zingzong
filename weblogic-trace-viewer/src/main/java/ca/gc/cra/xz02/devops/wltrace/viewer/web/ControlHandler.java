@@ -47,8 +47,8 @@ final class ControlHandler extends JsonHandler {
             ObjectNode result = JSON.createObjectNode();
             result.put("id", control.startRecording(name));
             json(exchange, 200, result);
-        } catch (IllegalStateException e) {
-            json(exchange, 409, error(e.getMessage()));
+        } catch (IllegalStateException refused) {
+            json(exchange, 409, error(refused.getMessage()));
         }
     }
 

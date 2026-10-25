@@ -58,8 +58,8 @@ class LineageDetectorTest {
         LineageFile lineage = detector.detect("rec-test", Arrays.asList(first, second));
 
         assertTrue(sourced(lineage).isEmpty(), describe(lineage));
-        for (LineageEntry e : lineage.entries) {
-            assertTrue(!"3".equals(e.value), "3 must not even be classified: " + describe(lineage));
+        for (LineageEntry entry : lineage.entries) {
+            assertTrue(!"3".equals(entry.value), "3 must not even be classified: " + describe(lineage));
         }
     }
 
@@ -73,19 +73,19 @@ class LineageDetectorTest {
         LineageFile lineage = detector.detect("rec-test", Arrays.asList(first, second));
 
         List<String> paths = new ArrayList<>();
-        for (LineageEntry e : sourced(lineage)) {
-            paths.add(e.to.path + "<-" + e.from.path);
+        for (LineageEntry entry : sourced(lineage)) {
+            paths.add(entry.to.path + "<-" + entry.from.path);
         }
         assertEquals(Arrays.asList("args[0].amount<-result.subtotal", "args[0].ref<-result.reference", "args[0].n<-result.count"), paths);
     }
 
     @Test
     void nearestEarlierSourceWinsAndOthersAreAlternatives() {
-        LoadedTrace a = trace(0, "t-a", span("s1", null, 0, "Order", "createOrder", "[]", "{\"id\":7001}"));
-        LoadedTrace b = trace(1, "t-b", span("s1", null, 0, "Order", "findOrder", "[]", "{\"@type\":\"Order\",\"id\":7001}"));
-        LoadedTrace c = trace(2, "t-c", span("s1", null, 0, "Order", "confirmOrder", "[{\"orderId\":7001}]", null));
+        LoadedTrace first = trace(0, "t-a", span("s1", null, 0, "Order", "createOrder", "[]", "{\"id\":7001}"));
+        LoadedTrace second = trace(1, "t-b", span("s1", null, 0, "Order", "findOrder", "[]", "{\"@type\":\"Order\",\"id\":7001}"));
+        LoadedTrace third = trace(2, "t-c", span("s1", null, 0, "Order", "confirmOrder", "[{\"orderId\":7001}]", null));
 
-        LineageFile lineage = detector.detect("rec-test", Arrays.asList(a, b, c));
+        LineageFile lineage = detector.detect("rec-test", Arrays.asList(first, second, third));
 
         LineageEntry entry = sourced(lineage).get(0);
         assertEquals("t-b", entry.from.trace, "nearest earlier trace");
@@ -110,9 +110,9 @@ class LineageDetectorTest {
         assertTrue(sourced(lineage).isEmpty(), describe(lineage));
         // Classification is never capped: every trace's input is classified regardless.
         int classified = 0;
-        for (LineageEntry e : lineage.entries) {
-            if ("GADGET-2000".equals(e.value)) {
-                assertEquals(LineageEntry.CLASS_USER_INPUT, e.classification);
+        for (LineageEntry entry : lineage.entries) {
+            if ("GADGET-2000".equals(entry.value)) {
+                assertEquals(LineageEntry.CLASS_USER_INPUT, entry.classification);
                 classified++;
             }
         }
@@ -146,10 +146,10 @@ class LineageDetectorTest {
         assertEquals("t-confirm", links.get(0).to.trace, "confirm links to the first create");
         assertEquals("t-create-1", links.get(0).from.trace);
         assertEquals("65639", links.get(0).value);
-        for (LineageEntry e : lineage.entries) {
-            if ("t-create-2".equals(e.to.trace)) {
-                assertNull(e.from, "the second create links to nothing: " + describe(lineage));
-                assertEquals(LineageEntry.CLASS_USER_INPUT, e.classification);
+        for (LineageEntry entry : lineage.entries) {
+            if ("t-create-2".equals(entry.to.trace)) {
+                assertNull(entry.from, "the second create links to nothing: " + describe(lineage));
+                assertEquals(LineageEntry.CLASS_USER_INPUT, entry.classification);
             }
         }
     }
@@ -239,35 +239,35 @@ class LineageDetectorTest {
 
     private static List<LineageEntry> sourced(LineageFile lineage) {
         List<LineageEntry> result = new ArrayList<>();
-        for (LineageEntry e : lineage.entries) {
-            if (e.from != null) {
-                result.add(e);
+        for (LineageEntry entry : lineage.entries) {
+            if (entry.from != null) {
+                result.add(entry);
             }
         }
         return result;
     }
 
     private static LineageEntry entry(LineageFile lineage, String value) {
-        for (LineageEntry e : lineage.entries) {
-            if (value.equals(e.value)) {
-                return e;
+        for (LineageEntry entry : lineage.entries) {
+            if (value.equals(entry.value)) {
+                return entry;
             }
         }
         return null;
     }
 
     private static String classification(LineageFile lineage, String value) {
-        LineageEntry e = entry(lineage, value);
-        return e == null ? null : e.classification;
+        LineageEntry entry = entry(lineage, value);
+        return entry == null ? null : entry.classification;
     }
 
     private static String describe(LineageFile lineage) {
-        StringBuilder sb = new StringBuilder();
-        for (LineageEntry e : lineage.entries) {
-            sb.append(e.to.trace).append('/').append(e.to.path).append(" <- ")
-                    .append(e.from == null ? e.classification : e.from.trace + "/" + e.from.path)
-                    .append(" [").append(e.value).append("]\n");
+        StringBuilder text = new StringBuilder();
+        for (LineageEntry entry : lineage.entries) {
+            text.append(entry.to.trace).append('/').append(entry.to.path).append(" <- ")
+                    .append(entry.from == null ? entry.classification : entry.from.trace + "/" + entry.from.path)
+                    .append(" [").append(entry.value).append("]\n");
         }
-        return sb.toString();
+        return text.toString();
     }
 }

@@ -28,10 +28,10 @@ class HttpRecordingTest {
 
     @Test
     void hasHttpRootsWithResourceChildrenThenTheEjbTree() throws Exception {
-        RecordingDir dir = RecordingDir.load(recording());
-        assertEquals(3, dir.traces.size());
+        RecordingDirectory recording = RecordingDirectory.load(recording());
+        assertEquals(3, recording.traces.size());
 
-        Span confirmRoot = dir.traces.get(1).root();
+        Span confirmRoot = recording.traces.get(1).root();
         assertEquals(Span.KIND_HTTP, confirmRoot.kind);
         assertEquals("POST", confirmRoot.http.method);
         assertTrue(confirmRoot.http.path.matches("/orders/api/orders/\\d+/confirm"), confirmRoot.http.path);
@@ -41,27 +41,27 @@ class HttpRecordingTest {
         assertTrue(confirmRoot.http.requestHeaders.get("Cookie").get(0).startsWith("JSESSIONID="));
         assertTrue(confirmRoot.http.responseHeaders.containsKey("Content-Type"));
         assertTrue(confirmRoot.http.responseBody.contains("\"status\":\"CONFIRMED\""));
-        assertNotNull(dir.traces.get(1).trace.trace.httpSessionId);
+        assertNotNull(recording.traces.get(1).trace.trace.httpSessionId);
 
-        List<Span> spans = dir.traces.get(1).trace.spans;
+        List<Span> spans = recording.traces.get(1).trace.spans;
         assertEquals("jaxrs", spans.get(1).layer);
-        assertEquals("OrdersResource.confirm [jaxrs]", Labels.span(spans.get(1)));
+        assertEquals("OrdersResource.confirm [jaxrs]", SpanLabels.span(spans.get(1)));
         assertEquals("s1", spans.get(1).parentId);
-        assertEquals("OrderService.confirmOrder", Labels.span(spans.get(2)));
+        assertEquals("OrderService.confirmOrder", SpanLabels.span(spans.get(2)));
         assertEquals("s2", spans.get(2).parentId);
 
-        Span soapRoot = dir.traces.get(2).root();
+        Span soapRoot = recording.traces.get(2).root();
         assertEquals("/tax/TaxWebService", soapRoot.http.path);
         assertTrue(soapRoot.http.requestBody.contains("<tax:computeTax>"), "the SOAP envelope as sent");
         assertTrue(soapRoot.http.responseBody.contains("<ns0:computeTaxResponse"));
-        assertEquals("jaxws", dir.traces.get(2).trace.spans.get(1).layer);
-        assertEquals("TaxService.computeTax", Labels.span(dir.traces.get(2).trace.spans.get(2)));
+        assertEquals("jaxws", recording.traces.get(2).trace.spans.get(1).layer);
+        assertEquals("TaxService.computeTax", SpanLabels.span(recording.traces.get(2).trace.spans.get(2)));
     }
 
     @Test
     void theRootRequestBodyIsTheUserInputSource() throws Exception {
-        RecordingDir dir = RecordingDir.load(recording());
-        LineageFile lineage = new LineageDetector().detect(dir.manifest.id, dir.traces);
+        RecordingDirectory recording = RecordingDirectory.load(recording());
+        LineageFile lineage = new LineageDetector().detect(recording.manifest.id, recording.traces);
 
         LineageEntry name = entry(lineage, "Ada Lovelace");
         assertEquals(LineageEntry.CLASS_USER_INPUT, name.classification);
@@ -72,17 +72,17 @@ class HttpRecordingTest {
 
         // SOAP elements are flattened too: NL-NH and GOODS are short/dictionary-like, 123.74 is distinctive.
         boolean soapAmount = false;
-        for (LineageEntry e : lineage.entries) {
-            if ("123.74".equals(e.value) && e.to.path.startsWith("http.requestBody.Envelope.Body.computeTax.amount")) {
+        for (LineageEntry entry : lineage.entries) {
+            if ("123.74".equals(entry.value) && entry.to.path.startsWith("http.requestBody.Envelope.Body.computeTax.amount")) {
                 soapAmount = true;
             }
         }
         assertTrue(soapAmount, "SOAP envelope element flattened");
 
         LineageEntry orderId = null;
-        for (LineageEntry e : lineage.entries) {
-            if (e.from != null && "args[0].orderId".equals(e.to.path)) {
-                orderId = e;
+        for (LineageEntry entry : lineage.entries) {
+            if (entry.from != null && "args[0].orderId".equals(entry.to.path)) {
+                orderId = entry;
             }
         }
         assertNotNull(orderId);
@@ -91,9 +91,9 @@ class HttpRecordingTest {
     }
 
     private static LineageEntry entry(LineageFile lineage, String value) {
-        for (LineageEntry e : lineage.entries) {
-            if (value.equals(e.value)) {
-                return e;
+        for (LineageEntry entry : lineage.entries) {
+            if (value.equals(entry.value)) {
+                return entry;
             }
         }
         return null;

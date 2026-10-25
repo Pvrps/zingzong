@@ -49,8 +49,8 @@ public abstract class AbstractTraceMojo extends AbstractMojo {
         domain = new Domain(domainHome.toPath());
         try {
             domain.verify();
-        } catch (IOException e) {
-            throw new MojoExecutionException(e.getMessage());
+        } catch (IOException failure) {
+            throw new MojoExecutionException(failure.getMessage());
         }
         Path requested = out != null ? out.toPath()
                 : Paths.get(System.getProperty("user.home"), ".weblogic-trace").resolve(domain.home.getFileName().toString());

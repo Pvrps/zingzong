@@ -72,7 +72,7 @@ class RawCaptureAuditTest {
         ClassLoader loader = Everything.class.getClassLoader();
         java.io.InputStream stream = new java.io.ByteArrayInputStream(new byte[]{1});
         java.sql.Connection connection = (java.sql.Connection) java.lang.reflect.Proxy.newProxyInstance(
-                Everything.class.getClassLoader(), new Class<?>[]{java.sql.Connection.class}, (p, m, a) -> m.getName().equals("toString") ? "conn" : null);
+                Everything.class.getClassLoader(), new Class<?>[]{java.sql.Connection.class}, (proxy, method, arguments) -> method.getName().equals("toString") ? "conn" : null);
         ReentrantLock lock = new ReentrantLock();
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Logger logger = Logger.getLogger("audit");
@@ -96,19 +96,19 @@ class RawCaptureAuditTest {
         Object monitor = new Object();
     }
 
-    private final SerializationCeilings config = new SerializationCeilings()
+    private final SerializationCeilings ceilings = new SerializationCeilings()
             .withMaxStringLength(40).withMaxBytes(8).withMaxElements(5).withMaxDepth(6);
 
     @Test
     void everyFieldIsPresentOrListedAsSkippedAndEveryTransformationIsMarked() throws Exception {
-        Everything e = build();
+        Everything everything = build();
         try {
-            Graphs graphs = new Graphs(config);
-            Graphs.Result r = graphs.write(e);
-            JsonNode root = r.node;
+            Graphs graphs = new Graphs(ceilings);
+            Graphs.Result result = graphs.write(everything);
+            JsonNode root = result.node;
 
             // Nothing dropped silently: walk the object graph and the JSON side by side.
-            audit(e, root, "$", new IdentityHashMap<>());
+            audit(everything, root, "$", new IdentityHashMap<>());
 
             // Each category produced its marker.
             assertEquals(root.get("cycle").get("@id").asInt(), root.get("cycle").get("other").get("@ref").asInt(), "cycle -> @ref");
@@ -154,41 +154,41 @@ class RawCaptureAuditTest {
             assertEquals("java.lang.Object", root.get("monitor").get("@type").asText());
 
             // Every warning corresponds to a marker in the output, i.e. nothing was dropped quietly.
-            for (ca.gc.cra.xz02.devops.wltrace.model.SerializationWarning w : r.warnings) {
-                JsonNode at = at(root, w.path);
-                assertTrue(at != null && isMarked(at), "warning without marker at " + w.path + ": " + w.reason);
+            for (ca.gc.cra.xz02.devops.wltrace.model.SerializationWarning warning : result.warnings) {
+                JsonNode at = at(root, warning.path);
+                assertTrue(at != null && isMarked(at), "warning without marker at " + warning.path + ": " + warning.reason);
             }
         } finally {
-            e.executor.shutdownNow();
+            everything.executor.shutdownNow();
         }
     }
 
     private static Everything build() {
-        Everything e = new Everything();
-        e.cycle.name = "a";
-        e.cycle.other = e.cycle;
-        e.repeated = e.cycle;
-        e.lazy.lines = unloadedList();
-        e.lazy._persistence_city_vh = unloadedHolder();
-        e.inner = new RawCaptureAuditTest().new Inner();
-        e.longText = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        e.bigBytes = new byte[16];
-        for (int i = 0; i < 20; i++) {
-            e.bigList.add(i);
+        Everything everything = new Everything();
+        everything.cycle.name = "a";
+        everything.cycle.other = everything.cycle;
+        everything.repeated = everything.cycle;
+        everything.lazy.lines = unloadedList();
+        everything.lazy._persistence_city_vh = unloadedHolder();
+        everything.inner = new RawCaptureAuditTest().new Inner();
+        everything.longText = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        everything.bigBytes = new byte[16];
+        for (int index = 0; index < 20; index++) {
+            everything.bigList.add(index);
         }
         Cycle chain = new Cycle();
         chain.name = "d0";
         Cycle cursor = chain;
-        for (int i = 1; i < 12; i++) {
-            Cycle next = new Cycle();
-            next.name = "d" + i;
-            cursor.other = next;
-            cursor = next;
+        for (int index = 1; index < 12; index++) {
+            Cycle nextLink = new Cycle();
+            nextLink.name = "d" + index;
+            cursor.other = nextLink;
+            cursor = nextLink;
         }
-        e.deep = chain;
-        e.objectKeys.put(Arrays.asList(1, 2), "v");
-        e.calendar.setTimeInMillis(1_800_000_000_000L);
-        return e;
+        everything.deep = chain;
+        everything.objectKeys.put(Arrays.asList(1, 2), "v");
+        everything.calendar.setTimeInMillis(1_800_000_000_000L);
+        return everything;
     }
 
     /** Every non-static declared field of {@code value}'s class hierarchy must be a key or a @skipped entry. */
@@ -207,25 +207,25 @@ class RawCaptureAuditTest {
         assertTrue(node.isObject() && node.has("@type"), path + " should be a walked object: " + node);
         Set<String> skipped = new HashSet<>();
         if (node.has("@skipped")) {
-            for (JsonNode s : node.get("@skipped")) {
-                assertTrue(s.has("reason") && !s.get("reason").asText().isEmpty(), path + ": skipped without reason");
-                skipped.add(s.get("field").asText());
+            for (JsonNode skippedField : node.get("@skipped")) {
+                assertTrue(skippedField.has("reason") && !skippedField.get("reason").asText().isEmpty(), path + ": skipped without reason");
+                skipped.add(skippedField.get("field").asText());
             }
         }
-        for (Class<?> c = value.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (Modifier.isStatic(f.getModifiers())) {
+        for (Class<?> current = value.getClass(); current != null && current != Object.class; current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers())) {
                     continue;
                 }
-                String name = f.getName();
+                String name = field.getName();
                 if (!node.has(name)) {
                     if (!skipped.contains(name)) {
                         fail(path + "." + name + " is absent without a @skipped entry: " + node);
                     }
                     continue;
                 }
-                f.setAccessible(true);
-                audit(f.get(value), node.get(name), path + "." + name, seen);
+                field.setAccessible(true);
+                audit(field.get(value), node.get(name), path + "." + name, seen);
             }
         }
     }
@@ -236,9 +236,9 @@ class RawCaptureAuditTest {
         }
         Iterator<String> names = node.fieldNames();
         while (names.hasNext()) {
-            String n = names.next();
-            if (n.equals("@ref") || n.equals("@lazy") || n.equals("@handle") || n.equals("@unserializable")
-                    || n.equals("@truncated") || n.equals("@text") || n.equals("@bytes")) {
+            String name = names.next();
+            if (name.equals("@ref") || name.equals("@lazy") || name.equals("@handle") || name.equals("@unserializable")
+                    || name.equals("@truncated") || name.equals("@text") || name.equals("@bytes")) {
                 return true;
             }
         }
@@ -246,9 +246,9 @@ class RawCaptureAuditTest {
     }
 
     private static void assertSkipped(JsonNode node, String field, String reasonPart) {
-        for (JsonNode s : node.get("@skipped")) {
-            if (s.get("field").asText().equals(field)) {
-                assertTrue(s.get("reason").asText().contains(reasonPart), s.toString());
+        for (JsonNode skippedField : node.get("@skipped")) {
+            if (skippedField.get("field").asText().equals(field)) {
+                assertTrue(skippedField.get("reason").asText().contains(reasonPart), skippedField.toString());
                 return;
             }
         }
@@ -259,15 +259,15 @@ class RawCaptureAuditTest {
     private static JsonNode at(JsonNode root, String path) {
         JsonNode node = root;
         String rest = path.startsWith("$") ? path.substring(1) : path;
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\.([^.\\[]+)|\\[(\\d+)]|\\['([^']*)']").matcher(rest);
-        while (m.find() && node != null) {
-            if (m.group(1) != null) {
-                node = node.get(m.group(1));
-            } else if (m.group(2) != null) {
-                int i = Integer.parseInt(m.group(2));
-                node = i < node.size() ? node.get(i) : node.get(node.size() - 1);
+        java.util.regex.Matcher segment = java.util.regex.Pattern.compile("\\.([^.\\[]+)|\\[(\\d+)]|\\['([^']*)']").matcher(rest);
+        while (segment.find() && node != null) {
+            if (segment.group(1) != null) {
+                node = node.get(segment.group(1));
+            } else if (segment.group(2) != null) {
+                int index = Integer.parseInt(segment.group(2));
+                node = index < node.size() ? node.get(index) : node.get(node.size() - 1);
             } else {
-                node = node.get(m.group(3));
+                node = node.get(segment.group(3));
             }
         }
         if (node != null && node.isArray()) {

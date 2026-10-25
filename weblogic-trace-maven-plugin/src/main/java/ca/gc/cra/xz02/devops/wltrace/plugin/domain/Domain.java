@@ -73,7 +73,7 @@ public final class Domain {
             String xml = new String(Files.readAllBytes(configXml()), StandardCharsets.UTF_8);
             Matcher version = Pattern.compile("<domain-version>\\s*([^<\\s]+)\\s*</domain-version>").matcher(xml);
             return version.find() ? version.group(1) : "unknown";
-        } catch (IOException e) {
+        } catch (IOException failure) {
             return "unknown";
         }
     }
@@ -87,7 +87,7 @@ public final class Domain {
     public static Path canonical(Path path) {
         try {
             return path.toRealPath();
-        } catch (IOException e) {
+        } catch (IOException failure) {
             return path.toAbsolutePath().normalize();
         }
     }

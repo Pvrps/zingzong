@@ -1,9 +1,9 @@
 package ca.gc.cra.xz02.devops.wltrace.viewer.recording.lineage;
 
-import ca.gc.cra.xz02.devops.wltrace.viewer.recording.LoadedTrace;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageEntry;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageFile;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageRef;
+import ca.gc.cra.xz02.devops.wltrace.viewer.recording.LoadedTrace;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -15,34 +15,24 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Finds values in later inputs that came from earlier outputs. Annotates, never removes:
- * every distinctive input value ends up either sourced or classified.
+ * Finds values in later inputs that came from earlier outputs. Annotates, never removes: every
+ * distinctive input value ends up either sourced or classified.
  *
- * Traces are walked in seq order. Every distinctive scalar in a span's {@code result} (and a
- * root HTTP span's response body) goes into a source index keyed by its normalized form;
- * every distinctive scalar in a later trace's {@code args} (and HTTP request body) is looked
- * up there. A hit is a {@link LineageEntry} {@code to ← from}; the nearest earlier source
- * wins, the others stay as alternatives.
+ * <p>Traces are walked in order. Every distinctive scalar in a span's result and in a root
+ * request's response body goes into a source index under its normalised form; every distinctive
+ * scalar in a later trace's arguments, request body, URL path and query is looked up there. A hit
+ * is an entry {@code to <- from} with the nearest earlier source first and the others as alternatives.
  *
- * The frequency cap applies to the source index only: a value that is produced as a result
- * in more than {@code frequencyCap} distinct traces is too common to be a meaningful source
- * (an echoed constant, a status code), so it is not indexed. It never affects
- * classification.
- *
- * A value's <em>origin</em> is where it first appears in seq order: in a root span's input it
- * is user-originated, anywhere else (a result, a nested span's input) system-originated.
- * User-originated values are never linked: when they show up again later they were typed
- * again, and the results that echoed them in between are not their source. Only
- * system-originated values (ids, computed amounts, rows read back) are looked up in the index.
- *
- * Input values without a source are classified: {@code environment} when they are an
- * instant inside the trace's own time window (the application generated them during the
- * call) or appear only in nested spans (read from the database or computed), else
- * {@code userInput} when they appear in the root span's input. An entry whose value is also
- * produced by the same trace's own results is flagged {@code alsoProducedHere}: it may be a
- * recomputation rather than a flow, and that cannot be told apart from the trace alone.
+ * <p>Three rules shape the index. A value produced as a result by more than {@code frequencyCap}
+ * distinct traces is too common to be a source (an echoed constant, a status) and is not indexed.
+ * A value first seen in a root span's input is user-originated and is never linked when it appears
+ * again: it was typed again, and the results that echoed it in between are not its source. An
+ * input without a source is classified {@code environment} when it is an instant inside the
+ * trace's own time window or appears only in nested spans, else {@code userInput}; an entry whose
+ * value the same trace also produces is flagged {@code alsoProducedHere}.
  */
 public final class LineageDetector {
 
@@ -61,15 +51,12 @@ public final class LineageDetector {
     }
 
     public LineageFile detect(String recordingId, List<LoadedTrace> traces) {
-        List<List<ValueRef>> resultsByTrace = new ArrayList<>();
-        List<List<ValueRef>> argsByTrace = new ArrayList<>();
+        List<List<ValueLocation>> outputsByTrace = traces.stream().map(ValueFlattener::outputs).collect(Collectors.toList());
+        List<List<ValueLocation>> inputsByTrace = traces.stream().map(ValueFlattener::inputs).collect(Collectors.toList());
         Map<String, Set<Integer>> producingTraces = new HashMap<>();
-        for (LoadedTrace trace : traces) {
-            List<ValueRef> results = ValueFlattener.results(trace);
-            resultsByTrace.add(results);
-            argsByTrace.add(ValueFlattener.args(trace));
-            for (ValueRef r : results) {
-                producingTraces.computeIfAbsent(r.value, k -> new HashSet<>()).add(trace.index);
+        for (int position = 0; position < traces.size(); position++) {
+            for (ValueLocation output : outputsByTrace.get(position)) {
+                producingTraces.computeIfAbsent(output.value, value -> new HashSet<>()).add(traces.get(position).index);
             }
         }
 
@@ -78,28 +65,25 @@ public final class LineageDetector {
         file.generatedAt = Instant.now().toString();
         List<LineageEntry> unsourced = new ArrayList<>();
 
-        Map<String, List<ValueRef>> index = new HashMap<>();
+        Map<String, List<ValueLocation>> sourceIndex = new HashMap<>();
         Set<String> userOriginated = new HashSet<>();
         Set<String> seen = new HashSet<>();
-        for (int m = 0; m < traces.size(); m++) {
-            LoadedTrace trace = traces.get(m);
+        for (int position = 0; position < traces.size(); position++) {
+            LoadedTrace trace = traces.get(position);
+            Set<String> producedHere = outputsByTrace.get(position).stream().map(output -> output.value).collect(Collectors.toSet());
             Set<String> rootInputs = new HashSet<>();
-            Set<String> producedHere = new HashSet<>();
-            for (ValueRef r : resultsByTrace.get(m)) {
-                producedHere.add(r.value);
-            }
-            for (ValueRef a : argsByTrace.get(m)) {
-                if (a.rootSpan) {
-                    rootInputs.add(a.value);
-                    if (seen.add(a.value)) {
-                        userOriginated.add(a.value);
+            for (ValueLocation input : inputsByTrace.get(position)) {
+                if (input.rootSpan) {
+                    rootInputs.add(input.value);
+                    if (seen.add(input.value)) {
+                        userOriginated.add(input.value);
                     }
                 }
             }
             Set<String> classified = new HashSet<>();
-            for (ValueRef target : argsByTrace.get(m)) {
+            for (ValueLocation target : inputsByTrace.get(position)) {
                 seen.add(target.value);
-                List<ValueRef> sources = userOriginated.contains(target.value) ? null : index.get(target.value);
+                List<ValueLocation> sources = userOriginated.contains(target.value) ? null : sourceIndex.get(target.value);
                 if (sources != null && !sources.isEmpty()) {
                     LineageEntry entry = sourced(target, sources);
                     if (producedHere.contains(target.value)) {
@@ -110,20 +94,20 @@ public final class LineageDetector {
                     unsourced.add(unsourced(target, classify(target, rootInputs, trace)));
                 }
             }
-            // Results of trace m become sources for later traces; nearest first means last added first.
-            for (ValueRef r : resultsByTrace.get(m)) {
-                seen.add(r.value);
-                if (producingTraces.getOrDefault(r.value, Collections.<Integer>emptySet()).size() > frequencyCap) {
+            // The outputs of this trace become sources for later traces; nearest first means last added first.
+            for (ValueLocation output : outputsByTrace.get(position)) {
+                seen.add(output.value);
+                if (producingTraces.getOrDefault(output.value, Collections.emptySet()).size() > frequencyCap) {
                     continue;
                 }
-                index.computeIfAbsent(r.value, k -> new ArrayList<>()).add(0, r);
+                sourceIndex.computeIfAbsent(output.value, value -> new ArrayList<>()).add(0, output);
             }
         }
         file.entries.addAll(unsourced);
         return file;
     }
 
-    private String classify(ValueRef target, Set<String> rootInputs, LoadedTrace trace) {
+    private static String classify(ValueLocation target, Set<String> rootInputs, LoadedTrace trace) {
         if (!rootInputs.contains(target.value)) {
             return LineageEntry.CLASS_ENVIRONMENT;
         }
@@ -140,34 +124,31 @@ public final class LineageDetector {
             Instant start = Instant.parse(trace.trace.trace.startedAt);
             Instant end = start.plusMillis(Math.max(0, trace.trace.trace.durationMs));
             return !candidate.isBefore(start.minus(WINDOW_SLACK)) && !candidate.isAfter(end.plus(WINDOW_SLACK));
-        } catch (DateTimeParseException e) {
+        } catch (DateTimeParseException notAnInstant) {
             return false;
         }
     }
 
-    private static LineageEntry sourced(ValueRef target, List<ValueRef> sources) {
+    private static LineageEntry sourced(ValueLocation target, List<ValueLocation> sources) {
         LineageEntry entry = new LineageEntry();
-        entry.to = ref(target);
-        entry.from = ref(sources.get(0));
+        entry.to = reference(target);
+        entry.from = reference(sources.get(0));
         entry.value = target.value;
         if (sources.size() > 1) {
-            entry.alternatives = new ArrayList<>();
-            for (ValueRef alt : sources.subList(1, sources.size())) {
-                entry.alternatives.add(ref(alt));
-            }
+            entry.alternatives = sources.subList(1, sources.size()).stream().map(LineageDetector::reference).collect(Collectors.toList());
         }
         return entry;
     }
 
-    private static LineageEntry unsourced(ValueRef target, String classification) {
+    private static LineageEntry unsourced(ValueLocation target, String classification) {
         LineageEntry entry = new LineageEntry();
-        entry.to = ref(target);
+        entry.to = reference(target);
         entry.value = target.value;
         entry.classification = classification;
         return entry;
     }
 
-    private static LineageRef ref(ValueRef v) {
-        return new LineageRef(v.traceId, v.spanId, v.path);
+    private static LineageRef reference(ValueLocation location) {
+        return new LineageRef(location.traceId, location.spanId, location.path);
     }
 }

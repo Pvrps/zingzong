@@ -21,7 +21,7 @@ public final class Http {
     public final StringWriter written = new StringWriter();
     public final ByteArrayOutputStream streamed = new ByteArrayOutputStream();
     public int status = 200;
-    private final String method;
+    private final String httpMethod;
     private final String uri;
     private final PrintWriter writer = new PrintWriter(written);
     private final ServletOutputStream output = new ServletOutputStream() {
@@ -41,15 +41,15 @@ public final class Http {
     };
 
     public Http(String method, String uri) {
-        this.method = method;
+        this.httpMethod = method;
         this.uri = uri;
         requestHeaders.put("Accept", Collections.singletonList("application/json"));
     }
 
     public HttpServletRequest request() {
-        return (HttpServletRequest) Proxy.newProxyInstance(Http.class.getClassLoader(), new Class<?>[]{HttpServletRequest.class}, (p, m, a) -> {
-            switch (m.getName()) {
-                case "getMethod": return method;
+        return (HttpServletRequest) Proxy.newProxyInstance(Http.class.getClassLoader(), new Class<?>[]{HttpServletRequest.class}, (proxy, method, arguments) -> {
+            switch (method.getName()) {
+                case "getMethod": return httpMethod;
                 case "getRequestURI": return uri;
                 case "getContextPath": return "/orders";
                 case "getProtocol": return "HTTP/1.1";
@@ -59,21 +59,21 @@ public final class Http {
                 case "getRemoteAddr": return "127.0.0.1";
                 case "getContentLength": return -1;
                 case "getHeaderNames": return Collections.enumeration(requestHeaders.keySet());
-                case "getHeaders": return Collections.enumeration(requestHeaders.getOrDefault(a[0], Collections.<String>emptyList()));
-                case "getHeader": { List<String> v = requestHeaders.get(a[0]); return v == null ? null : v.get(0); }
+                case "getHeaders": return Collections.enumeration(requestHeaders.getOrDefault(arguments[0], Collections.<String>emptyList()));
+                case "getHeader": { List<String> values = requestHeaders.get(arguments[0]); return values == null ? null : values.get(0); }
                 case "getCharacterEncoding": return "UTF-8";
-                case "hashCode": return System.identityHashCode(p);
-                case "equals": return p == a[0];
-                case "toString": return "request " + method + " " + uri;
-                default: return defaultValue(m.getReturnType());
+                case "hashCode": return System.identityHashCode(proxy);
+                case "equals": return proxy == arguments[0];
+                case "toString": return "request " + httpMethod + " " + uri;
+                default: return defaultValue(method.getReturnType());
             }
         });
     }
 
     public HttpServletResponse response() {
-        return (HttpServletResponse) Proxy.newProxyInstance(Http.class.getClassLoader(), new Class<?>[]{HttpServletResponse.class}, (p, m, a) -> {
-            switch (m.getName()) {
-                case "setStatus": status = (Integer) a[0]; return null;
+        return (HttpServletResponse) Proxy.newProxyInstance(Http.class.getClassLoader(), new Class<?>[]{HttpServletResponse.class}, (proxy, method, arguments) -> {
+            switch (method.getName()) {
+                case "setStatus": status = (Integer) arguments[0]; return null;
                 case "getStatus": return status;
                 case "getWriter": return writer;
                 case "getOutputStream": return output;
@@ -81,10 +81,10 @@ public final class Http {
                 case "getCharacterEncoding": return "UTF-8";
                 case "getHeaderNames": return new ArrayList<String>(Collections.singletonList("Content-Type"));
                 case "getHeaders": return Collections.singletonList("application/json");
-                case "hashCode": return System.identityHashCode(p);
-                case "equals": return p == a[0];
+                case "hashCode": return System.identityHashCode(proxy);
+                case "equals": return proxy == arguments[0];
                 case "toString": return "response";
-                default: return defaultValue(m.getReturnType());
+                default: return defaultValue(method.getReturnType());
             }
         });
     }

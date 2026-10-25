@@ -1,5 +1,6 @@
 package ca.gc.cra.xz02.devops.wltrace.plugin.domain;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -22,6 +23,24 @@ public abstract class DomainPlatform {
     /** The platform of the JVM the plugin runs in. */
     public static DomainPlatform current() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win") ? new WindowsPlatform() : new UnixPlatform();
+    }
+
+    /**
+     * The platform of a domain, from its {@code bin} directory: Unix start scripts, Windows start
+     * scripts, or the platform the plugin runs on when the directory has both or neither.
+     */
+    public static DomainPlatform detect(Path binDirectory) {
+        UnixPlatform unix = new UnixPlatform();
+        WindowsPlatform windows = new WindowsPlatform();
+        boolean unixScripts = Files.isRegularFile(binDirectory.resolve(unix.domainEnvFileName()));
+        boolean windowsScripts = Files.isRegularFile(binDirectory.resolve(windows.domainEnvFileName()));
+        if (unixScripts && !windowsScripts) {
+            return unix;
+        }
+        if (windowsScripts && !unixScripts) {
+            return windows;
+        }
+        return current();
     }
 
     /** {@code unix} or {@code windows}, for messages. */

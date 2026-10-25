@@ -22,7 +22,7 @@ public final class Domain {
 
     public Domain(Path home) {
         this.home = canonical(home);
-        this.platform = detectPlatform(this.home.resolve("bin"));
+        this.platform = DomainPlatform.detect(this.home.resolve("bin"));
     }
 
     /** Fails with a plain explanation when this is not a WebLogic domain. */
@@ -90,20 +90,6 @@ public final class Domain {
         } catch (IOException failure) {
             return path.toAbsolutePath().normalize();
         }
-    }
-
-    private static DomainPlatform detectPlatform(Path binDirectory) {
-        UnixPlatform unix = new UnixPlatform();
-        WindowsPlatform windows = new WindowsPlatform();
-        boolean unixScripts = Files.isRegularFile(binDirectory.resolve(unix.domainEnvFileName()));
-        boolean windowsScripts = Files.isRegularFile(binDirectory.resolve(windows.domainEnvFileName()));
-        if (unixScripts && !windowsScripts) {
-            return unix;
-        }
-        if (windowsScripts && !unixScripts) {
-            return windows;
-        }
-        return DomainPlatform.current();
     }
 
     @Override

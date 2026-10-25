@@ -42,6 +42,35 @@ class BootstrapVisibilityTest {
         assertTrue(offenders.isEmpty(), "bootstrap-loaded code linking to platform modules (recognise by name instead):\n" + String.join("\n", offenders));
     }
 
+    /** Java 8 bytecode has major version 52; the one agent jar runs on a JDK 8 and a JDK 21 server. */
+    private static final int JAVA_8_MAJOR_VERSION = 52;
+
+    @Test
+    void agentClassesAreJava8Bytecode() throws IOException {
+        Path classes = Paths.get("target", "classes");
+        assertTrue(Files.isDirectory(classes), "run after compile: " + classes.toAbsolutePath());
+        List<String> offenders = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(classes)) {
+            files.filter(p -> p.toString().endsWith(".class")).forEach(p -> {
+                int major = majorVersion(p);
+                if (major > JAVA_8_MAJOR_VERSION) {
+                    offenders.add(classes.relativize(p) + " has major version " + major);
+                }
+            });
+        }
+        assertTrue(offenders.isEmpty(), "class files above Java 8 bytecode:\n" + String.join("\n", offenders));
+    }
+
+    private static int majorVersion(Path classFile) {
+        try (java.io.DataInputStream data = new java.io.DataInputStream(Files.newInputStream(classFile))) {
+            data.readInt();
+            data.readUnsignedShort();
+            return data.readUnsignedShort();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /** CONSTANT_Class entries of a class file, as internal names. */
     private static List<String> classReferences(Path classFile) {
         List<String> names = new ArrayList<>();

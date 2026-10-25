@@ -22,9 +22,9 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-    <!-- One build for WebLogic 14.1.2 / JDK 21 and 12.2.1 / JDK 8: the agent runs on both servers,
-         the plugin inside whatever JDK the developer's Maven uses. Builds under JDK 8 or later. -->
-    <maven.compiler.release>8</maven.compiler.release>
+    <!-- Java 8 bytecode from a Java 8 or a later JDK: source/target, because javac 8 does not understand the release option. -->
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
 
     <!-- Test scope only (agent test fixtures): Java EE 8 javax.* API and the EclipseLink bundled with WebLogic 14.1.2. -->
     <javaee-api.version>8.0.1</javaee-api.version>
@@ -33,10 +33,12 @@
     <jackson.version>2.19.0</jackson.version>
     <junit.version>5.12.2</junit.version>
 
-    <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
-    <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
-    <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
-    <maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
+    <!-- Every plugin at a version that runs on a Java 8 JDK. -->
+    <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
+    <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+    <maven-jar-plugin.version>3.3.0</maven-jar-plugin.version>
+    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
+    <maven-plugin-plugin.version>3.9.0</maven-plugin-plugin.version>
   </properties>
 
   <dependencyManagement>

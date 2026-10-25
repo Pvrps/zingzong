@@ -5,8 +5,9 @@ import io.capture.plugin.reader.RecordingDir;
 import io.capture.trace.RecordingIndex;
 import io.capture.trace.RecordingManifest;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,17 +15,18 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The recordings under the output directory, newest first, and each one's viewer index.
- * Indexes (traces, lineage) are computed in-process and cached per
- * directory; a directory is re-read when any file in it is newer or the file count changed,
+ * The recordings under the output directory, newest first, and each one's viewer index. Indexes
+ * are cached per directory and recomputed when any file in it is newer or the file count changed,
  * which is how a live recording shows new traces as they land.
  */
 public final class Recordings {
 
     public static final Pattern ID = Pattern.compile("[A-Za-z0-9._-]+");
+    private static final Pattern ID_TIMESTAMP = Pattern.compile("rec-(\\d{4})(\\d{2})(\\d{2})-(\\d{2})(\\d{2})(\\d{2}).*");
 
     /** One row of the home view. */
     public static final class Summary {
@@ -57,56 +59,60 @@ public final class Recordings {
         }
     }
 
-    private final File outDir;
+    private final Path outDir;
     private final Map<String, Cached> cache = new HashMap<String, Cached>();
 
-    public Recordings(File outDir) {
+    public Recordings(Path outDir) {
         this.outDir = outDir;
     }
 
-    public File outDir() {
+    public Path outDir() {
         return outDir;
     }
 
-    public File dir(String id) {
-        return ID.matcher(id).matches() ? new File(outDir, id) : null;
+    public Path dir(String id) {
+        return ID.matcher(id).matches() ? outDir.resolve(id) : null;
     }
 
     public boolean exists(String id) {
-        File dir = dir(id);
-        return dir != null && dir.isDirectory() && isRecording(dir);
+        Path dir = dir(id);
+        return dir != null && Files.isDirectory(dir) && isRecording(dir);
     }
 
     /** All recordings, newest first; {@code activeId} is what the servers currently report. */
     public List<Summary> list(String activeId) {
         List<Summary> result = new ArrayList<Summary>();
-        File[] dirs = outDir.listFiles();
-        if (dirs == null) {
+        if (!Files.isDirectory(outDir)) {
             return result;
         }
-        for (File dir : dirs) {
-            if (!dir.isDirectory() || !ID.matcher(dir.getName()).matches() || !isRecording(dir)) {
-                continue;
+        try (DirectoryStream<Path> dirs = Files.newDirectoryStream(outDir)) {
+            for (Path dir : dirs) {
+                String id = dir.getFileName().toString();
+                if (!Files.isDirectory(dir) || !ID.matcher(id).matches() || !isRecording(dir)) {
+                    continue;
+                }
+                RecordingManifest manifest = null;
+                try {
+                    manifest = RecordingDir.loadManifest(dir);
+                } catch (IOException ignored) {
+                    // a manifest being written; show what we have
+                }
+                int traces;
+                try {
+                    traces = RecordingDir.traceFiles(dir).size();
+                } catch (IOException e) {
+                    traces = 0;
+                }
+                boolean active = id.equals(activeId);
+                List<String> servers = manifest == null || manifest.servers == null ? Collections.<String>emptyList() : manifest.servers;
+                result.add(new Summary(id,
+                        manifest == null ? id : manifest.name,
+                        manifest == null ? null : manifest.startedAt,
+                        manifest == null || active ? null : manifest.endedAt,
+                        traces, servers, active));
             }
-            RecordingManifest manifest = null;
-            try {
-                manifest = RecordingDir.loadManifest(dir.toPath());
-            } catch (IOException ignored) {
-                // a manifest being written; show what we have
-            }
-            int traces;
-            try {
-                traces = RecordingDir.traceFiles(dir.toPath()).size();
-            } catch (IOException e) {
-                traces = 0;
-            }
-            boolean active = dir.getName().equals(activeId);
-            List<String> servers = manifest == null || manifest.servers == null ? Collections.<String>emptyList() : manifest.servers;
-            result.add(new Summary(dir.getName(),
-                    manifest == null ? dir.getName() : manifest.name,
-                    manifest == null ? null : manifest.startedAt,
-                    manifest == null || active ? null : manifest.endedAt,
-                    traces, servers, active));
+        } catch (IOException e) {
+            return result;
         }
         Collections.sort(result, new Comparator<Summary>() {
             @Override
@@ -117,12 +123,12 @@ public final class Recordings {
         return result;
     }
 
-    /** startedAt when known, else the timestamp in a rec-yyyyMMdd-HHmmss id in the same shape, else the id. */
+    /** startedAt when known, else the timestamp of a rec-yyyyMMdd-HHmmss id in the same shape, else the id. */
     private static String sortKey(Summary s) {
         if (s.startedAt != null) {
             return s.startedAt;
         }
-        java.util.regex.Matcher m = Pattern.compile("rec-(\\d{4})(\\d{2})(\\d{2})-(\\d{2})(\\d{2})(\\d{2}).*").matcher(s.id);
+        Matcher m = ID_TIMESTAMP.matcher(s.id);
         if (m.matches()) {
             return m.group(1) + "-" + m.group(2) + "-" + m.group(3) + "T" + m.group(4) + ":" + m.group(5) + ":" + m.group(6);
         }
@@ -131,8 +137,8 @@ public final class Recordings {
 
     /** The viewer index of one recording, recomputed when the directory changed. */
     public synchronized RecordingIndex index(String id) throws IOException {
-        File dir = dir(id);
-        if (dir == null || !dir.isDirectory()) {
+        Path dir = dir(id);
+        if (dir == null || !Files.isDirectory(dir)) {
             return null;
         }
         long stamp = stamp(dir);
@@ -140,73 +146,72 @@ public final class Recordings {
         if (cached != null && cached.stamp == stamp) {
             return cached.index;
         }
-        RecordingIndex index = Indexer.index(RecordingDir.load(dir.toPath()));
+        RecordingIndex index = Indexer.index(RecordingDir.load(dir));
         cache.put(id, new Cached(stamp, index));
         return index;
     }
 
     /** A trace file of a recording, by its file name; null unless it is one. */
-    public File traceFile(String id, String file) {
-        File dir = dir(id);
+    public Path traceFile(String id, String file) {
+        Path dir = dir(id);
         if (dir == null || !RecordingDir.TRACE_FILE.matcher(file).matches()) {
             return null;
         }
-        File f = new File(dir, file);
-        return f.isFile() ? f : null;
+        Path f = dir.resolve(file);
+        return Files.isRegularFile(f) ? f : null;
     }
 
     /**
-     * Removes a recording: its trace files, manifests and directory. Refuses the active one
-     * (the servers are still writing into it). Returns how many files were deleted.
+     * Removes a recording: its trace files, manifests and directory. Refuses the active one, which
+     * the servers are still writing into. Returns how many files were deleted.
      */
     public synchronized int delete(String id, String activeId) throws IOException {
-        File dir = dir(id);
-        if (dir == null || !dir.isDirectory() || !isRecording(dir)) {
+        Path dir = dir(id);
+        if (dir == null || !Files.isDirectory(dir) || !isRecording(dir)) {
             throw new IOException("no recording " + id);
         }
         if (id.equals(activeId)) {
             throw new IllegalStateException("recording " + id + " is active; stop it first");
         }
         int deleted = 0;
-        File[] files = dir.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                if (f.isFile()) {
-                    if (!f.delete()) {
-                        throw new IOException("could not delete " + f);
-                    }
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(dir)) {
+            for (Path f : files) {
+                if (Files.isRegularFile(f)) {
+                    Files.delete(f);
                     deleted++;
                 }
             }
         }
-        if (!dir.delete()) {
-            throw new IOException("could not delete " + dir + " (something besides recording files is in it)");
+        try {
+            Files.delete(dir);
+        } catch (IOException e) {
+            throw new IOException("could not delete " + dir + " (something besides recording files is in it)", e);
         }
         cache.remove(id);
         return deleted;
     }
 
-    private static boolean isRecording(File dir) {
-        Path p = dir.toPath();
+    private static boolean isRecording(Path dir) {
         try {
-            return !RecordingDir.manifestFiles(p).isEmpty() || !RecordingDir.traceFiles(p).isEmpty();
+            return !RecordingDir.manifestFiles(dir).isEmpty() || !RecordingDir.traceFiles(dir).isEmpty();
         } catch (IOException e) {
             return false;
         }
     }
 
     /** Newest modification time and file count of the directory's files: changes when a trace lands or a manifest is completed. */
-    private static long stamp(File dir) {
-        File[] files = dir.listFiles();
+    private static long stamp(Path dir) {
         long newest = 0;
         int count = 0;
-        if (files != null) {
-            for (File f : files) {
-                if (f.isFile()) {
-                    newest = Math.max(newest, f.lastModified());
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(dir)) {
+            for (Path f : files) {
+                if (Files.isRegularFile(f)) {
+                    newest = Math.max(newest, Files.getLastModifiedTime(f).toMillis());
                     count++;
                 }
             }
+        } catch (IOException e) {
+            return -1;
         }
         return newest * 31 + count;
     }

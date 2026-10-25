@@ -4,6 +4,8 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 
+import java.awt.Desktop;
+import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.CountDownLatch;
@@ -11,7 +13,7 @@ import java.util.concurrent.CountDownLatch;
 /**
  * Serves the page where captures are started and stopped, the active one is watched live and
  * previous ones are viewed, on {@code 127.0.0.1:<capture.port>}; opens it in the browser when
- * it can, and blocks until Ctrl-C. Refuses when the domain is not enabled on disk.
+ * the desktop allows and blocks until Ctrl-C. Refuses when the domain is not enabled on disk.
  */
 @Mojo(name = "start", requiresProject = false, aggregator = true)
 public final class StartMojo extends AbstractCaptureMojo {
@@ -32,7 +34,9 @@ public final class StartMojo extends AbstractCaptureMojo {
         }
         web.start();
         say("page: " + web.url() + "  (Ctrl-C to stop)");
-        openBrowser(web.url());
+        if (!openBrowser(web.url())) {
+            say("open " + web.url() + " in a browser");
+        }
         final CountDownLatch done = new CountDownLatch(1);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -49,24 +53,16 @@ public final class StartMojo extends AbstractCaptureMojo {
         }
     }
 
-    private void openBrowser(String url) {
+    private static boolean openBrowser(String url) {
         try {
-            if (!java.awt.GraphicsEnvironment.isHeadless() && java.awt.Desktop.isDesktopSupported()
-                    && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
-                java.awt.Desktop.getDesktop().browse(URI.create(url));
-                return;
+            if (!GraphicsEnvironment.isHeadless() && Desktop.isDesktopSupported()
+                    && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(URI.create(url));
+                return true;
             }
         } catch (Throwable ignored) {
-            // fall through to the command-line openers
+            // the URL is printed instead
         }
-        String os = System.getProperty("os.name", "").toLowerCase();
-        String[] command = os.contains("mac") ? new String[]{"open", url}
-                : os.contains("win") ? new String[]{"rundll32", "url.dll,FileProtocolHandler", url}
-                : new String[]{"xdg-open", url};
-        try {
-            new ProcessBuilder(command).redirectErrorStream(true).start();
-        } catch (IOException e) {
-            say("open " + url + " in a browser");
-        }
+        return false;
     }
 }

@@ -1,8 +1,10 @@
 package io.capture.plugin;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -27,8 +29,8 @@ public final class StateMonitor {
     static final String BUILD_PROPERTIES = "io/capture/agent/build.properties";
 
     private final Domain domain;
-    private final File pluginAgentJar;
-    private final File outDir;
+    private final Path pluginAgentJar;
+    private final Path outDir;
     private final String pluginAgentBuild;
     private final Map<String, Known> known = new LinkedHashMap<String, Known>();
     private final Set<String> notOurs = new HashSet<String>();
@@ -49,7 +51,7 @@ public final class StateMonitor {
         }
     }
 
-    public StateMonitor(Domain domain, File pluginAgentJar, File outDir) {
+    public StateMonitor(Domain domain, Path pluginAgentJar, Path outDir) {
         this.domain = domain;
         this.pluginAgentJar = pluginAgentJar;
         this.outDir = outDir;
@@ -60,7 +62,7 @@ public final class StateMonitor {
         return domain;
     }
 
-    public File outDir() {
+    public Path outDir() {
         return outDir;
     }
 
@@ -71,8 +73,8 @@ public final class StateMonitor {
         } catch (IOException e) {
             blockPresent = false;
         }
-        File installed = domain.installedAgentJar();
-        boolean jarPresent = installed.isFile();
+        Path installed = domain.installedAgentJar();
+        boolean jarPresent = Files.isRegularFile(installed);
         boolean jarCurrent = jarPresent && pluginAgentBuild != null && pluginAgentBuild.equals(buildStamp(installed));
         refreshJvms();
         List<DomainState.Server> servers = new ArrayList<DomainState.Server>();
@@ -218,7 +220,7 @@ public final class StateMonitor {
         if (root == null) {
             root = props.getProperty("user.dir");
         }
-        return root != null && Domain.canonical(new File(root)).equals(domain.home);
+        return root != null && domain.isHome(Paths.get(root));
     }
 
     private void connect(Known k) {
@@ -252,19 +254,19 @@ public final class StateMonitor {
     private String newRecordingId() {
         String base = "rec-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
         String id = base;
-        for (int n = 2; new File(outDir, id).exists(); n++) {
+        for (int n = 2; Files.exists(outDir.resolve(id)); n++) {
             id = base + "-" + n;
         }
         return id;
     }
 
     /** The {@code build=} stamp of an agent jar's build.properties, or null. */
-    public static String buildStamp(File jar) {
-        if (jar == null || !jar.isFile()) {
+    public static String buildStamp(Path jar) {
+        if (jar == null || !Files.isRegularFile(jar)) {
             return null;
         }
         try {
-            JarFile jf = new JarFile(jar);
+            JarFile jf = new JarFile(jar.toFile());
             try {
                 ZipEntry entry = jf.getEntry(BUILD_PROPERTIES);
                 if (entry == null) {
@@ -290,7 +292,7 @@ public final class StateMonitor {
         return pluginAgentBuild;
     }
 
-    public File pluginAgentJar() {
+    public Path pluginAgentJar() {
         return pluginAgentJar;
     }
 }

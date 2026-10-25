@@ -11,7 +11,7 @@ import io.capture.trace.RecordingIndex;
 import io.capture.trace.TraceJson;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
+import java.nio.file.Path;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -140,11 +140,11 @@ public final class WebServer {
                     RecordingIndex index = recordings.index(id);
                     json(x, 200, JSON.valueToTree(index));
                 } else if (parts.length == 3 && parts[1].equals("traces")) {
-                    File f = recordings.traceFile(id, parts[2]);
+                    Path f = recordings.traceFile(id, parts[2]);
                     if (f == null) {
                         json(x, 404, error("no trace " + parts[2]));
                     } else {
-                        send(x, 200, "application/json", Files.readAllBytes(f.toPath()));
+                        send(x, 200, "application/json", Files.readAllBytes(f));
                     }
                 } else {
                     json(x, 404, error("not found"));
@@ -177,9 +177,9 @@ public final class WebServer {
         n.put("blockPresent", s.blockPresent);
         n.put("jarPresent", s.jarPresent);
         n.put("jarCurrent", s.jarCurrent);
-        n.put("domain", monitor.domain().home.getPath());
+        n.put("domain", monitor.domain().home.toString());
         n.put("webLogicVersion", monitor.domain().webLogicVersion());
-        n.put("outDir", recordings.outDir().getPath());
+        n.put("outDir", recordings.outDir().toString());
         n.put("pluginAgentBuild", monitor.pluginAgentBuild());
         n.put("activeRecordingId", s.activeRecordingId);
         n.put("activeRecordingName", s.activeRecordingName);

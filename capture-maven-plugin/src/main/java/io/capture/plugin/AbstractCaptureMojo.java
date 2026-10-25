@@ -8,6 +8,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * The three parameters every goal takes, all settable with {@code -D}, and the plumbing they
@@ -31,28 +33,29 @@ public abstract class AbstractCaptureMojo extends AbstractMojo {
     private PluginDescriptor plugin;
 
     protected Domain domain;
-    protected File outDir;
+    protected Path outDir;
     protected StateMonitor monitor;
 
     /** Verifies the domain, resolves the agent jar and the output directory. */
     protected void prepare() throws MojoExecutionException {
-        domain = new Domain(domainHome);
+        domain = new Domain(domainHome.toPath());
         try {
             domain.verify();
         } catch (IOException e) {
             throw new MojoExecutionException(e.getMessage());
         }
-        File dir = out != null ? out : new File(new File(System.getProperty("user.home"), ".ejb-capture"), domain.home.getName());
+        Path dir = out != null ? out.toPath()
+                : Paths.get(System.getProperty("user.home"), ".ejb-capture").resolve(domain.home.getFileName().toString());
         outDir = Domain.canonical(dir);
         monitor = new StateMonitor(domain, agentJar(), outDir);
     }
 
     /** The capture-agent jar among this plugin's resolved dependencies. */
-    private File agentJar() throws MojoExecutionException {
+    private Path agentJar() throws MojoExecutionException {
         if (plugin != null && plugin.getArtifacts() != null) {
             for (Artifact a : plugin.getArtifacts()) {
                 if ("io.capture".equals(a.getGroupId()) && "capture-agent".equals(a.getArtifactId()) && a.getFile() != null) {
-                    return a.getFile();
+                    return a.getFile().toPath();
                 }
             }
         }
@@ -65,7 +68,7 @@ public abstract class AbstractCaptureMojo extends AbstractMojo {
     }
 
     protected void report(DomainState state) {
-        say("domain " + domain + " (WebLogic " + domain.webLogicVersion() + ")");
+        say("domain " + domain + " (WebLogic " + domain.webLogicVersion() + ", " + domain.platform().name().toLowerCase() + " start scripts)");
         say("state: " + state.message);
     }
 }

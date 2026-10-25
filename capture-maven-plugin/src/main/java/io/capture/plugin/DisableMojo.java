@@ -3,15 +3,17 @@ package io.capture.plugin;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Mojo;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
  * Removes the capture agent from a WebLogic domain: stops an active recording, removes the
- * ejb-capture block from {@code bin/setUserOverrides.sh} (and the file, when enable created
- * it), deletes {@code <domain>/ejb-capture/}. Recordings are never touched. A running server
- * keeps the agent loaded, idle, until it restarts.
+ * ejb-capture block from the overrides file (and the file, when enable created it), deletes
+ * {@code <domain>/ejb-capture/}. Recordings are never touched. A running server keeps the agent
+ * loaded, idle, until it restarts.
  */
 @Mojo(name = "disable", requiresProject = false, aggregator = true)
 public final class DisableMojo extends AbstractCaptureMojo {
@@ -25,13 +27,14 @@ public final class DisableMojo extends AbstractCaptureMojo {
             say("stopped the active recording " + stopped + " first");
         }
         try {
-            boolean removed = OverridesBlock.remove(domain.setUserOverrides());
-            boolean fileGone = !domain.setUserOverrides().exists();
+            Path overrides = domain.setUserOverrides();
+            boolean removed = OverridesBlock.remove(overrides, OverridesBlock.Syntax.of(domain.platform()));
+            boolean fileGone = !Files.exists(overrides);
             say(removed
-                    ? (fileGone ? "removed " + domain.setUserOverrides() + " (enable had created it)" : "removed the ejb-capture block from " + domain.setUserOverrides())
-                    : "no ejb-capture block in " + domain.setUserOverrides());
-            File install = domain.installDir();
-            if (install.isDirectory()) {
+                    ? (fileGone ? "removed " + overrides + " (enable had created it)" : "removed the ejb-capture block from " + overrides)
+                    : "no ejb-capture block in " + overrides);
+            Path install = domain.installDir();
+            if (Files.isDirectory(install)) {
                 deleteRecursively(install);
                 say("deleted " + install);
             } else {
@@ -51,15 +54,14 @@ public final class DisableMojo extends AbstractCaptureMojo {
         monitor.close();
     }
 
-    private static void deleteRecursively(File f) throws IOException {
-        File[] children = f.listFiles();
-        if (children != null) {
-            for (File c : children) {
-                deleteRecursively(c);
+    private static void deleteRecursively(Path p) throws IOException {
+        if (Files.isDirectory(p)) {
+            try (DirectoryStream<Path> children = Files.newDirectoryStream(p)) {
+                for (Path c : children) {
+                    deleteRecursively(c);
+                }
             }
         }
-        if (!f.delete() && f.exists()) {
-            throw new IOException("cannot delete " + f);
-        }
+        Files.deleteIfExists(p);
     }
 }

@@ -1,6 +1,6 @@
 package io.capture.agent.hook;
 
-import io.capture.agent.span.Recorder;
+import io.capture.agent.span.JdbcRecorder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
@@ -23,7 +23,7 @@ public final class JdbcAdvice {
         public static long enter(@Advice.This(typing = Assigner.Typing.DYNAMIC) Object statement,
                                  @Advice.Origin("#m") String method,
                                  @Advice.AllArguments(typing = Assigner.Typing.DYNAMIC) Object[] args) {
-            return Recorder.enterJdbc(statement, method, args);
+            return JdbcRecorder.enter(statement, method, args);
         }
 
         @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
@@ -31,7 +31,7 @@ public final class JdbcAdvice {
                                 @Advice.This(typing = Assigner.Typing.DYNAMIC) Object statement,
                                 @Advice.Return(typing = Assigner.Typing.DYNAMIC) Object result,
                                 @Advice.Thrown Throwable thrown) {
-            Recorder.exitJdbc(token, statement, result, thrown);
+            JdbcRecorder.exit(token, statement, result, thrown);
         }
     }
 
@@ -43,7 +43,7 @@ public final class JdbcAdvice {
         public static void enter(@Advice.This(typing = Assigner.Typing.DYNAMIC) Object statement,
                                  @Advice.Origin("#m") String method,
                                  @Advice.AllArguments(typing = Assigner.Typing.DYNAMIC) Object[] args) {
-            Recorder.bindJdbc(statement, method, args);
+            JdbcRecorder.bind(statement, method, args);
         }
     }
 
@@ -56,7 +56,7 @@ public final class JdbcAdvice {
         public static void enter(@Advice.This(typing = Assigner.Typing.DYNAMIC) Object resultSet,
                                  @Advice.Argument(0) String method,
                                  @Advice.Argument(value = 2, typing = Assigner.Typing.DYNAMIC) Object returned) {
-            Recorder.rowRead(resultSet, method, returned);
+            JdbcRecorder.rowRead(resultSet, method, returned);
         }
     }
 }

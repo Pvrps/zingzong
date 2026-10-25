@@ -1,7 +1,7 @@
 package io.capture.agent.http;
 
 import io.capture.agent.AgentLog;
-import io.capture.agent.span.Recorder;
+import io.capture.agent.span.Spans;
 import io.capture.trace.HttpInfo;
 
 import java.io.InputStream;
@@ -39,7 +39,7 @@ public final class ServletRecorder {
      * request, or a re-entry of the chain for a request already being recorded).
      */
     public static Object[] enter(Object request, Object response) {
-        if (!Recorder.isEnabled() || request == null || response == null) {
+        if (Spans.active() == null || request == null || response == null) {
             return null;
         }
         try {
@@ -47,7 +47,7 @@ public final class ServletRecorder {
                 return null;
             }
             Object original = unwrap(request);
-            if (Recorder.currentServletRequest() == original) {
+            if (Spans.servletRequest() == original) {
                 return null; // next filter in the same chain
             }
             HttpCapture capture = new HttpCapture(original, unwrap(response));
@@ -66,7 +66,7 @@ public final class ServletRecorder {
             capture.wrappedResponse = wrappedResponse;
             String principal = principalOf(request);
             String sessionId = sessionIdOf(request);
-            if (!Recorder.enterServlet(capture, principal, sessionId)) {
+            if (!Spans.openServlet(capture, principal, sessionId)) {
                 return null;
             }
             return new Object[]{wrappedRequest, wrappedResponse, capture};
@@ -85,7 +85,7 @@ public final class ServletRecorder {
             flushWriter(capture);
             drainUnreadRequestBody(capture);
             HttpInfo info = describe(capture, thrown != null);
-            Recorder.exitServlet(capture, info, principalOf(capture.originalRequest), sessionIdOf(capture.originalRequest), thrown);
+            Spans.closeServlet(capture, info, principalOf(capture.originalRequest), sessionIdOf(capture.originalRequest), thrown);
         } catch (Throwable t) {
             try {
                 AgentLog.error("servlet exit handling failed", t);

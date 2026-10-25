@@ -1,6 +1,6 @@
 package io.capture.agent.hook;
 
-import io.capture.agent.span.Recorder;
+import io.capture.agent.span.MessageRecorder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
@@ -17,13 +17,13 @@ public final class MessageAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static long enter(@Advice.This(typing = Assigner.Typing.DYNAMIC) Object listener,
                              @Advice.Argument(value = 0, typing = Assigner.Typing.DYNAMIC) Object message) {
-        return Recorder.enterMessage(listener, message);
+        return MessageRecorder.enter(listener, message);
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void exit(@Advice.Enter long token,
                             @Advice.Argument(value = 0, typing = Assigner.Typing.DYNAMIC) Object message,
                             @Advice.Thrown Throwable thrown) {
-        Recorder.exitMessage(token, message, thrown);
+        MessageRecorder.exit(token, message, thrown);
     }
 }

@@ -1,6 +1,6 @@
 package io.capture.agent.hook;
 
-import io.capture.agent.span.Recorder;
+import io.capture.agent.span.EjbRecorder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
@@ -20,7 +20,7 @@ public final class ContainerAdvice {
     public static long enter(@Advice.Argument(value = 0, typing = Assigner.Typing.DYNAMIC) Object invokable,
                              @Advice.Argument(value = 1, typing = Assigner.Typing.DYNAMIC) Object clientObject,
                              @Advice.Argument(value = 2, typing = Assigner.Typing.DYNAMIC) Object wrapper) {
-        return Recorder.enterContainer(invokable, clientObject, wrapper);
+        return EjbRecorder.enter(invokable, clientObject, wrapper);
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
@@ -28,6 +28,6 @@ public final class ContainerAdvice {
                             @Advice.Argument(value = 3, typing = Assigner.Typing.DYNAMIC) Object[] args,
                             @Advice.Return(typing = Assigner.Typing.DYNAMIC) Object result,
                             @Advice.Thrown Throwable thrown) {
-        Recorder.exitContainer(token, args, result, thrown);
+        EjbRecorder.exit(token, args, result, thrown);
     }
 }

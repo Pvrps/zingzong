@@ -95,10 +95,7 @@
           </execution>
         </executions>
       </plugin>
-      <!--
-        Everything but the agent jar is shaded in and relocated: the plugin runs inside the
-        Maven JVM, which has its own Jackson and SLF4J.
-      -->
+      <!-- Everything but the agent jar is shaded in and relocated: the Maven JVM has its own Jackson. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -119,30 +116,6 @@
                 <relocation>
                   <pattern>com.fasterxml.jackson</pattern>
                   <shadedPattern>io.capture.plugin.shaded.com.fasterxml.jackson</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.networknt</pattern>
-                  <shadedPattern>io.capture.plugin.shaded.com.networknt</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.ethlo</pattern>
-                  <shadedPattern>io.capture.plugin.shaded.com.ethlo</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.slf4j</pattern>
-                  <shadedPattern>io.capture.plugin.shaded.org.slf4j</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.yaml</pattern>
-                  <shadedPattern>io.capture.plugin.shaded.org.yaml</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.jcodings</pattern>
-                  <shadedPattern>io.capture.plugin.shaded.org.jcodings</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.joni</pattern>
-                  <shadedPattern>io.capture.plugin.shaded.org.joni</shadedPattern>
                 </relocation>
               </relocations>
               <filters>

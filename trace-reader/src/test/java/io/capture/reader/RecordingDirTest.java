@@ -10,13 +10,12 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The Phase 4 acceptance recording (rec-20261023-162921) as captured on the server. */
+/** Proves loading, ordering, lineage and indexing of a recording captured on the server: Create order then Confirm order. */
 class RecordingDirTest {
 
     private static Path recording() throws Exception {
@@ -38,12 +37,6 @@ class RecordingDirTest {
         assertEquals(1, dir.traces.get(0).seq());
         assertEquals("OrderService.createOrder", Labels.span(dir.traces.get(0).root()));
         assertEquals("OrderService.confirmOrder", Labels.span(dir.traces.get(1).root()));
-    }
-
-    @Test
-    void everyFileValidatesAgainstTheSchema() throws Exception {
-        Map<String, List<String>> problems = new TraceValidator().validateAll(recording());
-        assertTrue(problems.isEmpty(), problems.toString());
     }
 
     @Test
@@ -73,15 +66,12 @@ class RecordingDirTest {
     }
 
     @Test
-    void indexGroupsBothTracesIntoTheHttpSession() throws Exception {
+    void indexSummarisesBothTraces() throws Exception {
         RecordingDir dir = RecordingDir.load(recording());
         RecordingIndex index = Indexer.index(dir);
         assertEquals(2, index.traces.size());
         assertEquals("OrderService.createOrder", index.traces.get(0).rootLabel);
         assertEquals(9, index.traces.get(0).spanCount);
-        assertEquals(1, index.sessions.size());
-        assertEquals(RecordingIndex.Session.KIND_HTTP_SESSION, index.sessions.get(0).kind);
-        assertEquals(2, index.sessions.get(0).traceIds.size());
         assertTrue(index.lineage.size() >= 2);
     }
 }

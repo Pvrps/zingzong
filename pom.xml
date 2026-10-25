@@ -33,7 +33,6 @@
     <bytebuddy.version>1.17.5</bytebuddy.version>
     <jackson.version>2.19.0</jackson.version>
     <junit.version>5.12.2</junit.version>
-    <json-schema-validator.version>1.5.9</json-schema-validator.version>
 
     <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>

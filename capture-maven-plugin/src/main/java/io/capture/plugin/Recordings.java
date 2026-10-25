@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 
 /**
  * The recordings under the output directory, newest first, and each one's viewer index.
- * Indexes (traces, sessions, lineage) are computed in-process by trace-reader and cached per
+ * Indexes (traces, lineage) are computed in-process and cached per
  * directory; a directory is re-read when any file in it is newer or the file count changed,
  * which is how a live recording shows new traces as they land.
  */

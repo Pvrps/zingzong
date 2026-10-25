@@ -13,25 +13,12 @@
   <artifactId>trace-reader</artifactId>
   <packaging>jar</packaging>
   <name>trace-reader</name>
-  <description>Loads recordings, validates them, builds sessions, lineage and the viewer index. Library only; runs inside the plugin's Maven JDK, hence Java 8.</description>
+  <description>Loads recordings, detects lineage and builds the viewer index.</description>
 
   <dependencies>
     <dependency>
       <groupId>io.capture</groupId>
       <artifactId>trace-model</artifactId>
-    </dependency>
-    <!-- Schema validation of trace files against trace.schema.json (draft-07). -->
-    <dependency>
-      <groupId>com.networknt</groupId>
-      <artifactId>json-schema-validator</artifactId>
-      <version>${json-schema-validator.version}</version>
-    </dependency>
-    <!-- The validator logs through SLF4J; the plugin has nothing to say there. -->
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-nop</artifactId>
-      <version>2.0.16</version>
-      <scope>runtime</scope>
     </dependency>
 
     <dependency>

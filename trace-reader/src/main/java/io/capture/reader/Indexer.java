@@ -5,7 +5,7 @@ import io.capture.trace.LineageFile;
 import io.capture.trace.RecordingIndex;
 import io.capture.trace.Span;
 
-/** Builds {@code recording-index.json}: manifest, trace summaries, sessions, lineage. */
+/** Builds the viewer index of a loaded recording: manifest, one summary per trace, lineage. */
 public final class Indexer {
 
     private Indexer() {
@@ -21,7 +21,6 @@ public final class Indexer {
         for (LoadedTrace loaded : recording.traces) {
             index.traces.add(summary(loaded));
         }
-        index.sessions = SessionGrouper.group(recording.traces);
         index.lineage = lineage.entries;
         return index;
     }

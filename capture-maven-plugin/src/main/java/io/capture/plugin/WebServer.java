@@ -29,7 +29,7 @@ import java.util.concurrent.Executors;
  *   POST /api/capture/start   {"name": ...}  start a recording on every server JVM
  *   POST /api/capture/stop
  *   GET  /api/recordings                     all recordings under the output directory, newest first
- *   GET  /api/recordings/{id}                the viewer index (traces, sessions, lineage)
+ *   GET  /api/recordings/{id}                the viewer index (traces, lineage)
  *   DELETE /api/recordings/{id}              remove a finished recording and its files (409 while active)
  *   GET  /api/recordings/{id}/traces/{file}  one trace file
  * </pre>

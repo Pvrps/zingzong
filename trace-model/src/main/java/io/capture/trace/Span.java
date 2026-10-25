@@ -30,10 +30,8 @@ public class Span {
     public String module;
     public String thread;
 
-    /** Captured after the call returns. */
+    /** Captured after the call returns, so what the callee saw and did to them. */
     public List<ValueCapture> args;
-    /** Captured before the call when snapshotArgs=true. */
-    public List<ValueCapture> argsBefore;
     public ValueCapture result;
     public ExceptionInfo exception;
     public List<SerializationWarning> serializationWarnings;

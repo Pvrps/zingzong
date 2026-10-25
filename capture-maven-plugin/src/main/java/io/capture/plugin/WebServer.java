@@ -18,13 +18,15 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 
 /**
  * The page and its API on {@code 127.0.0.1:<port>}, on the JDK's own HTTP server.
  * <pre>
- *   GET  /                                   the page
+ *   GET  /, /index.html, /style.css, /app.js, /diagram.js   the page
  *   GET  /api/state                          DomainState, re-evaluated on every call
  *   POST /api/capture/start   {"name": ...}  start a recording on every server JVM
  *   POST /api/capture/stop
@@ -37,6 +39,15 @@ import java.util.concurrent.Executors;
 public final class WebServer {
 
     private static final ObjectMapper JSON = TraceJson.mapper();
+    /** The page's four files, served from the plugin's resources. */
+    private static final Map<String, String> STATIC_FILES = new HashMap<String, String>();
+
+    static {
+        STATIC_FILES.put("index.html", "text/html; charset=utf-8");
+        STATIC_FILES.put("style.css", "text/css; charset=utf-8");
+        STATIC_FILES.put("app.js", "text/javascript; charset=utf-8");
+        STATIC_FILES.put("diagram.js", "text/javascript; charset=utf-8");
+    }
 
     private final StateMonitor monitor;
     private final Recordings recordings;
@@ -49,9 +60,10 @@ public final class WebServer {
         server.createContext("/", new Handler() {
             @Override
             void handle(HttpExchange x, String path) throws Exception {
-                if (path.equals("/") || path.equals("/index.html")) {
-                    byte[] page = resource("io/capture/plugin/index.html");
-                    send(x, 200, "text/html; charset=utf-8", page);
+                String file = path.equals("/") ? "index.html" : path.substring(1);
+                String type = STATIC_FILES.get(file);
+                if (type != null) {
+                    send(x, 200, type, resource("io/capture/plugin/" + file));
                 } else {
                     send(x, 404, "text/plain", "not found".getBytes(StandardCharsets.UTF_8));
                 }

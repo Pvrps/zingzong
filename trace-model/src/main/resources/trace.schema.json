@@ -61,7 +61,6 @@
         "module": { "type": "string" },
         "thread": { "type": "string" },
         "args": { "type": "array", "items": { "$ref": "#/definitions/valueCapture" } },
-        "argsBefore": { "type": "array", "items": { "$ref": "#/definitions/valueCapture" } },
         "result": { "oneOf": [ { "$ref": "#/definitions/valueCapture" }, { "type": "null" } ] },
         "exception": { "oneOf": [ { "$ref": "#/definitions/exceptionInfo" }, { "type": "null" } ] },
         "serializationWarnings": { "type": "array", "items": { "$ref": "#/definitions/serializationWarning" } },

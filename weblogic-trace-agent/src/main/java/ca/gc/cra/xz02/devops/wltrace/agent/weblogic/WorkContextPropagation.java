@@ -76,7 +76,7 @@ public final class WorkContextPropagation {
         try {
             return new WorkContextPropagation(log, ClassLoader.getSystemClassLoader());
         } catch (Throwable failure) {
-            log.info("WorkContext propagation unavailable (" + failure + "); traces are not linked across threads");
+            log.info("WorkContext propagation absent (" + failure + "); traces are not linked across threads");
             return new WorkContextPropagation(log);
         }
     }

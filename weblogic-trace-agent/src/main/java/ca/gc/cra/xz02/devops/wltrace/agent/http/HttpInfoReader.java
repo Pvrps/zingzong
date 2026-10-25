@@ -23,7 +23,7 @@ import java.util.Map;
 public final class HttpInfoReader {
 
     private static final String ASSUMED = " (assumed)";
-    private static final String UNAVAILABLE = "@unavailable";
+    private static final String UNREADABLE = "@unreadable";
 
     private HttpInfoReader() {
     }
@@ -203,7 +203,7 @@ public final class HttpInfoReader {
                 headers.put(name, values);
             }
         } catch (Throwable failure) {
-            headers.put(UNAVAILABLE, Collections.singletonList(String.valueOf(failure)));
+            headers.put(UNREADABLE, Collections.singletonList(String.valueOf(failure)));
         }
         return headers;
     }
@@ -231,7 +231,7 @@ public final class HttpInfoReader {
                 headers.put(name, values == null ? new ArrayList<>() : new ArrayList<>(values));
             }
         } catch (Throwable failure) {
-            headers.put(UNAVAILABLE, Collections.singletonList(String.valueOf(failure)));
+            headers.put(UNREADABLE, Collections.singletonList(String.valueOf(failure)));
         }
         return headers;
     }

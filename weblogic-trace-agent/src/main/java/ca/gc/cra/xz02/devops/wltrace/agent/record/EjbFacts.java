@@ -72,7 +72,7 @@ public final class EjbFacts extends SpanFacts {
     }
 
     @Override
-    public String label() {
+    public String summary() {
         return beanClass.getSimpleName() + "." + signature.name;
     }
 }

@@ -43,7 +43,7 @@ public final class HttpFacts extends SpanFacts {
     }
 
     @Override
-    public String label() {
+    public String summary() {
         return ServletApi.string(capture.originalRequest, "getMethod") + " " + ServletApi.string(capture.originalRequest, "getRequestURI");
     }
 }

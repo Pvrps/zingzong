@@ -35,8 +35,8 @@ public class RecordingDirectoryTest {
         assertEquals(recording.manifest.traceCount, Long.valueOf(2));
         assertEquals(recording.traces.size(), 2);
         assertEquals(recording.traces.get(0).sequence(), 1);
-        assertEquals(SpanLabels.span(recording.traces.get(0).root()), "OrderService.createOrder");
-        assertEquals(SpanLabels.span(recording.traces.get(1).root()), "OrderService.confirmOrder");
+        assertEquals(SpanNames.span(recording.traces.get(0).root()), "OrderService.createOrder");
+        assertEquals(SpanNames.span(recording.traces.get(1).root()), "OrderService.confirmOrder");
     }
 
     @Test

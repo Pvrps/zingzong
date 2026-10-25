@@ -75,7 +75,7 @@ public final class ServletRecorder extends SpanRecorder<HttpFacts> {
             wrappedRequest = teeClasses.wrapRequest(request, capture);
             wrappedResponse = teeClasses.wrapResponse(response, capture);
         } catch (Throwable failure) {
-            log.warnOnce("tee-wrappers", "servlet tee wrappers unavailable, bodies will not be recorded: " + failure);
+            log.warnOnce("tee-wrappers", "servlet tee wrappers cannot be generated, bodies will not be recorded: " + failure);
             capture = new HttpCapture(original, ServletApi.unwrap(response), null);
         }
         return new HttpFacts(capture, wrappedRequest, wrappedResponse);

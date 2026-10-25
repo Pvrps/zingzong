@@ -69,7 +69,7 @@ public final class ServerRuntime {
             return first;
         } catch (Throwable failure) {
             principalUnavailable.set(true);
-            log.warnOnce("principal", "principal unavailable (" + SECURITY_CLASS + ".getCurrentSubject): " + failure + "; recording null from now on");
+            log.warnOnce("principal", "principal not readable (" + SECURITY_CLASS + ".getCurrentSubject): " + failure + "; recording null from now on");
             return null;
         }
     }
@@ -113,7 +113,7 @@ public final class ServerRuntime {
             return null;
         } catch (Throwable failure) {
             sessionUnavailable.set(true);
-            log.warnOnce("http-session", "HTTP session id unavailable through WebLogic internals: " + failure + "; recording null from now on");
+            log.warnOnce("http-session", "HTTP session id not readable through WebLogic internals: " + failure + "; recording null from now on");
             return null;
         }
     }

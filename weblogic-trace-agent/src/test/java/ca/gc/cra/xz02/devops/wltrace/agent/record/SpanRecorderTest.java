@@ -54,7 +54,7 @@ public class SpanRecorderTest {
         }
 
         @Override
-        public String label() {
+        public String summary() {
             return name;
         }
     }

@@ -26,6 +26,6 @@ public abstract class SpanFacts {
         return server.httpSessionId();
     }
 
-    /** A short label for the agent log: the class and method, or the request. */
-    public abstract String label();
+    /** A short summary for the agent log: the class and method, or the request. */
+    public abstract String summary();
 }

@@ -36,7 +36,7 @@ public final class RecordingIndexer {
         summary.parentSpanId = loaded.trace.trace.parentSpanId;
         Span root = loaded.root();
         summary.rootKind = root == null ? null : root.kind;
-        summary.rootLabel = SpanLabels.span(root);
+        summary.rootLabel = SpanNames.span(root);
         summary.spanCount = loaded.trace.spans.size();
         summary.warningCount = loaded.trace.spans.stream()
                 .mapToInt(span -> span.serializationWarnings == null ? 0 : span.serializationWarnings.size())

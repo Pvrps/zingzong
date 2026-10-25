@@ -45,9 +45,9 @@ public class HttpRecordingTest {
 
         List<Span> spans = recording.traces.get(1).trace.spans;
         assertEquals(spans.get(1).layer, "jaxrs");
-        assertEquals(SpanLabels.span(spans.get(1)), "OrdersResource.confirm [jaxrs]");
+        assertEquals(SpanNames.span(spans.get(1)), "OrdersResource.confirm [jaxrs]");
         assertEquals(spans.get(1).parentId, "s1");
-        assertEquals(SpanLabels.span(spans.get(2)), "OrderService.confirmOrder");
+        assertEquals(SpanNames.span(spans.get(2)), "OrderService.confirmOrder");
         assertEquals(spans.get(2).parentId, "s2");
 
         Span soapRoot = recording.traces.get(2).root();
@@ -55,7 +55,7 @@ public class HttpRecordingTest {
         assertTrue(soapRoot.http.requestBody.contains("<tax:computeTax>"), "the SOAP envelope as sent");
         assertTrue(soapRoot.http.responseBody.contains("<ns0:computeTaxResponse"));
         assertEquals(recording.traces.get(2).trace.spans.get(1).layer, "jaxws");
-        assertEquals(SpanLabels.span(recording.traces.get(2).trace.spans.get(2)), "TaxService.computeTax");
+        assertEquals(SpanNames.span(recording.traces.get(2).trace.spans.get(2)), "TaxService.computeTax");
     }
 
     @Test

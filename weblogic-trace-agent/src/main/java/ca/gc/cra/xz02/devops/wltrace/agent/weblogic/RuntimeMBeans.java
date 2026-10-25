@@ -162,7 +162,7 @@ public final class RuntimeMBeans {
                 }
             }
         } catch (Throwable failure) {
-            log.warnOnce("deployments", "deployments unavailable from RuntimeService.DomainConfiguration.AppDeployments: " + failure);
+            log.warnOnce("deployments", "deployments not readable from RuntimeService.DomainConfiguration.AppDeployments: " + failure);
         } finally {
             restoreContextLoader(contextSet);
         }

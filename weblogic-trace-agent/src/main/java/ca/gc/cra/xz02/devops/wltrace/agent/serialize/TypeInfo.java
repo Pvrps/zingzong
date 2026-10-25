@@ -136,7 +136,7 @@ public final class TypeInfo {
             try {
                 declared = current.getDeclaredFields();
             } catch (Throwable failure) {
-                result.add(FieldInfo.skipped("<" + current.getName() + ">", "declared fields unavailable: " + failure));
+                result.add(FieldInfo.skipped("<" + current.getName() + ">", "declared fields not readable: " + failure));
                 continue;
             }
             Map<String, Field> holders = new LinkedHashMap<>();

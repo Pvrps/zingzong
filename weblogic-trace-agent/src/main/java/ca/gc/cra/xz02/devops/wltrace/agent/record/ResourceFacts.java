@@ -32,7 +32,7 @@ public final class ResourceFacts extends SpanFacts {
     }
 
     @Override
-    public String label() {
+    public String summary() {
         return resourceClassName.substring(resourceClassName.lastIndexOf('.') + 1) + "." + signature.name;
     }
 }

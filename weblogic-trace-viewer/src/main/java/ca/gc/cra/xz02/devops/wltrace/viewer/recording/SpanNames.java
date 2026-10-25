@@ -3,9 +3,9 @@ package ca.gc.cra.xz02.devops.wltrace.viewer.recording;
 import ca.gc.cra.xz02.devops.wltrace.model.Span;
 
 /** Short names for spans in the index: {@code OrderService.createOrder}, {@code POST /orders/api/orders}, {@code OrdersResource.create [jaxrs]}. */
-public final class SpanLabels {
+public final class SpanNames {
 
-    private SpanLabels() {
+    private SpanNames() {
     }
 
     /** The label of a span by its kind; {@code ?} for null. */

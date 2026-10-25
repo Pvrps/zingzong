@@ -34,7 +34,7 @@ public final class JdbcFacts extends SpanFacts {
     }
 
     @Override
-    public String label() {
+    public String summary() {
         return sql.dataSource + "." + sql.operation;
     }
 }

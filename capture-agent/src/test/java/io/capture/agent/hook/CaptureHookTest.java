@@ -1,6 +1,5 @@
 package io.capture.agent.hook;
 
-import io.capture.agent.AgentConfig;
 import io.capture.agent.AgentLog;
 import io.capture.agent.hook.stubs.Calls;
 import io.capture.agent.hook.stubs.EventListenerBean;
@@ -68,9 +67,8 @@ class CaptureHookTest {
         new ServletStubImpl().execute(new Http("GET", "/warm-up").request(), new Http("GET", "/warm-up").response());
 
         Instrumentation instrumentation = ByteBuddyAgent.install();
-        AgentConfig config = AgentConfig.parse("out=" + out.getAbsolutePath());
-        AgentLog.init(config.outDir);
-        Recorder.configure(config);
+        AgentLog.init(out);
+        Recorder.configure(out);
         hook = new CaptureHook(instrumentation);
         Recorder.hook(hook, WorkContextPropagation.create());
     }

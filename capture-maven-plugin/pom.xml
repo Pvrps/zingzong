@@ -102,6 +102,7 @@
             </goals>
             <configuration>
               <createDependencyReducedPom>true</createDependencyReducedPom>
+              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml</dependencyReducedPomLocation>
               <artifactSet>
                 <excludes>
                   <exclude>io.capture:capture-agent</exclude>

@@ -21,15 +21,14 @@ public final class AgentBootstrap {
     private AgentBootstrap() {
     }
 
-    public static void start(String args, Instrumentation inst, String mode, File jar) {
-        AgentConfig config = AgentConfig.parse(args);
-        AgentLog.init(config.outDir);
+    public static void start(File outDir, Instrumentation inst, String mode, File jar) {
+        AgentLog.init(outDir);
         AgentLog.info("capture-agent " + AgentVersion.VERSION + " (" + AgentVersion.BUILD + ") " + mode
-                + " (" + config + ") jar=" + jar
+                + " (out=" + outDir + ") jar=" + jar
                 + " jvm=" + System.getProperty("java.version")
                 + " loader=" + describe(AgentBootstrap.class.getClassLoader()));
 
-        Recorder.configure(config);
+        Recorder.configure(outDir);
         String inert = inertReason();
         if (inert != null) {
             Recorder.inert(inert);

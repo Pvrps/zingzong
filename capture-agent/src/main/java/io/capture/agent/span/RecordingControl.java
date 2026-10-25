@@ -92,6 +92,6 @@ public final class RecordingControl implements RecordingControlMBean {
 
     @Override
     public String getOutputDirectory() {
-        return Recorder.config() == null ? null : Recorder.config().outDir.getAbsolutePath();
+        return Recorder.outDir() == null ? null : Recorder.outDir().getAbsolutePath();
     }
 }

@@ -1,6 +1,5 @@
 package io.capture.agent.span;
 
-import io.capture.agent.AgentConfig;
 import io.capture.agent.AgentLog;
 import io.capture.agent.hook.CaptureHook;
 import io.capture.agent.meta.WlsMetadata;
@@ -19,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class Recorder {
 
     private static final AtomicReference<Recording> ACTIVE = new AtomicReference<Recording>();
-    private static volatile AgentConfig config;
+    private static volatile File outDir;
     private static volatile SerializerConfig serializerConfig = new SerializerConfig();
     private static volatile GraphSerializer serializer = new JacksonGraphSerializer(serializerConfig);
     private static volatile TraceWriter writer;
@@ -50,16 +49,16 @@ public final class Recorder {
         return recording == null ? "ready" : "recording " + recording.id;
     }
 
-    /** The serializer runs with the documented ceilings of {@link SerializerConfig}; only the output directory is configurable. */
-    public static void configure(AgentConfig agentConfig) {
-        config = agentConfig;
+    /** Points the writer at the output directory; the serializer runs with the documented ceilings of {@link SerializerConfig}. */
+    public static void configure(File directory) {
+        outDir = directory;
         serializerConfig = new SerializerConfig();
         serializer = new JacksonGraphSerializer(serializerConfig);
-        writer = new TraceWriter(agentConfig.outDir, TraceWriter.DEFAULT_CAPACITY);
+        writer = new TraceWriter(directory, TraceWriter.DEFAULT_CAPACITY);
     }
 
-    public static AgentConfig config() {
-        return config;
+    public static File outDir() {
+        return outDir;
     }
 
     public static GraphSerializer serializer() {

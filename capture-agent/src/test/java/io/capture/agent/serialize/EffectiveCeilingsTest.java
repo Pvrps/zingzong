@@ -1,6 +1,5 @@
 package io.capture.agent.serialize;
 
-import io.capture.agent.AgentConfig;
 import io.capture.agent.span.Recorder;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +13,7 @@ class EffectiveCeilingsTest {
 
     @Test
     void recorderRunsWithTheDocumentedCeilings() {
-        Recorder.configure(AgentConfig.parse("out=" + new File(System.getProperty("java.io.tmpdir"), "ceilings-test").getAbsolutePath()));
+        Recorder.configure(new File(System.getProperty("java.io.tmpdir"), "ceilings-test"));
         SerializerConfig effective = ((JacksonGraphSerializer) Recorder.serializer()).config();
         assertEquals(SerializerConfig.DEFAULT_MAX_DEPTH, effective.maxDepth);
         assertEquals(SerializerConfig.DEFAULT_MAX_ELEMENTS, effective.maxElements);

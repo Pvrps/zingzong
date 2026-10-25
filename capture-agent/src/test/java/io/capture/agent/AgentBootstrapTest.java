@@ -2,11 +2,23 @@ package io.capture.agent;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Proves that the agent stays inert outside WebLogic and activates when WebLogic and its container classes are present. */
+/** Proves that {@code out} is the agent's only argument and that the agent stays inert outside WebLogic. */
 class AgentBootstrapTest {
+
+    @Test
+    void outIsTheOnlyArgument() {
+        assertEquals(new File(System.getProperty("java.io.tmpdir"), "capture"), Agent.outDir(null));
+        assertEquals(new File("/tmp/x"), Agent.outDir(" out=/tmp/x ,"));
+        assertThrows(IllegalArgumentException.class, () -> Agent.outDir("bogus=1"));
+        assertThrows(IllegalArgumentException.class, () -> Agent.outDir("hook=x"), "no hook override");
+    }
 
     @Test
     void inertWithoutWebLogicActiveWithIt() {

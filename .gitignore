@@ -6,6 +6,7 @@ devenv.local.nix
 
 # Maven
 target/
+.local/
 
 # IDE
 .idea/

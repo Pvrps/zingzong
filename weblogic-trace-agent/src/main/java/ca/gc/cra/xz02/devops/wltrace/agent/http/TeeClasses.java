@@ -1,10 +1,10 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.http;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentLog;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodCall;
 import net.bytebuddy.implementation.MethodDelegation;
@@ -15,26 +15,21 @@ import static net.bytebuddy.matcher.ElementMatchers.isAbstract;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 
 /**
- * The request and response wrappers and the tee streams, generated with Byte Buddy against the
- * servlet API the server loaded, once per servlet-API class loader. The generated classes live
- * in a child of that loader and are cached on its {@code HttpServletRequestWrapper} Class
- * object, so they go away with it.
+ * The request and response wrappers and the tee streams for one servlet API, generated with Byte
+ * Buddy against the API classes the server loaded. The generated classes extend
+ * {@code HttpServletRequestWrapper}, {@code HttpServletResponseWrapper}, {@code ServletInputStream}
+ * and {@code ServletOutputStream} and delegate every intercepted method to {@link TeeSupport}.
+ * They live in a child of the servlet API's loader, so they go away with it.
  */
 public final class TeeClasses {
 
-    private static final String REQUEST_WRAPPER = "javax.servlet.http.HttpServletRequestWrapper";
+    static final String REQUEST_WRAPPER = "javax.servlet.http.HttpServletRequestWrapper";
     private static final String RESPONSE_WRAPPER = "javax.servlet.http.HttpServletResponseWrapper";
     private static final String REQUEST = "javax.servlet.http.HttpServletRequest";
     private static final String RESPONSE = "javax.servlet.http.HttpServletResponse";
     private static final String INPUT_STREAM = "javax.servlet.ServletInputStream";
     private static final String OUTPUT_STREAM = "javax.servlet.ServletOutputStream";
-
-    private static final ClassValue<TeeClasses> CACHE = new ClassValue<TeeClasses>() {
-        @Override
-        protected TeeClasses computeValue(Class<?> requestWrapperClass) {
-            return generate(requestWrapperClass.getClassLoader());
-        }
-    };
+    private static final String GENERATED_PACKAGE = "ca.gc.cra.xz02.devops.wltrace.generated.";
 
     private final Constructor<?> requestWrapper;
     private final Constructor<?> responseWrapper;
@@ -46,13 +41,6 @@ public final class TeeClasses {
         this.responseWrapper = responseWrapper;
         this.inputStream = inputStream;
         this.outputStream = outputStream;
-    }
-
-    /** The generated classes for the servlet API visible from {@code servletObject}'s class. */
-    public static TeeClasses forServletApiOf(Object servletObject) throws ClassNotFoundException {
-        ClassLoader loader = servletObject.getClass().getClassLoader();
-        Class<?> wrapper = Class.forName(REQUEST_WRAPPER, false, loader == null ? ClassLoader.getSystemClassLoader() : loader);
-        return CACHE.get(wrapper);
     }
 
     public Object wrapRequest(Object request, HttpCapture capture) throws Exception {
@@ -71,64 +59,63 @@ public final class TeeClasses {
         return outputStream.newInstance(delegate, buffer);
     }
 
-    private static TeeClasses generate(ClassLoader servletLoader) {
-        try {
-            long start = System.nanoTime();
-            Class<?> requestWrapper = Class.forName(REQUEST_WRAPPER, false, servletLoader);
-            Class<?> responseWrapper = Class.forName(RESPONSE_WRAPPER, false, servletLoader);
-            Class<?> request = Class.forName(REQUEST, false, servletLoader);
-            Class<?> response = Class.forName(RESPONSE, false, servletLoader);
-            Class<?> servletInputStream = Class.forName(INPUT_STREAM, false, servletLoader);
-            Class<?> servletOutputStream = Class.forName(OUTPUT_STREAM, false, servletLoader);
+    /** Generates the four classes against the servlet API visible from the loader. */
+    static TeeClasses generate(ClassLoader servletLoader) throws Exception {
+        Class<?> requestWrapper = Class.forName(REQUEST_WRAPPER, false, servletLoader);
+        Class<?> responseWrapper = Class.forName(RESPONSE_WRAPPER, false, servletLoader);
+        Class<?> request = Class.forName(REQUEST, false, servletLoader);
+        Class<?> response = Class.forName(RESPONSE, false, servletLoader);
+        Class<?> servletInputStream = Class.forName(INPUT_STREAM, false, servletLoader);
+        Class<?> servletOutputStream = Class.forName(OUTPUT_STREAM, false, servletLoader);
 
-            ByteBuddy byteBuddy = new ByteBuddy();
-            Class<?> teeIn = stream(byteBuddy, servletInputStream, "ca.gc.cra.xz02.devops.wltrace.generated.TeeServletInputStream", servletLoader);
-            Class<?> teeOut = stream(byteBuddy, servletOutputStream, "ca.gc.cra.xz02.devops.wltrace.generated.TeeServletOutputStream", servletLoader);
+        ByteBuddy byteBuddy = new ByteBuddy();
+        Class<?> teeInput = stream(byteBuddy, servletInputStream, GENERATED_PACKAGE + "TeeServletInputStream", servletLoader);
+        Class<?> teeOutput = stream(byteBuddy, servletOutputStream, GENERATED_PACKAGE + "TeeServletOutputStream", servletLoader);
 
-            Class<?> reqClass = byteBuddy.subclass(requestWrapper, net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy.Default.NO_CONSTRUCTORS)
-                    .name("ca.gc.cra.xz02.devops.wltrace.generated.TeeHttpServletRequest")
-                    .defineField("capture", Object.class, Visibility.PUBLIC)
-                    .defineConstructor(Visibility.PUBLIC).withParameters(request, Object.class)
-                    .intercept(MethodCall.invoke(requestWrapper.getConstructor(request)).withArgument(0)
-                            .andThen(FieldAccessor.ofField("capture").setsArgumentAt(1)))
-                    .method(named("getInputStream"))
-                    .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getInputStream")).to(TeeSupport.class))
-                    .method(named("getReader"))
-                    .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getReader")).to(TeeSupport.class))
-                    .make()
-                    .load(servletLoader, ClassLoadingStrategy.Default.WRAPPER_PERSISTENT)
-                    .getLoaded();
+        Class<?> requestClass = byteBuddy.subclass(requestWrapper, ConstructorStrategy.Default.NO_CONSTRUCTORS)
+                .name(GENERATED_PACKAGE + "TeeHttpServletRequest")
+                .defineField("capture", Object.class, Visibility.PUBLIC)
+                .defineConstructor(Visibility.PUBLIC).withParameters(request, Object.class)
+                .intercept(MethodCall.invoke(requestWrapper.getConstructor(request)).withArgument(0)
+                        .andThen(FieldAccessor.ofField("capture").setsArgumentAt(1)))
+                .method(named("getInputStream"))
+                .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getInputStream")).to(TeeSupport.class))
+                .method(named("getReader"))
+                .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getReader")).to(TeeSupport.class))
+                .make()
+                .load(servletLoader, ClassLoadingStrategy.Default.WRAPPER_PERSISTENT)
+                .getLoaded();
 
-            Class<?> respClass = byteBuddy.subclass(responseWrapper, net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy.Default.NO_CONSTRUCTORS)
-                    .name("ca.gc.cra.xz02.devops.wltrace.generated.TeeHttpServletResponse")
-                    .defineField("capture", Object.class, Visibility.PUBLIC)
-                    .defineConstructor(Visibility.PUBLIC).withParameters(response, Object.class)
-                    .intercept(MethodCall.invoke(responseWrapper.getConstructor(response)).withArgument(0)
-                            .andThen(FieldAccessor.ofField("capture").setsArgumentAt(1)))
-                    .method(named("getOutputStream"))
-                    .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getOutputStream")).to(TeeSupport.class))
-                    .method(named("getWriter"))
-                    .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getWriter")).to(TeeSupport.class))
-                    .method(named("sendError"))
-                    .intercept(MethodDelegation.withDefaultConfiguration().filter(named("sendError")).to(TeeSupport.class))
-                    .make()
-                    .load(servletLoader, ClassLoadingStrategy.Default.WRAPPER_PERSISTENT)
-                    .getLoaded();
+        Class<?> responseClass = byteBuddy.subclass(responseWrapper, ConstructorStrategy.Default.NO_CONSTRUCTORS)
+                .name(GENERATED_PACKAGE + "TeeHttpServletResponse")
+                .defineField("capture", Object.class, Visibility.PUBLIC)
+                .defineConstructor(Visibility.PUBLIC).withParameters(response, Object.class)
+                .intercept(MethodCall.invoke(responseWrapper.getConstructor(response)).withArgument(0)
+                        .andThen(FieldAccessor.ofField("capture").setsArgumentAt(1)))
+                .method(named("getOutputStream"))
+                .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getOutputStream")).to(TeeSupport.class))
+                .method(named("getWriter"))
+                .intercept(MethodDelegation.withDefaultConfiguration().filter(named("getWriter")).to(TeeSupport.class))
+                .method(named("sendError"))
+                .intercept(MethodDelegation.withDefaultConfiguration().filter(named("sendError")).to(TeeSupport.class))
+                .make()
+                .load(servletLoader, ClassLoadingStrategy.Default.WRAPPER_PERSISTENT)
+                .getLoaded();
 
-            AgentLog.info("generated servlet tee classes for " + describe(servletLoader) + " in " + (System.nanoTime() - start) / 1000000L + "ms");
-            return new TeeClasses(
-                    reqClass.getConstructor(request, Object.class),
-                    respClass.getConstructor(response, Object.class),
-                    teeIn.getConstructor(Object.class, Object.class),
-                    teeOut.getConstructor(Object.class, Object.class));
-        } catch (Throwable t) {
-            throw new IllegalStateException("cannot generate servlet tee classes for " + describe(servletLoader), t);
-        }
+        return new TeeClasses(
+                requestClass.getConstructor(request, Object.class),
+                responseClass.getConstructor(response, Object.class),
+                teeInput.getConstructor(Object.class, Object.class),
+                teeOutput.getConstructor(Object.class, Object.class));
     }
 
-    /** A ServletInputStream/ServletOutputStream subclass whose every public method lands in TeeSupport.forward. */
+    /**
+     * A ServletInputStream or ServletOutputStream subclass whose primitives land in
+     * {@link TeeSupport#forward}. Only the primitives are intercepted; readLine, skip, print and
+     * the like keep their inherited implementations, which call read or write and therefore pass the tee.
+     */
     private static Class<?> stream(ByteBuddy byteBuddy, Class<?> servletStream, String name, ClassLoader loader) throws Exception {
-        DynamicType.Builder<?> builder = byteBuddy.subclass(servletStream, net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy.Default.NO_CONSTRUCTORS)
+        DynamicType.Builder<?> builder = byteBuddy.subclass(servletStream, ConstructorStrategy.Default.NO_CONSTRUCTORS)
                 .name(name)
                 .defineField("delegate", Object.class, Visibility.PUBLIC)
                 .defineField("buffer", Object.class, Visibility.PUBLIC)
@@ -136,19 +123,9 @@ public final class TeeClasses {
                 .intercept(MethodCall.invoke(servletStream.getDeclaredConstructor())
                         .andThen(FieldAccessor.ofField("delegate").setsArgumentAt(0))
                         .andThen(FieldAccessor.ofField("buffer").setsArgumentAt(1)))
-                // Only the primitives are intercepted; readLine/skip/readAllBytes/print keep their
-                // inherited implementations, which call read/write and therefore pass the tee.
                 .method(named("read").or(named("write")).or(named("available")).or(named("close")).or(named("flush"))
                         .or(named("mark")).or(named("reset")).or(named("markSupported")).or(isAbstract()))
                 .intercept(MethodDelegation.withDefaultConfiguration().filter(named("forward")).to(TeeSupport.class));
         return builder.make().load(loader, ClassLoadingStrategy.Default.WRAPPER_PERSISTENT).getLoaded();
-    }
-
-    private static String describe(ClassLoader loader) {
-        if (loader == null) {
-            return "bootstrap";
-        }
-        String s = loader.toString();
-        return s.length() > 100 ? s.substring(0, 100) + "..." : s;
     }
 }

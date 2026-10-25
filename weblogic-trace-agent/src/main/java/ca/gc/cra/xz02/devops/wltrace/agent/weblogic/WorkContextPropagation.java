@@ -3,19 +3,25 @@ package ca.gc.cra.xz02.devops.wltrace.agent.weblogic;
 import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentLog;
 
 import java.lang.reflect.Method;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
 
 /**
  * Carries "which trace and span caused this" across a thread handoff inside one server (an
  * {@code @Asynchronous} call, a JMS message to an MDB) through WebLogic's WorkContext, reached
- * reflectively. The one entry, {@value #KEY}, holds {@code <traceId>/<spanId>} of the span active
- * when the handoff happened. Without the WorkContext API every method is a no-op.
+ * reflectively. The one entry, {@value #KEY}, holds {@code <traceId>/<spanId>} of the span
+ * active when the handoff happened. Without the WorkContext API every method is a no-op.
  */
 public final class WorkContextPropagation {
 
-    static final String KEY = "ca.gc.cra.xz02.devops.wltrace.model";
+    public static final String KEY = "ca.gc.cra.xz02.devops.wltrace";
+    /**
+     * The flags of {@code PropagationMode} the entry travels with. {@code GLOBAL} leaves out
+     * {@code WORK}, the flag that follows a work-manager handoff, which is where
+     * {@code @Asynchronous} runs.
+     */
+    private static final String[] PROPAGATION_FLAGS = {"LOCAL", "WORK", "RMI", "JMS_QUEUE", "JMS_TOPIC", "SOAP", "MIME_HEADER"};
 
-    /** What a handoff carried in: trace id and causing span id. */
+    /** What a handoff carried in: the trace and the causing span. */
     public static final class Inbound {
         public final String traceId;
         public final String spanId;
@@ -26,8 +32,7 @@ public final class WorkContextPropagation {
         }
     }
 
-    private static final AtomicBoolean warned = new AtomicBoolean();
-
+    private final AgentLog log;
     private final Method getHelper;
     private final Method getMap;
     private final Method put;
@@ -36,7 +41,8 @@ public final class WorkContextPropagation {
     private final Method create;
     private final int mode;
 
-    private WorkContextPropagation(ClassLoader loader) throws Exception {
+    private WorkContextPropagation(AgentLog log, ClassLoader loader) throws Exception {
+        this.log = log;
         Class<?> helperClass = Class.forName("weblogic.workarea.WorkContextHelper", true, loader);
         Class<?> mapClass = Class.forName("weblogic.workarea.WorkContextMap", true, loader);
         Class<?> contextClass = Class.forName("weblogic.workarea.WorkContext", true, loader);
@@ -48,61 +54,62 @@ public final class WorkContextPropagation {
         get = mapClass.getMethod("get", String.class);
         remove = mapClass.getMethod("remove", String.class);
         create = factoryClass.getMethod("create", String.class);
-        // GLOBAL leaves out WORK, the flag that follows a work-manager handoff (@Asynchronous).
-        int m = 0;
-        for (String flag : new String[]{"LOCAL", "WORK", "RMI", "JMS_QUEUE", "JMS_TOPIC", "SOAP", "MIME_HEADER"}) {
+        int flags = 0;
+        for (String flag : PROPAGATION_FLAGS) {
             try {
-                m |= modeClass.getField(flag).getInt(null);
-            } catch (NoSuchFieldException ignored) {
+                flags |= modeClass.getField(flag).getInt(null);
+            } catch (NoSuchFieldException absent) {
                 // a flag this version does not have
             }
         }
-        mode = m;
+        mode = flags;
     }
 
-    private WorkContextPropagation() {
+    private WorkContextPropagation(AgentLog log) {
+        this.log = log;
         getHelper = getMap = put = get = remove = create = null;
         mode = 0;
     }
 
     /** Bound to the WorkContext API on the system class path, or inert when it is absent. */
-    public static WorkContextPropagation create() {
+    public static WorkContextPropagation create(AgentLog log) {
         try {
-            return new WorkContextPropagation(ClassLoader.getSystemClassLoader());
-        } catch (Throwable t) {
-            AgentLog.info("WorkContext propagation unavailable (" + t + "); traces are not linked across threads");
-            return new WorkContextPropagation();
+            return new WorkContextPropagation(log, ClassLoader.getSystemClassLoader());
+        } catch (Throwable failure) {
+            log.info("WorkContext propagation unavailable (" + failure + "); traces are not linked across threads");
+            return new WorkContextPropagation(log);
         }
     }
 
-    public Inbound inbound() {
+    /** The trace and span that caused the current thread's work, when a handoff carried them in. */
+    public Optional<Inbound> inbound() {
         if (get == null) {
-            return null;
+            return Optional.empty();
         }
         try {
             Object context = get.invoke(map(), KEY);
             if (context == null) {
-                return null;
+                return Optional.empty();
             }
             Object value = context.getClass().getMethod("get").invoke(context);
-            String s = value == null ? null : value.toString();
-            int slash = s == null ? -1 : s.indexOf('/');
-            return slash < 0 ? null : new Inbound(s.substring(0, slash), s.substring(slash + 1));
-        } catch (Throwable t) {
-            warn(t);
-            return null;
+            String text = value == null ? null : value.toString();
+            int slash = text == null ? -1 : text.indexOf('/');
+            return slash < 0 ? Optional.empty() : Optional.of(new Inbound(text.substring(0, slash), text.substring(slash + 1)));
+        } catch (Throwable failure) {
+            warn(failure);
+            return Optional.empty();
         }
     }
 
-    /** The active span of the thread's trace changed: make it visible to handoffs. */
+    /** The active span of the thread's trace changed: makes it visible to handoffs. */
     public void publish(String traceId, String spanId) {
         if (put == null) {
             return;
         }
         try {
             put.invoke(map(), KEY, create.invoke(null, traceId + "/" + spanId), mode);
-        } catch (Throwable t) {
-            warn(t);
+        } catch (Throwable failure) {
+            warn(failure);
         }
     }
 
@@ -113,8 +120,8 @@ public final class WorkContextPropagation {
         }
         try {
             remove.invoke(map(), KEY);
-        } catch (Throwable t) {
-            warn(t);
+        } catch (Throwable failure) {
+            warn(failure);
         }
     }
 
@@ -122,9 +129,7 @@ public final class WorkContextPropagation {
         return getMap.invoke(getHelper.invoke(null));
     }
 
-    private static void warn(Throwable t) {
-        if (warned.compareAndSet(false, true)) {
-            AgentLog.warn("WorkContext propagation failed: " + t + "; traces may not be linked across threads");
-        }
+    private void warn(Throwable failure) {
+        log.warnOnce("work-context", "WorkContext propagation failed: " + failure + "; traces may not be linked across threads");
     }
 }

@@ -1,38 +1,26 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.record;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.WlsMetadata;
-
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.WlsRuntime;
-
 import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.WorkContextPropagation;
-
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.BeanMeta;
 import ca.gc.cra.xz02.devops.wltrace.model.Span;
 import ca.gc.cra.xz02.devops.wltrace.model.Trace;
+import ca.gc.cra.xz02.devops.wltrace.model.TraceInfo;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
+import java.util.Optional;
 
 /**
- * Per-thread stack of open spans and the trace they belong to. A span pushed on an empty
- * stack starts a trace, recording the inbound handoff as its parent when there is one;
- * popping the last span completes the trace.
+ * One thread's stack of open spans and the trace they belong to. A span pushed on an empty stack
+ * starts a trace, recording the inbound handoff as its parent when there is one; popping the
+ * last span completes the trace. Every push publishes the active span through the WorkContext
+ * so work handed to another thread can name its cause.
  */
 final class SpanStack {
 
-    private static final ThreadLocal<SpanStack> CURRENT = new ThreadLocal<SpanStack>() {
-        @Override
-        protected SpanStack initialValue() {
-            return new SpanStack();
-        }
-    };
-
-    private final Deque<OpenSpan> open = new ArrayDeque<OpenSpan>();
-    private TraceBuilder trace;
-
-    static SpanStack current() {
-        return CURRENT.get();
-    }
+    private final Deque<OpenSpan> open = new ArrayDeque<>();
+    private OpenTrace trace;
+    private long nextToken = 1;
 
     boolean isEmpty() {
         return open.isEmpty();
@@ -42,61 +30,50 @@ final class SpanStack {
         return open.peek();
     }
 
-    /** The nearest open servlet span's capture state, or null. */
-    Object servletCapture() {
-        for (OpenSpan span : open) {
-            if (span.isServlet()) {
-                return span.http;
-            }
-        }
-        return null;
-    }
-
-    TraceBuilder trace() {
+    OpenTrace trace() {
         return trace;
     }
 
-    OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
-                  Object http, WorkContextPropagation propagation) {
-        return push(recording, kind, layer, beanClass, method, nowNanos, http, null, null, null, null, null, propagation);
+    /** The nearest open span whose facts are of the type, innermost first; empty when there is none. */
+    <F extends SpanFacts> Optional<F> nearestFacts(Class<F> type) {
+        return open.stream().map(span -> span.facts).filter(type::isInstance).map(type::cast).findFirst();
     }
 
-    OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
-                  Object http, Object container, BeanMeta meta, String interfaceName,
-                  String invocation, String transactionAttribute, WorkContextPropagation propagation) {
+    OpenSpan push(Recording recording, SpanRecorder<?> recorder, SpanFacts facts, long nowNanos, WorkContextPropagation propagation) {
         if (open.isEmpty() || trace == null || trace.recording != recording) {
-            // A recording that changed under an open stack (start/stop mid-call) abandons the stale spans.
+            // A recording that changed under an open stack (start or stop mid-call) abandons the stale spans.
             open.clear();
-            WorkContextPropagation.Inbound inbound = propagation.inbound();
-            trace = new TraceBuilder(recording, nowNanos, inbound == null ? null : inbound.traceId,
-                    inbound == null ? null : inbound.spanId);
+            Optional<WorkContextPropagation.Inbound> inbound = propagation.inbound();
+            trace = new OpenTrace(recording, nowNanos,
+                    inbound.map(cause -> cause.traceId).orElse(null),
+                    inbound.map(cause -> cause.spanId).orElse(null));
         }
         OpenSpan parent = open.peek();
         int order = trace.nextOrder();
-        OpenSpan span = new OpenSpan(trace.spanId(order), parent, order, kind, layer, beanClass, method,
-                nowNanos - trace.startNanos, nowNanos, http, container, meta, interfaceName, invocation, transactionAttribute);
+        OpenSpan span = new OpenSpan(OpenTrace.spanId(order), parent, order, nextToken++, recorder, facts, nowNanos - trace.startNanos, nowNanos);
         open.push(span);
         propagation.publish(trace.id, span.id);
         return span;
     }
 
-    /** Pops the top span into the trace and returns the finished {@link Trace} when it was the root, else null. */
-    Trace pop(Span completed, WorkContextPropagation propagation) {
+    /** Pops the top span into the trace; returns the finished trace when it was the root, else empty. */
+    Optional<Trace> pop(Span completed, String serverName, List<TraceInfo.Deployment> deployments, WorkContextPropagation propagation) {
         if (open.isEmpty() || trace == null) {
-            return null;
+            return Optional.empty();
         }
         open.pop();
         trace.add(completed);
         if (!open.isEmpty()) {
             propagation.publish(trace.id, open.peek().id);
-            return null;
+            return Optional.empty();
         }
-        Trace finished = trace.build();
+        Trace finished = trace.build(serverName, deployments);
         trace = null;
         propagation.clear();
-        return finished;
+        return Optional.of(finished);
     }
 
+    /** Abandons every open span; the next push starts a fresh trace. */
     void reset() {
         open.clear();
         trace = null;

@@ -113,8 +113,8 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <manifestEntries>
-                    <Premain-Class>ca.gc.cra.xz02.devops.wltrace.agent.Agent</Premain-Class>
-                    <Agent-Class>ca.gc.cra.xz02.devops.wltrace.agent.Agent</Agent-Class>
+                    <Premain-Class>ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentMain</Premain-Class>
+                    <Agent-Class>ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentMain</Agent-Class>
                     <Can-Retransform-Classes>true</Can-Retransform-Classes>
                     <Can-Redefine-Classes>true</Can-Redefine-Classes>
                   </manifestEntries>

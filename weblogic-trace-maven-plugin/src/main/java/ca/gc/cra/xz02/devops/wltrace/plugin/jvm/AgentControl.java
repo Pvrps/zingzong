@@ -8,12 +8,12 @@ import javax.management.remote.JMXServiceURL;
 import java.io.Closeable;
 import java.io.IOException;
 
-/** The agent's {@code ca.gc.cra.xz02.devops.wltrace:type=Control} MBean in one server JVM, over the JDK's local connector. */
+/** The agent's control MBean in one server JVM, reached over the JDK's local JMX connector. */
 public final class AgentControl implements Closeable {
 
     public static final String OBJECT_NAME = "ca.gc.cra.xz02.devops.wltrace:type=Control";
 
-    /** What the MBean reports. */
+    /** What the MBean reports about the agent and its recording. */
     public static final class Status {
         public final boolean recording;
         public final String recordingId;
@@ -82,7 +82,7 @@ public final class AgentControl implements Closeable {
         try {
             connector.close();
         } catch (IOException ignored) {
-            // nothing to do
+            // nothing left to release
         }
     }
 }

@@ -59,14 +59,15 @@ class ClassLoaderIsolationTest {
     void typeInfoIsKeyedByClassObject() throws Exception {
         Class<?> a = define(Collections.singletonMap("name", String.class), Collections.<String, Class<?>>emptyMap());
         Class<?> b = define(Collections.singletonMap("name", String.class), Collections.singletonMap("extra", String.class));
-        TypeInfo infoA = TypeInfo.of(a);
-        TypeInfo infoB = TypeInfo.of(b);
+        TypeInfoCache typeInfos = new TypeInfoCache();
+        TypeInfo infoA = typeInfos.of(a);
+        TypeInfo infoB = typeInfos.of(b);
         assertNotSame(infoA, infoB);
-        assertSame(a, infoA.type);
-        assertSame(b, infoB.type);
-        assertEquals(1, infoA.fields.size());
-        assertEquals(2, infoB.fields.size());
-        assertSame(infoA, TypeInfo.of(a), "stable per Class object");
+        assertSame(a, infoA.type());
+        assertSame(b, infoB.type());
+        assertEquals(1, infoA.fieldCount());
+        assertEquals(2, infoB.fieldCount());
+        assertSame(infoA, typeInfos.of(a), "stable per Class object");
     }
 
     private static Class<?> define(Map<String, Class<?>> fields1, Map<String, Class<?>> fields2) {

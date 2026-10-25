@@ -6,7 +6,7 @@ import ca.gc.cra.xz02.devops.wltrace.model.Trace;
 import ca.gc.cra.xz02.devops.wltrace.model.TraceJson;
 
 import java.io.File;
-import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -17,70 +17,77 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Bounded queue drained by one daemon thread that writes {@code <out>/<recordingId>/<seq>-<traceId>.json}
- * atomically ({@code .tmp} then rename). A full queue drops the trace and counts it; the
- * request thread never blocks.
+ * A bounded queue drained by one daemon thread that writes {@code <out>/<recordingId>/<seq>-<traceId>.json}
+ * atomically ({@code .tmp}, then rename). A full queue drops the trace and counts it; the request
+ * thread never blocks and never throws.
  */
-final class TraceWriter {
+public final class TraceWriter {
 
-    static final int DEFAULT_CAPACITY = 1000;
+    public static final int DEFAULT_CAPACITY = 1000;
 
-    private final File outDir;
+    private static final class Pending {
+        final Recording recording;
+        final Trace trace;
+
+        Pending(Recording recording, Trace trace) {
+            this.recording = recording;
+            this.trace = trace;
+        }
+    }
+
+    private final File outputDirectory;
+    private final AgentLog log;
     private final BlockingQueue<Pending> queue;
     private final AtomicLong dropped = new AtomicLong();
     private final AtomicLong written = new AtomicLong();
     private final AtomicBoolean busy = new AtomicBoolean();
-    private final AtomicBoolean dropWarned = new AtomicBoolean();
-    private final Thread thread;
 
-    TraceWriter(File outDir, int capacity) {
-        this.outDir = outDir;
-        this.queue = new ArrayBlockingQueue<Pending>(capacity);
-        this.thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                drain();
-            }
-        }, "weblogic-trace-writer");
-        this.thread.setDaemon(true);
-        this.thread.start();
+    public TraceWriter(File outputDirectory, int capacity, AgentLog log) {
+        this.outputDirectory = outputDirectory;
+        this.log = log;
+        this.queue = new ArrayBlockingQueue<>(capacity);
+        Thread thread = new Thread(this::drain, "weblogic-trace-writer");
+        thread.setDaemon(true);
+        thread.start();
     }
 
-    File recordingDir(Recording recording) {
-        return new File(outDir, recording.id);
+    public File outputDirectory() {
+        return outputDirectory;
     }
 
-    /** Never blocks, never throws. Returns false when the trace was dropped. */
-    boolean offer(Recording recording, Trace trace) {
+    public File recordingDirectory(Recording recording) {
+        return new File(outputDirectory, recording.id);
+    }
+
+    /** Queues the trace under the recording's next sequence number; false when it was dropped. */
+    public boolean offer(Recording recording, Trace trace) {
         try {
-            trace.recording.seq = recording.nextSeq();
+            trace.recording.seq = recording.nextSequence();
             if (queue.offer(new Pending(recording, trace))) {
                 return true;
             }
             dropped.incrementAndGet();
-            if (dropWarned.compareAndSet(false, true)) {
-                AgentLog.warn("trace queue full (" + queue.size() + "); dropping traces, see DroppedTraces on the Control MBean");
-            }
-        } catch (Throwable t) {
+            log.warnOnce("queue-full", "trace queue full (" + queue.size() + "); dropping traces, see DroppedTraces on the Control MBean");
+        } catch (Throwable failure) {
             dropped.incrementAndGet();
         }
         return false;
     }
 
-    long dropped() {
+    public long dropped() {
         return dropped.get();
     }
 
-    long written() {
+    public long written() {
         return written.get();
     }
 
-    int queued() {
+    public int queued() {
         return queue.size();
     }
 
-    /** Waits until everything queued so far has been written, or the timeout passes. */
-    boolean flush(long timeoutMillis) {
+    /** Waits until everything queued so far is written, or the timeout passes; true when drained. */
+    public boolean flush(long timeoutMillis) {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         while (!queue.isEmpty() || busy.get()) {
             if (System.currentTimeMillis() > deadline) {
@@ -88,7 +95,7 @@ final class TraceWriter {
             }
             try {
                 Thread.sleep(5);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return false;
             }
@@ -101,7 +108,7 @@ final class TraceWriter {
             Pending pending;
             try {
                 pending = queue.poll(1, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException interrupted) {
                 return;
             }
             if (pending == null) {
@@ -110,51 +117,48 @@ final class TraceWriter {
             busy.set(true);
             try {
                 write(pending);
-            } catch (Throwable t) {
-                AgentLog.error("could not write trace " + pending.trace.trace.id, t);
+            } catch (Throwable failure) {
+                log.error("could not write trace " + pending.trace.trace.id, failure);
             } finally {
                 busy.set(false);
             }
         }
     }
 
-    private void write(Pending pending) throws Exception {
-        File dir = recordingDir(pending.recording);
-        if (!dir.isDirectory() && !dir.mkdirs()) {
-            throw new java.io.IOException("cannot create " + dir);
+    private void write(Pending pending) throws IOException {
+        File directory = recordingDirectory(pending.recording);
+        if (!directory.isDirectory() && !directory.mkdirs()) {
+            throw new IOException("cannot create " + directory);
         }
         Trace trace = pending.trace;
-        File target = new File(dir, String.format("%06d-%s.json", trace.recording.seq, trace.trace.id));
-        File tmp = new File(dir, target.getName() + ".tmp");
-        OutputStream out = new FileOutputStream(tmp);
-        try {
+        File target = new File(directory, String.format("%06d-%s.json", trace.recording.seq, trace.trace.id));
+        File temporary = new File(directory, target.getName() + ".tmp");
+        try (OutputStream out = Files.newOutputStream(temporary.toPath())) {
             TraceJson.write(trace, out);
-        } finally {
-            out.close();
         }
-        Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         written.incrementAndGet();
-
-        Span root = trace.spans.isEmpty() ? null : trace.spans.get(0);
-        AgentLog.event("TRACE " + trace.trace.id + " seq=" + trace.recording.seq
-                + " root=" + (root == null || root.ejb == null ? "?" : simpleName(root.ejb.beanClass) + "." + root.ejb.method)
+        log.event("TRACE " + trace.trace.id + " seq=" + trace.recording.seq
+                + " root=" + rootLabel(trace)
                 + " spans=" + trace.spans.size() + " " + trace.trace.durationMs + "ms"
                 + (trace.trace.principal == null ? "" : " principal=" + trace.trace.principal)
                 + " -> " + target.getName());
     }
 
-    private static String simpleName(String className) {
-        int dot = className.lastIndexOf('.');
-        return dot < 0 ? className : className.substring(dot + 1);
-    }
-
-    private static final class Pending {
-        final Recording recording;
-        final Trace trace;
-
-        Pending(Recording recording, Trace trace) {
-            this.recording = recording;
-            this.trace = trace;
+    private static String rootLabel(Trace trace) {
+        if (trace.spans.isEmpty()) {
+            return "?";
         }
+        Span root = trace.spans.get(0);
+        if (root.ejb != null) {
+            return root.ejb.beanClass.substring(root.ejb.beanClass.lastIndexOf('.') + 1) + "." + root.ejb.method;
+        }
+        if (root.http != null) {
+            return root.http.method + " " + root.http.path;
+        }
+        if (root.sql != null) {
+            return root.sql.dataSource + "." + root.sql.operation;
+        }
+        return root.kind;
     }
 }

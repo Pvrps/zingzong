@@ -1,31 +1,44 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.serialize;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import ca.gc.cra.xz02.devops.wltrace.model.SerializationWarning;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 /**
- * State for serializing one value: the JSON path for warnings, the depth, and the
- * identity table that turns repeated references into {@code @ref}. One context per
- * captured value, so ids never cross an argument boundary.
+ * The state of serializing one value: the JSON path for warnings, the depth, and the identity
+ * table that turns repeated references into {@code @ref}. One context per recorded value, so
+ * ids never cross an argument boundary.
  */
 public final class SerializationContext {
 
-    public final SerializerConfig config;
-    private final List<SerializationWarning> warnings = new ArrayList<SerializationWarning>();
-    private final Deque<String> path = new ArrayDeque<String>();
-    private final Map<Object, Tracked> seen = new IdentityHashMap<Object, Tracked>();
+    /** An object seen during this walk: its node when it is an object, and whether it is still being written. */
+    static final class Tracked {
+        /** The node for objects; null for collections, maps and arrays, which carry no {@code @id}. */
+        final ObjectNode node;
+        int id;
+        boolean inProgress = true;
+
+        Tracked(ObjectNode node) {
+            this.node = node;
+        }
+    }
+
+    public final SerializationCeilings ceilings;
+    private final List<SerializationWarning> warnings = new ArrayList<>();
+    private final Deque<String> path = new ArrayDeque<>();
+    private final Map<Object, Tracked> seen = new IdentityHashMap<>();
     private int nextId = 1;
     private int depth;
 
-    public SerializationContext(SerializerConfig config, String rootPath) {
-        this.config = config;
+    public SerializationContext(SerializationCeilings ceilings, String rootPath) {
+        this.ceilings = ceilings;
         this.path.push(rootPath == null ? "$" : rootPath);
     }
 
@@ -38,12 +51,12 @@ public final class SerializationContext {
     }
 
     public String currentPath() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder builder = new StringBuilder();
         // ArrayDeque.push adds first, so iterate from the tail to rebuild root-first.
-        for (java.util.Iterator<String> it = path.descendingIterator(); it.hasNext(); ) {
-            sb.append(it.next());
+        for (Iterator<String> segments = path.descendingIterator(); segments.hasNext(); ) {
+            builder.append(segments.next());
         }
-        return sb.toString();
+        return builder.toString();
     }
 
     void pushField(String name) {
@@ -74,7 +87,7 @@ public final class SerializationContext {
         depth--;
     }
 
-    /** Returns the existing record for an object seen before, or null. */
+    /** The record of an object seen before in this walk, or null. */
     Tracked seen(Object value) {
         return seen.get(value);
     }
@@ -85,22 +98,11 @@ public final class SerializationContext {
         return tracked;
     }
 
-    /** Assigns (once) and returns the id used for {@code @id}/{@code @ref}. */
+    /** Assigns once and returns the id used for {@code @id} and {@code @ref}. */
     int idFor(Tracked tracked) {
         if (tracked.id == 0) {
             tracked.id = nextId++;
         }
         return tracked.id;
-    }
-
-    static final class Tracked {
-        /** The node for objects; null for collections, maps and arrays (no @id possible). */
-        final ObjectNode node;
-        int id;
-        boolean inProgress = true;
-
-        Tracked(ObjectNode node) {
-            this.node = node;
-        }
     }
 }

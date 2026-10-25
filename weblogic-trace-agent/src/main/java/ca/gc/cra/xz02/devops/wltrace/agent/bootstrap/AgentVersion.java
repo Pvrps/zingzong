@@ -1,32 +1,26 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.bootstrap;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentVersion;
-
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-/** Version and build stamp from build.properties (filtered by Maven). */
+/** Version and build stamp of this agent, read from {@code build.properties} as Maven filtered it. */
 public final class AgentVersion {
 
     public static final String VERSION;
     public static final String BUILD;
 
     static {
-        Properties p = new Properties();
-        try {
-            InputStream in = AgentVersion.class.getResourceAsStream("build.properties");
+        Properties properties = new Properties();
+        try (InputStream in = AgentVersion.class.getResourceAsStream("build.properties")) {
             if (in != null) {
-                try {
-                    p.load(in);
-                } finally {
-                    in.close();
-                }
+                properties.load(in);
             }
-        } catch (Throwable ignored) {
-            // leave defaults
+        } catch (IOException | RuntimeException ignored) {
+            // the defaults below say the stamp is unknown
         }
-        VERSION = p.getProperty("version", "unknown");
-        BUILD = p.getProperty("build", "unknown");
+        VERSION = properties.getProperty("version", "unknown");
+        BUILD = properties.getProperty("build", "unknown");
     }
 
     private AgentVersion() {

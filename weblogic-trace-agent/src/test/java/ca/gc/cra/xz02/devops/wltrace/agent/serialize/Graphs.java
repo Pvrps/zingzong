@@ -1,8 +1,8 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.serialize;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import ca.gc.cra.xz02.devops.wltrace.model.SerializationWarning;
 import ca.gc.cra.xz02.devops.wltrace.model.TraceJson;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
 
@@ -12,17 +12,17 @@ final class Graphs {
     final JacksonGraphSerializer serializer;
 
     Graphs() {
-        this(new SerializerConfig());
+        this(new SerializationCeilings());
     }
 
-    Graphs(SerializerConfig config) {
-        this.serializer = new JacksonGraphSerializer(config);
+    Graphs(SerializationCeilings ceilings) {
+        this.serializer = new JacksonGraphSerializer(ceilings, new TypeInfoCache());
     }
 
     Result write(Object value) {
-        SerializationContext ctx = new SerializationContext(serializer.config(), "$");
-        JsonNode node = serializer.serialize(value, value == null ? Object.class : value.getClass(), ctx);
-        return new Result(node, ctx.warnings());
+        SerializationContext context = new SerializationContext(serializer.ceilings(), "$");
+        JsonNode node = serializer.serialize(value, value == null ? Object.class : value.getClass(), context);
+        return new Result(node, context.warnings());
     }
 
     static final class Result {
@@ -43,20 +43,15 @@ final class Graphs {
         }
 
         String warnings() {
-            StringBuilder sb = new StringBuilder();
-            for (SerializationWarning w : warnings) {
-                sb.append(w.path).append(" : ").append(w.reason).append(" (").append(w.typeName).append(")\n");
+            StringBuilder builder = new StringBuilder();
+            for (SerializationWarning warning : warnings) {
+                builder.append(warning.path).append(" : ").append(warning.reason).append(" (").append(warning.typeName).append(")\n");
             }
-            return sb.toString();
+            return builder.toString();
         }
 
         boolean hasWarning(String pathPart, String reasonPart) {
-            for (SerializationWarning w : warnings) {
-                if (w.path.contains(pathPart) && w.reason.contains(reasonPart)) {
-                    return true;
-                }
-            }
-            return false;
+            return warnings.stream().anyMatch(warning -> warning.path.contains(pathPart) && warning.reason.contains(reasonPart));
         }
     }
 }

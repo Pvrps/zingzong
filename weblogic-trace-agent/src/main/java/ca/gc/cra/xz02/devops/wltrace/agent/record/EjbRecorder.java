@@ -1,75 +1,54 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.record;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentLog;
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.BeanMeta;
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.ContainerInvocation;
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.WlsMetadata;
+import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.BeanMetadata;
+import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.BeanMetadataResolver;
+import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.SessionInvocation;
 import ca.gc.cra.xz02.devops.wltrace.model.Span;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
 
 /**
- * Entry and exit of WebLogic's session-bean invokers, called from {@code ContainerAdvice}: the
- * span's facts come from the container's invocation wrapper, client object and BeanInfo.
+ * Calls through WebLogic's session invokers: the facts come from the invoker's arguments
+ * ({@link SessionInvocation}) and the container's metadata for the bean class. Adds nothing to
+ * the base shape: arguments and result are recorded under the interface method's signature.
  */
-public final class EjbRecorder {
+public final class EjbRecorder extends SpanRecorder<EjbFacts> {
 
-    private static final AtomicBoolean warned = new AtomicBoolean();
+    private final BeanMetadataResolver metadata;
+    private final MethodResolver methods;
 
-    private EjbRecorder() {
+    public EjbRecorder(RecorderContext context, BeanMetadataResolver metadata, MethodResolver methods) {
+        super(context);
+        this.metadata = metadata;
+        this.methods = methods;
     }
 
-    /** Returns 0 when nothing is recorded, else the token {@link #exit} needs. */
-    public static long enter(Object invokable, Object clientObject, Object wrapper) {
-        Recording recording = Spans.active();
-        if (recording == null) {
-            return 0L;
-        }
-        try {
-            ContainerInvocation ci = ContainerInvocation.read(invokable, clientObject, wrapper);
-            if (ci == null || ci.beanClass == null) {
-                if (warned.compareAndSet(false, true)) {
-                    AgentLog.warn("container hook: invocation objects not recognised (" + describe(invokable) + ", "
-                            + describe(clientObject) + ", " + describe(wrapper) + "); call not recorded");
-                }
-                return 0L;
-            }
-            BeanMeta meta = WlsMetadata.of(ci.beanClass, new WlsMetadata.Hint(ci.ejbName, ci.beanInfo));
-            String invocation = ci.local ? BeanMeta.LOCAL : BeanMeta.REMOTE;
-            String methodName = ci.method == null ? "?" : ci.method.getName();
-            String iface = ci.businessInterface(meta == null ? null : meta.interfaces);
-            OpenSpan span = Spans.push(recording, Span.KIND_EJB, null, ci.beanClass.getName(), methodName, ci, meta,
-                    iface, invocation, ci.transactionAttribute);
-            return Spans.token(span);
-        } catch (Throwable t) {
-            return 0L;
-        }
+    @Override
+    public String kind() {
+        return Span.KIND_EJB;
     }
 
-    public static void exit(long token, Object[] args, Object result, Throwable thrown) {
-        if (token == 0L) {
-            return;
+    /** {@code invokable}, the container's client object and the invocation wrapper, as the invoker received them. */
+    @Override
+    protected EjbFacts readFacts(Object invokable, Object clientObject, Object invocationWrapper) {
+        Optional<SessionInvocation> read = SessionInvocation.read(invokable, clientObject, invocationWrapper);
+        if (!read.isPresent()) {
+            log.warnOnce("session-invocation", "session invoker hook: invocation objects not recognised (" + describe(invokable) + ", "
+                    + describe(clientObject) + ", " + describe(invocationWrapper) + "); call not recorded");
+            return null;
         }
-        try {
-            SpanStack stack = SpanStack.current();
-            OpenSpan open = stack.top();
-            if (open == null || !(open.container instanceof ContainerInvocation)) {
-                stack.reset();
-                return;
-            }
-            ContainerInvocation ci = (ContainerInvocation) open.container;
-            Span span = open.toSpan(System.nanoTime() - open.enteredAtNanos);
-            MethodSignatures.MethodInfo info = ci.method == null
-                    ? MethodSignatures.MethodInfo.unknown(open.method, "")
-                    : MethodSignatures.resolve(ci.beanClass, ci.method);
-            Spans.fill(span, info, args, result, thrown);
-            Spans.complete(span);
-        } catch (Throwable t) {
-            Spans.abandon("container exit handling", t);
-        }
+        SessionInvocation invocation = read.get();
+        BeanMetadata beanMetadata = metadata.of(invocation.beanClass, new BeanMetadataResolver.Hint(invocation.ejbName, invocation.beanInfo));
+        MethodSignature signature = invocation.method == null
+                ? MethodSignature.unknown("?", "")
+                : methods.resolve(invocation.beanClass, invocation.method);
+        return new EjbFacts(invocation.beanClass, signature, beanMetadata,
+                invocation.businessInterface(beanMetadata.interfaces),
+                invocation.local ? BeanMetadata.LOCAL : BeanMetadata.REMOTE,
+                invocation.transactionAttribute, null);
     }
 
-    private static String describe(Object o) {
-        return o == null ? "null" : o.getClass().getName();
+    private static String describe(Object value) {
+        return value == null ? "null" : value.getClass().getName();
     }
 }

@@ -37,15 +37,16 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class Scalars {
 
+    /** Recognised by name: java.sql lives in the platform loader, invisible to the bootstrap-loaded agent. */
     private static final String SQL_TIMESTAMP = "java.sql.Timestamp";
 
     private Scalars() {
     }
 
-    /** Returns a scalar node, or null when the value is not a scalar. */
-    static JsonNode write(Object value, SerializationContext ctx) {
+    /** The scalar node for the value, or null when the value is not a scalar. */
+    static JsonNode write(Object value, SerializationContext context) {
         if (value instanceof String) {
-            return text((String) value, ctx);
+            return text((String) value, context);
         }
         if (value instanceof Boolean) {
             return BooleanNode.valueOf((Boolean) value);
@@ -60,30 +61,16 @@ final class Scalars {
             return TextNode.valueOf(((Enum<?>) value).name());
         }
         if (value instanceof CharSequence) {
-            return text(value.toString(), ctx);
+            return text(value.toString(), context);
         }
         if (value instanceof Date) {
-            // java.sql lives in the platform loader, invisible to the bootstrap-loaded agent: recognised by name.
-            Date date = (Date) value;
-            long millis = date.getTime();
-            if (value.getClass().getName().equals(SQL_TIMESTAMP)) {
-                try {
-                    int nanos = (Integer) value.getClass().getMethod("getNanos").invoke(value);
-                    return TextNode.valueOf(Instant.ofEpochSecond(Math.floorDiv(millis, 1000L), nanos).toString());
-                } catch (Throwable ignored) {
-                    // millisecond precision below
-                }
-            }
-            return TextNode.valueOf(Instant.ofEpochMilli(millis).toString());
+            return date((Date) value);
         }
         if (value instanceof Calendar) {
-            Calendar c = (Calendar) value;
-            return TextNode.valueOf(ZonedDateTime.ofInstant(Instant.ofEpochMilli(c.getTimeInMillis()), c.getTimeZone().toZoneId()).toString());
+            Calendar calendar = (Calendar) value;
+            return TextNode.valueOf(ZonedDateTime.ofInstant(Instant.ofEpochMilli(calendar.getTimeInMillis()), calendar.getTimeZone().toZoneId()).toString());
         }
-        if (value instanceof StackTraceElement) {
-            return TextNode.valueOf(value.toString());
-        }
-        if (value instanceof Temporal || value instanceof TemporalAmount || value instanceof ZoneId) {
+        if (value instanceof StackTraceElement || value instanceof Temporal || value instanceof TemporalAmount || value instanceof ZoneId) {
             return TextNode.valueOf(value.toString());
         }
         if (value instanceof AtomicBoolean) {
@@ -96,43 +83,53 @@ final class Scalars {
         return null;
     }
 
-    private static JsonNode text(String s, SerializationContext ctx) {
-        int max = ctx.config.maxStringLength;
-        if (s.length() > max) {
-            int dropped = s.length() - max;
-            ctx.warn("string ceiling " + max + " reached; " + dropped + " of " + s.length() + " chars dropped", String.class.getName());
-            return Placeholders.text(s.substring(0, max), s.length(), dropped);
+    private static JsonNode date(Date date) {
+        long millis = date.getTime();
+        if (date.getClass().getName().equals(SQL_TIMESTAMP)) {
+            try {
+                int nanos = (Integer) date.getClass().getMethod("getNanos").invoke(date);
+                return TextNode.valueOf(Instant.ofEpochSecond(Math.floorDiv(millis, 1000L), nanos).toString());
+            } catch (Throwable ignored) {
+                // millisecond precision below
+            }
         }
-        return TextNode.valueOf(s);
+        return TextNode.valueOf(Instant.ofEpochMilli(millis).toString());
     }
 
-    private static JsonNode number(Number n) {
-        if (n instanceof Integer) {
-            return IntNode.valueOf(n.intValue());
+    private static JsonNode text(String text, SerializationContext context) {
+        int maximum = context.ceilings.maxStringLength;
+        if (text.length() > maximum) {
+            int dropped = text.length() - maximum;
+            context.warn("string ceiling " + maximum + " reached; " + dropped + " of " + text.length() + " chars dropped", String.class.getName());
+            return Marker.text(text.substring(0, maximum), text.length(), dropped).toNode();
         }
-        if (n instanceof Long || n instanceof AtomicLong) {
-            return LongNode.valueOf(n.longValue());
+        return TextNode.valueOf(text);
+    }
+
+    private static JsonNode number(Number number) {
+        if (number instanceof Integer || number instanceof AtomicInteger) {
+            return IntNode.valueOf(number.intValue());
         }
-        if (n instanceof Short || n instanceof Byte) {
-            return ShortNode.valueOf(n.shortValue());
+        if (number instanceof Long || number instanceof AtomicLong) {
+            return LongNode.valueOf(number.longValue());
         }
-        if (n instanceof Double) {
-            double d = n.doubleValue();
-            return Double.isNaN(d) || Double.isInfinite(d) ? TextNode.valueOf(n.toString()) : DoubleNode.valueOf(d);
+        if (number instanceof Short || number instanceof Byte) {
+            return ShortNode.valueOf(number.shortValue());
         }
-        if (n instanceof Float) {
-            float f = n.floatValue();
-            return Float.isNaN(f) || Float.isInfinite(f) ? TextNode.valueOf(n.toString()) : FloatNode.valueOf(f);
+        if (number instanceof Double) {
+            double value = number.doubleValue();
+            return Double.isNaN(value) || Double.isInfinite(value) ? TextNode.valueOf(number.toString()) : DoubleNode.valueOf(value);
         }
-        if (n instanceof BigDecimal) {
-            return TextNode.valueOf(((BigDecimal) n).toPlainString());
+        if (number instanceof Float) {
+            float value = number.floatValue();
+            return Float.isNaN(value) || Float.isInfinite(value) ? TextNode.valueOf(number.toString()) : FloatNode.valueOf(value);
         }
-        if (n instanceof BigInteger) {
-            return TextNode.valueOf(n.toString());
+        if (number instanceof BigDecimal) {
+            return TextNode.valueOf(((BigDecimal) number).toPlainString());
         }
-        if (n instanceof AtomicInteger) {
-            return IntNode.valueOf(n.intValue());
+        if (number instanceof BigInteger) {
+            return TextNode.valueOf(number.toString());
         }
-        return TextNode.valueOf(n.toString());
+        return TextNode.valueOf(number.toString());
     }
 }

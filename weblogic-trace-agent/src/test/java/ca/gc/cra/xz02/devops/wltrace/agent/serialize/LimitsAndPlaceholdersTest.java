@@ -95,7 +95,7 @@ class LimitsAndPlaceholdersTest {
 
     @Test
     void depthCeilingLeavesAMarkedSubtree() {
-        Graphs graphs = new Graphs(new SerializerConfig().withMaxDepth(3));
+        Graphs graphs = new Graphs(new SerializationCeilings().withMaxDepth(3));
         Node chain = new Node("d0", new Node("d1", new Node("d2", new Node("d3", new Node("d4", null)))));
 
         Graphs.Result r = graphs.write(chain);
@@ -108,7 +108,7 @@ class LimitsAndPlaceholdersTest {
 
     @Test
     void elementCeilingsLeaveCountedMarkers() {
-        Graphs graphs = new Graphs(new SerializerConfig().withMaxElements(3));
+        Graphs graphs = new Graphs(new SerializationCeilings().withMaxElements(3));
         List<Integer> ten = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
 
         Graphs.Result r = graphs.write(ten);
@@ -132,7 +132,7 @@ class LimitsAndPlaceholdersTest {
 
     @Test
     void stringCeilingLeavesPrefixLengthAndDroppedCount() throws Exception {
-        Graphs graphs = new Graphs(new SerializerConfig().withMaxStringLength(5));
+        Graphs graphs = new Graphs(new SerializationCeilings().withMaxStringLength(5));
         Graphs.Result r = graphs.write(new Node("abcdefghij", null));
         JsonNode label = r.node.get("label");
         assertEquals("abcde", label.get("@text").asText(), r.json());
@@ -224,7 +224,7 @@ class LimitsAndPlaceholdersTest {
     void byteArraysAreBase64AndTheCeilingIsCounted() throws Exception {
         Holder holder = new Holder();
         holder.bytes = new byte[]{1, 2, 3, 4, 5, 6};
-        Graphs graphs = new Graphs(new SerializerConfig().withMaxBytes(4));
+        Graphs graphs = new Graphs(new SerializationCeilings().withMaxBytes(4));
 
         Graphs.Result r = graphs.write(holder);
         JsonNode bytes = r.node.get("bytes");

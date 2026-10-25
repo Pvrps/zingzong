@@ -1,6 +1,5 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.http;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentLog;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.FieldValue;
 import net.bytebuddy.implementation.bind.annotation.Origin;
@@ -13,40 +12,37 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.concurrent.Callable;
 
 /**
- * The code behind the wrapper classes {@link TeeClasses} generates at runtime. Those classes
- * extend the servlet API (which the agent cannot link against) and delegate here. Every
- * byte the application reads or writes passes through unchanged; a copy lands in the
- * {@link HttpCapture} buffers.
+ * The code behind the classes {@link TeeClasses} generates. Those classes extend the servlet API,
+ * which the agent cannot link against, and delegate here. Every byte the application reads or
+ * writes passes through unchanged; a copy lands in the {@link HttpCapture} buffers. Static because
+ * Byte Buddy binds the generated methods to these; the state is the capture they are handed.
  */
 public final class TeeSupport {
 
     private TeeSupport() {
     }
 
-    // ---- request wrapper ----------------------------------------------------------------
-
-    /** getInputStream(): the container's stream wrapped in a generated tee stream, created once. */
+    /** {@code getInputStream()}: the container's stream behind a generated tee stream, created once. */
     @RuntimeType
-    public static Object getInputStream(@This Object self, @SuperCall Callable<?> zuper, @FieldValue("capture") Object captureField) throws Exception {
+    public static Object getInputStream(@SuperCall Callable<?> container, @FieldValue("capture") Object captureField) throws Exception {
         HttpCapture capture = (HttpCapture) captureField;
         synchronized (capture) {
             if (capture.requestStream == null) {
-                Object delegate = zuper.call();
-                capture.requestStream = TeeClasses.forServletApiOf(self).newInputStream(delegate, capture.requestBody);
+                capture.requestStream = capture.tees.newInputStream(container.call(), capture.requestBody);
             }
             return capture.requestStream;
         }
     }
 
-    /** getReader(): a reader over our tee stream in the request's declared charset (ISO-8859-1 by the spec's default). */
+    /** {@code getReader()}: a reader over the tee stream in the request's declared charset (ISO-8859-1 by the servlet default). */
     @RuntimeType
     public static Object getReader(@This Object self, @FieldValue("capture") Object captureField) throws Exception {
         HttpCapture capture = (HttpCapture) captureField;
@@ -60,137 +56,115 @@ public final class TeeSupport {
         }
     }
 
-    // ---- response wrapper ---------------------------------------------------------------
-
+    /** {@code getOutputStream()}: the container's stream behind a generated tee stream, created once. */
     @RuntimeType
-    public static Object getOutputStream(@This Object self, @SuperCall Callable<?> zuper, @FieldValue("capture") Object captureField) throws Exception {
+    public static Object getOutputStream(@SuperCall Callable<?> container, @FieldValue("capture") Object captureField) throws Exception {
         HttpCapture capture = (HttpCapture) captureField;
         synchronized (capture) {
             if (capture.responseStream == null) {
-                Object delegate = zuper.call();
-                capture.responseStream = TeeClasses.forServletApiOf(self).newOutputStream(delegate, capture.responseBody);
+                capture.responseStream = capture.tees.newOutputStream(container.call(), capture.responseBody);
             }
             return capture.responseStream;
         }
     }
 
-    /**
-     * getWriter(): the container's own writer (so its encoding and commit rules apply) behind a
-     * PrintWriter that also keeps every character written.
-     */
+    /** {@code getWriter()}: the container's own writer, so its encoding and commit rules apply, behind a writer that keeps every character. */
     @RuntimeType
-    public static Object getWriter(@This Object self, @SuperCall Callable<?> zuper, @FieldValue("capture") Object captureField) throws Exception {
+    public static Object getWriter(@This Object self, @SuperCall Callable<?> container, @FieldValue("capture") Object captureField) throws Exception {
         HttpCapture capture = (HttpCapture) captureField;
         synchronized (capture) {
             if (capture.responseWriter == null) {
-                PrintWriter container = (PrintWriter) zuper.call();
+                PrintWriter containerWriter = (PrintWriter) container.call();
                 capture.responseText = new StringBuilder();
                 capture.responseWriterCharset = (String) self.getClass().getMethod("getCharacterEncoding").invoke(self);
-                capture.responseWriter = new PrintWriter(new TeeWriter(container, capture.responseText), false);
+                capture.responseWriter = new PrintWriter(new TeeWriter(containerWriter, capture.responseText), false);
             }
             return capture.responseWriter;
         }
     }
 
-
     /**
-     * sendError(status[, message]): the application asked the container for its error page.
-     * The page itself is written by the container through its own stream, not through the
+     * {@code sendError(status[, message])}: the application asked the container for its error
+     * page. The page is written by the container through its own stream, not through the
      * wrapper, so what is recorded is the request: status and message.
      */
     @RuntimeType
-    public static Object sendError(@SuperCall Callable<?> zuper, @AllArguments Object[] args, @FieldValue("capture") Object captureField) throws Exception {
+    public static Object sendError(@SuperCall Callable<?> container, @AllArguments Object[] arguments, @FieldValue("capture") Object captureField) throws Exception {
         HttpCapture capture = (HttpCapture) captureField;
         synchronized (capture) {
-            capture.sentErrorStatus = args.length > 0 && args[0] instanceof Integer ? (Integer) args[0] : null;
-            capture.sentErrorMessage = args.length > 1 && args[1] != null ? String.valueOf(args[1]) : null;
+            capture.sentErrorStatus = arguments.length > 0 && arguments[0] instanceof Integer ? (Integer) arguments[0] : null;
+            capture.sentErrorMessage = arguments.length > 1 && arguments[1] != null ? String.valueOf(arguments[1]) : null;
         }
-        return zuper.call();
+        return container.call();
     }
-    // ---- generated stream subclasses -----------------------------------------------------
 
     /**
-     * Every method of a generated ServletInputStream/ServletOutputStream subclass lands here:
-     * read/write go through the buffer, everything else is forwarded to the container's stream.
+     * Every intercepted method of a generated stream lands here: read and write go through the
+     * buffer, everything else is forwarded to the container's stream.
      */
     @RuntimeType
-    public static Object forward(@Origin Method method, @AllArguments Object[] args,
+    public static Object forward(@Origin Method method, @AllArguments Object[] arguments,
                                  @FieldValue("delegate") Object delegate, @FieldValue("buffer") Object bufferField) throws Throwable {
         BodyBuffer buffer = (BodyBuffer) bufferField;
         String name = method.getName();
-        Class<?>[] types = method.getParameterTypes();
+        Class<?>[] parameterTypes = method.getParameterTypes();
         if (name.equals("read") && delegate instanceof InputStream) {
-            InputStream in = (InputStream) delegate;
-            if (types.length == 0) {
-                int b = in.read();
-                buffer.touch();
-                if (b >= 0) {
-                    buffer.write(b);
-                }
-                return b;
-            }
-            if (types.length == 3) {
-                byte[] b = (byte[]) args[0];
-                int off = (Integer) args[1];
-                int len = (Integer) args[2];
-                int n = in.read(b, off, len);
-                buffer.touch();
-                if (n > 0) {
-                    buffer.write(b, off, n);
-                }
-                return n;
-            }
-            if (types.length == 1) {
-                byte[] b = (byte[]) args[0];
-                int n = in.read(b, 0, b.length);
-                buffer.touch();
-                if (n > 0) {
-                    buffer.write(b, 0, n);
-                }
-                return n;
-            }
+            return read((InputStream) delegate, parameterTypes, arguments, buffer);
         }
         if (name.equals("write") && delegate instanceof OutputStream) {
-            OutputStream out = (OutputStream) delegate;
-            if (types.length == 1 && types[0] == int.class) {
-                out.write((Integer) args[0]);
-                buffer.write((Integer) args[0]);
-                return null;
-            }
-            if (types.length == 3) {
-                byte[] b = (byte[]) args[0];
-                int off = (Integer) args[1];
-                int len = (Integer) args[2];
-                out.write(b, off, len);
-                buffer.write(b, off, len);
-                return null;
-            }
-            if (types.length == 1) {
-                byte[] b = (byte[]) args[0];
-                out.write(b);
-                buffer.write(b, 0, b.length);
-                return null;
-            }
+            write((OutputStream) delegate, parameterTypes, arguments, buffer);
+            return null;
         }
-        Method target = delegate.getClass().getMethod(name, types);
+        Method target = delegate.getClass().getMethod(name, parameterTypes);
         try {
             target.setAccessible(true);
         } catch (Throwable ignored) {
-            // public method on a public class: fine without
+            // a public method on a public class works without
         }
         try {
-            return target.invoke(delegate, args);
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            throw e.getCause();
+            return target.invoke(delegate, arguments);
+        } catch (InvocationTargetException wrapped) {
+            throw wrapped.getCause();
         }
     }
 
-    // ---- helpers ------------------------------------------------------------------------
+    private static Object read(InputStream in, Class<?>[] parameterTypes, Object[] arguments, BodyBuffer buffer) throws IOException {
+        if (parameterTypes.length == 0) {
+            int value = in.read();
+            buffer.touch();
+            if (value >= 0) {
+                buffer.write(value);
+            }
+            return value;
+        }
+        byte[] bytes = (byte[]) arguments[0];
+        int offset = parameterTypes.length == 3 ? (Integer) arguments[1] : 0;
+        int count = parameterTypes.length == 3 ? (Integer) arguments[2] : bytes.length;
+        int read = in.read(bytes, offset, count);
+        buffer.touch();
+        if (read > 0) {
+            buffer.write(bytes, offset, read);
+        }
+        return read;
+    }
+
+    private static void write(OutputStream out, Class<?>[] parameterTypes, Object[] arguments, BodyBuffer buffer) throws IOException {
+        if (parameterTypes.length == 1 && parameterTypes[0] == int.class) {
+            out.write((Integer) arguments[0]);
+            buffer.write((Integer) arguments[0]);
+            return;
+        }
+        byte[] bytes = (byte[]) arguments[0];
+        int offset = parameterTypes.length == 3 ? (Integer) arguments[1] : 0;
+        int count = parameterTypes.length == 3 ? (Integer) arguments[2] : bytes.length;
+        out.write(bytes, offset, count);
+        buffer.write(bytes, offset, count);
+    }
 
     static Charset charset(String name, String fallback) {
         try {
             return Charset.forName(name == null || name.isEmpty() ? fallback : name);
-        } catch (Throwable t) {
+        } catch (Throwable failure) {
             return Charset.forName(fallback);
         }
     }
@@ -206,18 +180,18 @@ public final class TeeSupport {
         }
 
         @Override
-        public void write(char[] cbuf, int off, int len) throws IOException {
-            delegate.write(cbuf, off, len);
+        public void write(char[] characters, int offset, int count) throws IOException {
+            delegate.write(characters, offset, count);
             synchronized (copy) {
-                copy.append(cbuf, off, len);
+                copy.append(characters, offset, count);
             }
         }
 
         @Override
-        public void write(String str, int off, int len) throws IOException {
-            delegate.write(str, off, len);
+        public void write(String text, int offset, int count) throws IOException {
+            delegate.write(text, offset, count);
             synchronized (copy) {
-                copy.append(str, off, off + len);
+                copy.append(text, offset, offset + count);
             }
         }
 
@@ -230,15 +204,5 @@ public final class TeeSupport {
         public void close() throws IOException {
             delegate.close();
         }
-    }
-
-    static void warnOnce(java.util.concurrent.atomic.AtomicBoolean flag, String message, Throwable t) {
-        if (flag.compareAndSet(false, true)) {
-            AgentLog.warn(message + ": " + t);
-        }
-    }
-
-    static Writer writerOver(OutputStream out, String charset) {
-        return new OutputStreamWriter(out, charset(charset, "ISO-8859-1"));
     }
 }

@@ -1,85 +1,93 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.record;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.WlsRuntime;
-
 import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentLog;
 import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentVersion;
+import ca.gc.cra.xz02.devops.wltrace.agent.weblogic.ServerRuntime;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 
-/** The {@code ca.gc.cra.xz02.devops.wltrace:type=Control} MBean on the platform MBeanServer: start, stop and status of recordings. */
+/** The control MBean on the platform MBeanServer: start, stop and status of recordings, for the plugin over JMX. */
 public final class RecordingControl implements RecordingControlMBean {
 
     public static final String OBJECT_NAME = "ca.gc.cra.xz02.devops.wltrace:type=Control";
 
-    public static void register() {
+    private final RecordingLifecycle lifecycle;
+    private final TraceWriter writer;
+    private final ServerRuntime server;
+    private final AgentLog log;
+
+    public RecordingControl(RecordingLifecycle lifecycle, TraceWriter writer, ServerRuntime server, AgentLog log) {
+        this.lifecycle = lifecycle;
+        this.writer = writer;
+        this.server = server;
+        this.log = log;
+    }
+
+    /** Registers this MBean, replacing an earlier registration under the same name; a failure is logged, not thrown. */
+    public void register() {
         try {
-            MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+            MBeanServer platform = ManagementFactory.getPlatformMBeanServer();
             ObjectName name = new ObjectName(OBJECT_NAME);
-            if (server.isRegistered(name)) {
-                server.unregisterMBean(name);
+            if (platform.isRegistered(name)) {
+                platform.unregisterMBean(name);
             }
-            server.registerMBean(new RecordingControl(), name);
-            AgentLog.info("registered JMX MBean " + OBJECT_NAME);
-        } catch (Throwable t) {
-            AgentLog.error("could not register " + OBJECT_NAME + "; captures cannot be started on this server", t);
+            platform.registerMBean(this, name);
+            log.info("registered JMX MBean " + OBJECT_NAME);
+        } catch (Throwable failure) {
+            log.error("could not register " + OBJECT_NAME + "; recordings cannot be started on this server", failure);
         }
     }
 
     @Override
     public String start(String recordingId, String name) {
-        return Recorder.start(recordingId, name).id;
+        return lifecycle.start(recordingId, name).id;
     }
 
     @Override
     public String stop() {
-        Recording recording = Recorder.stop();
-        return recording == null ? null : recording.id;
+        return lifecycle.stop().map(recording -> recording.id).orElse(null);
     }
 
     @Override
     public String getState() {
-        return Recorder.state();
+        return lifecycle.state();
     }
 
     @Override
     public boolean isEnabled() {
-        return Recorder.isEnabled();
+        return lifecycle.active().isPresent();
     }
 
     @Override
     public String getRecordingId() {
-        Recording recording = Recorder.active();
-        return recording == null ? null : recording.id;
+        return lifecycle.active().map(recording -> recording.id).orElse(null);
     }
 
     @Override
     public String getRecordingName() {
-        Recording recording = Recorder.active();
-        return recording == null ? null : recording.name;
+        return lifecycle.active().map(recording -> recording.name).orElse(null);
     }
 
     @Override
     public long getTraceCount() {
-        Recording recording = Recorder.active();
-        return recording == null ? 0L : recording.traceCount();
+        return lifecycle.active().map(Recording::traceCount).orElse(0L);
     }
 
     @Override
     public long getDroppedTraces() {
-        return Recorder.droppedTraces();
+        return writer.dropped();
     }
 
     @Override
     public long getWrittenTraces() {
-        return Recorder.writtenTraces();
+        return writer.written();
     }
 
     @Override
     public int getQueuedTraces() {
-        return Recorder.queuedTraces();
+        return writer.queued();
     }
 
     @Override
@@ -89,11 +97,11 @@ public final class RecordingControl implements RecordingControlMBean {
 
     @Override
     public String getServerName() {
-        return WlsRuntime.serverName();
+        return server.serverName();
     }
 
     @Override
     public String getOutputDirectory() {
-        return Recorder.outDir() == null ? null : Recorder.outDir().getAbsolutePath();
+        return writer.outputDirectory().getAbsolutePath();
     }
 }

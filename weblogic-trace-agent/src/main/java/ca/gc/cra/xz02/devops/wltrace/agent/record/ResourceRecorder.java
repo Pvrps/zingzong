@@ -3,49 +3,37 @@ package ca.gc.cra.xz02.devops.wltrace.agent.record;
 import ca.gc.cra.xz02.devops.wltrace.model.Span;
 
 /**
- * Entry and exit of JAX-RS resource and JAX-WS endpoint methods, called from
- * {@code ResourceAdvice}: a child HTTP span with layer "jaxrs" or "jaxws", arguments and result
- * captured like an EJB call.
+ * JAX-RS resource and JAX-WS endpoint methods: a child HTTP span with layer {@code jaxrs} or
+ * {@code jaxws}, arguments and result recorded like an EJB call. The method is resolved from the
+ * origin string the advice passes, {@code <class>|<method>|<descriptor>}, against the user's
+ * class behind the instance. Adds nothing to the base shape.
  */
-public final class ResourceRecorder {
+public final class ResourceRecorder extends SpanRecorder<ResourceFacts> {
 
-    private ResourceRecorder() {
+    private final MethodResolver methods;
+    private final ResourceLayers layers;
+
+    public ResourceRecorder(RecorderContext context, MethodResolver methods, ResourceLayers layers) {
+        super(context);
+        this.methods = methods;
+        this.layers = layers;
     }
 
-    /** Returns 0 when nothing is recorded, else the token {@link #exit} needs. */
-    public static long enter(Object self, String resourceClass, String method) {
-        Recording recording = Spans.active();
-        if (recording == null) {
-            return 0L;
-        }
-        try {
-            String layer = ResourceLayers.layerOf(self == null ? null : self.getClass());
-            OpenSpan span = Spans.push(recording, Span.KIND_HTTP, layer, resourceClass, method, null, null, null, null, null);
-            return Spans.token(span);
-        } catch (Throwable t) {
-            return 0L;
-        }
+    @Override
+    public String kind() {
+        return Span.KIND_HTTP;
     }
 
-    public static void exit(long token, Object self, String resourceClass, String method, String descriptor,
-                            Object[] args, Object result, Throwable thrown) {
-        if (token == 0L) {
-            return;
+    /** The resource instance and the advice origin {@code <class>|<method>|<descriptor>}; the third argument is unused. */
+    @Override
+    protected ResourceFacts readFacts(Object resource, Object origin, Object unused) {
+        String[] parts = String.valueOf(origin).split("\\|", 3);
+        if (parts.length != 3) {
+            return null;
         }
-        try {
-            SpanStack stack = SpanStack.current();
-            OpenSpan open = stack.top();
-            if (open == null || !resourceClass.equals(open.beanClass) || !method.equals(open.method)) {
-                // The recording boundary was crossed mid-trace: abandon this thread's state.
-                stack.reset();
-                return;
-            }
-            Span span = open.toSpan(System.nanoTime() - open.enteredAtNanos);
-            Class<?> type = MethodSignatures.beanClass(self, resourceClass);
-            Spans.fill(span, MethodSignatures.resolve(type, method, descriptor), args, result, thrown);
-            Spans.complete(span);
-        } catch (Throwable t) {
-            Spans.abandon("resource exit handling for " + resourceClass + "." + method, t);
-        }
+        String resourceClassName = parts[0];
+        Class<?> resourceClass = MethodResolver.beanClassOf(resource, resourceClassName);
+        MethodSignature signature = methods.resolve(resourceClass, parts[1], parts[2]);
+        return new ResourceFacts(resourceClassName, signature, layers.layerOf(resource == null ? null : resource.getClass()));
     }
 }

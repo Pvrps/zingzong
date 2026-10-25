@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Iterator;
@@ -15,392 +15,386 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Builds Jackson {@link JsonNode} trees by walking object graphs field by field, never through
- * getters or {@code ObjectMapper}; Jackson supplies the tree model only. The structural rules of
- * {@link Placeholders} are the only transformations and each is marked in the output; a failure
- * becomes a marked {@code @unserializable} node and a warning, never an exception for the caller.
+ * Builds Jackson trees by walking object graphs field by field, never through getters or an
+ * {@code ObjectMapper}; Jackson supplies the tree model only. Repeated objects become
+ * {@code @ref}, lazy values are read for their state and never loaded, runtime handles become
+ * {@code @handle}, and every ceiling in the {@link SerializationCeilings} leaves {@code @truncated}.
+ * A failure anywhere becomes an {@code @unserializable} node and a warning, never an exception
+ * for the caller.
  */
 public final class JacksonGraphSerializer implements GraphSerializer {
 
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
 
-    private final SerializerConfig config;
+    private final SerializationCeilings ceilings;
+    private final TypeInfoCache typeInfos;
+    private final JmsMessageView jmsMessages;
 
-    public JacksonGraphSerializer() {
-        this(new SerializerConfig());
+    public JacksonGraphSerializer(SerializationCeilings ceilings, TypeInfoCache typeInfos) {
+        this.ceilings = ceilings;
+        this.typeInfos = typeInfos;
+        this.jmsMessages = new JmsMessageView(this);
     }
 
-    public JacksonGraphSerializer(SerializerConfig config) {
-        this.config = config;
-    }
-
-    public SerializerConfig config() {
-        return config;
+    public SerializationCeilings ceilings() {
+        return ceilings;
     }
 
     @Override
-    public JsonNode serialize(Object value, Class<?> declaredType, SerializationContext ctx) {
+    public JsonNode serialize(Object value, Class<?> declaredType, SerializationContext context) {
         try {
-            return write(value, ctx);
-        } catch (Throwable t) {
+            return write(value, context);
+        } catch (Throwable failure) {
             // Last line of defence; write() already catches per sub-tree.
-            safeWarn(ctx, "serializer failure: " + t, value);
-            return Placeholders.unserializable(value, "serializer failure: " + t, null);
+            safeWarn(context, "serializer failure: " + failure, value);
+            return Marker.unserializable(value, "serializer failure: " + failure, null).toNode();
         }
     }
 
-    // ---- writing -------------------------------------------------------------------------
-
-    /** A nested value written as part of a composite view (JmsMessages). */
-    JsonNode writeValue(Object value, SerializationContext ctx) {
-        return write(value, ctx);
+    /** A nested value written as part of a composite view, such as a JMS message. */
+    JsonNode writeValue(Object value, SerializationContext context) {
+        return write(value, context);
     }
 
-    private JsonNode write(Object value, SerializationContext ctx) {
+    private JsonNode write(Object value, SerializationContext context) {
         if (value == null) {
             return NullNode.getInstance();
         }
         try {
-            JsonNode scalar = Scalars.write(value, ctx);
-            if (scalar != null) {
-                return scalar;
-            }
-            return writeStructured(value, ctx);
-        } catch (Throwable t) {
-            String reason = describeFailure(t);
-            ctx.warn(reason, value.getClass().getName());
-            return Placeholders.unserializable(value, reason, safeToString(value));
+            JsonNode scalar = Scalars.write(value, context);
+            return scalar != null ? scalar : writeStructured(value, context);
+        } catch (Throwable failure) {
+            String reason = describeFailure(failure);
+            context.warn(reason, value.getClass().getName());
+            return Marker.unserializable(value, reason, safeToString(value)).toNode();
         }
     }
 
-    private JsonNode writeStructured(Object value, SerializationContext ctx) {
-        TypeInfo info = TypeInfo.of(value.getClass());
+    private JsonNode writeStructured(Object value, SerializationContext context) {
+        TypeInfo info = typeInfos.of(value.getClass());
 
-        Lazy.State lazy = Lazy.stateOf(value, info);
-        if (lazy == Lazy.State.UNLOADED || lazy == Lazy.State.UNKNOWN) {
-            if (lazy == Lazy.State.UNKNOWN) {
-                ctx.warn("lazy state unknown, not touched", info.type.getName());
+        LazyState lazy = LazyState.of(value, info);
+        if (lazy == LazyState.UNLOADED || lazy == LazyState.UNKNOWN) {
+            if (lazy == LazyState.UNKNOWN) {
+                context.warn("lazy state unknown, not touched", info.type.getName());
             }
-            return Placeholders.lazy(false);
+            return Marker.lazy().toNode();
         }
-        if (lazy == Lazy.State.LOADED) {
-            Object loaded = Lazy.loadedValue(value, info);
+        if (lazy == LazyState.LOADED) {
+            Object loaded = LazyState.loadedValue(value, info);
             if (loaded != value) {
-                return write(loaded, ctx);
+                return write(loaded, context);
             }
         }
 
         if (info.handleKind != null) {
-            ctx.warn("runtime handle (" + info.handleKind + "), recorded as reference", info.type.getName());
-            return Placeholders.handle(value, info.handleKind, safeToString(value, info));
+            context.warn("runtime handle (" + info.handleKind + "), recorded as reference", info.type.getName());
+            return Marker.handle(value, info.handleKind, safeToString(value, info)).toNode();
         }
 
-        if (ctx.depth() >= config.maxDepth) {
-            String reason = "depth ceiling " + config.maxDepth + " reached; subtree dropped";
-            ctx.warn(reason, info.type.getName());
-            return Placeholders.unserializable(value, reason, safeToString(value, info));
+        if (context.depth() >= ceilings.maxDepth) {
+            String reason = "depth ceiling " + ceilings.maxDepth + " reached; subtree dropped";
+            context.warn(reason, info.type.getName());
+            return Marker.unserializable(value, reason, safeToString(value, info)).toNode();
         }
 
-        SerializationContext.Tracked seen = ctx.seen(value);
+        SerializationContext.Tracked seen = context.seen(value);
         if (seen != null) {
             if (seen.node != null) {
-                int id = ctx.idFor(seen);
-                if (!seen.node.has(Placeholders.ID)) {
-                    seen.node.put(Placeholders.ID, id);
+                int id = context.idFor(seen);
+                if (!seen.node.has(Marker.Kind.ID.key())) {
+                    Marker.id(id).writeTo(seen.node);
                 }
-                return Placeholders.ref(id);
+                return Marker.ref(id).toNode();
             }
             if (seen.inProgress) {
                 String reason = "cyclic reference to a container being written";
-                ctx.warn(reason, info.type.getName());
-                return Placeholders.unserializable(value, reason, null);
+                context.warn(reason, info.type.getName());
+                return Marker.unserializable(value, reason, null).toNode();
             }
             // A container seen before but complete: written again in full, duplicates are fine.
         }
 
         if (value instanceof Optional) {
-            return writeOptional((Optional<?>) value, ctx);
+            return writeOptional((Optional<?>) value, context);
         }
         if (info.type.isArray()) {
-            return writeArray(value, ctx);
+            return writeArray(value, context);
         }
         if (value instanceof Collection) {
-            return writeCollection((Collection<?>) value, ctx);
+            return writeCollection((Collection<?>) value, context);
         }
         if (value instanceof Map) {
-            return writeMap((Map<?, ?>) value, info, ctx);
+            return writeMap((Map<?, ?>) value, info, context);
         }
         if (value instanceof Throwable) {
-            return writeThrowable((Throwable) value, info, ctx);
+            return writeThrowable((Throwable) value, info, context);
         }
         if (info.jmsMessage) {
-            return JmsMessages.write(value, info, this, ctx);
+            return jmsMessages.write(value, info, context);
         }
-        return writeObject(value, info, ctx);
+        return writeObject(value, info, context);
     }
 
-    private ObjectNode writeObject(Object value, TypeInfo info, SerializationContext ctx) {
+    private ObjectNode writeObject(Object value, TypeInfo info, SerializationContext context) {
         ObjectNode node = NODES.objectNode();
-        node.put(Placeholders.TYPE, info.type.getName());
+        Marker.type(info.type.getName()).writeTo(node);
         if (!info.serializable) {
-            // Walked all the same; the marker says it could not cross a remote boundary.
-            node.put(Placeholders.SERIALIZABLE, false);
+            Marker.notSerializable().writeTo(node);
         }
-        SerializationContext.Tracked tracked = ctx.track(value, node);
-        ctx.enter();
-        try {
-            writeFields(value, info, node, ctx);
-        } finally {
-            ctx.leave();
-            tracked.inProgress = false;
-        }
-        return node;
-    }
-
-    private void writeFields(Object value, TypeInfo info, ObjectNode node, SerializationContext ctx) {
-        for (TypeInfo.FieldInfo field : info.fields) {
-            if (!field.walked()) {
-                Placeholders.skipped(node, field.name, field.skipReason);
-                continue;
-            }
-            ctx.pushField(field.name);
-            try {
-                node.set(field.name, writeField(value, field, ctx));
-            } catch (Throwable t) {
-                String reason = describeFailure(t);
-                ctx.warn(reason, field.field.getType().getName());
-                node.set(field.name, Placeholders.unserializable(null, reason, null));
-            } finally {
-                ctx.pop();
-            }
-        }
-    }
-
-    private JsonNode writeField(Object owner, TypeInfo.FieldInfo field, SerializationContext ctx) throws IllegalAccessException {
-        if (field.lazyHolder != null) {
-            Object holder = field.lazyHolder.get(owner);
-            Lazy.State state = Lazy.holderState(holder);
-            if (state == Lazy.State.UNLOADED || state == Lazy.State.UNKNOWN) {
-                return Placeholders.lazy(false);
-            }
-            if (state == Lazy.State.LOADED) {
-                return write(Lazy.loadedValue(holder, TypeInfo.of(holder.getClass())), ctx);
-            }
-        }
-        return write(field.field.get(owner), ctx);
-    }
-
-    private JsonNode writeOptional(Optional<?> optional, SerializationContext ctx) {
-        ObjectNode node = NODES.objectNode();
-        node.put(Placeholders.TYPE, Optional.class.getName());
-        node.put("present", optional.isPresent());
-        if (optional.isPresent()) {
-            ctx.pushField("value");
-            ctx.enter();
-            try {
-                node.set("value", write(optional.get(), ctx));
-            } finally {
-                ctx.leave();
-                ctx.pop();
-            }
-        }
-        return node;
-    }
-
-    private JsonNode writeArray(Object array, SerializationContext ctx) {
-        if (array instanceof byte[]) {
-            byte[] bytes = (byte[]) array;
-            int kept = Math.min(bytes.length, config.maxBytes);
-            byte[] shown = kept == bytes.length ? bytes : java.util.Arrays.copyOf(bytes, kept);
-            int dropped = bytes.length - kept;
-            if (dropped > 0) {
-                ctx.warn("byte[] ceiling " + config.maxBytes + " reached; " + dropped + " of " + bytes.length + " bytes dropped", "byte[]");
-            }
-            return Placeholders.bytes(Base64.getEncoder().encodeToString(shown), bytes.length, dropped);
-        }
-        if (array instanceof char[]) {
-            return Scalars.write(new String((char[]) array), ctx);
-        }
-        ArrayNode node = NODES.arrayNode();
-        SerializationContext.Tracked tracked = ctx.track(array, null);
-        ctx.enter();
-        try {
-            int length = Array.getLength(array);
-            for (int i = 0; i < length; i++) {
-                if (i >= config.maxElements) {
-                    int dropped = length - i;
-                    ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + length + " elements dropped", array.getClass().getName());
-                    node.add(Placeholders.truncatedElements("elements", dropped));
-                    break;
-                }
-                ctx.pushIndex(i);
-                try {
-                    node.add(write(Array.get(array, i), ctx));
-                } finally {
-                    ctx.pop();
-                }
-            }
-        } finally {
-            ctx.leave();
-            tracked.inProgress = false;
-        }
-        return node;
-    }
-
-    private JsonNode writeCollection(Collection<?> collection, SerializationContext ctx) {
-        ArrayNode node = NODES.arrayNode();
-        SerializationContext.Tracked tracked = ctx.track(collection, null);
-        ctx.enter();
-        try {
-            int i = 0;
-            int size = collection.size();
-            for (Iterator<?> it = collection.iterator(); it.hasNext(); i++) {
-                Object element = it.next();
-                if (i >= config.maxElements) {
-                    int dropped = size - i;
-                    ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + size + " elements dropped", collection.getClass().getName());
-                    node.add(Placeholders.truncatedElements("elements", dropped));
-                    break;
-                }
-                ctx.pushIndex(i);
-                try {
-                    node.add(write(element, ctx));
-                } finally {
-                    ctx.pop();
-                }
-            }
-        } finally {
-            ctx.leave();
-            tracked.inProgress = false;
-        }
-        return node;
-    }
-
-    private JsonNode writeMap(Map<?, ?> map, TypeInfo info, SerializationContext ctx) {
-        boolean stringKeys = true;
-        for (Object key : map.keySet()) {
-            if (!(key instanceof String || key instanceof Enum || key instanceof Number || key instanceof Boolean || key instanceof Character)) {
-                stringKeys = false;
-                break;
-            }
-        }
-        SerializationContext.Tracked tracked = ctx.track(map, null);
-        ctx.enter();
-        try {
-            if (stringKeys) {
-                ObjectNode node = NODES.objectNode();
-                int i = 0;
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    if (i++ >= config.maxElements) {
-                        int dropped = map.size() - config.maxElements;
-                        ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + map.size() + " entries dropped", info.type.getName());
-                        node.set(Placeholders.TRUNCATED, NODES.numberNode(dropped));
-                        node.put(Placeholders.WHAT, "entries");
-                        break;
-                    }
-                    String key = entry.getKey() instanceof Enum ? ((Enum<?>) entry.getKey()).name() : String.valueOf(entry.getKey());
-                    ctx.pushKey(key);
-                    try {
-                        node.set(key, write(entry.getValue(), ctx));
-                    } finally {
-                        ctx.pop();
-                    }
-                }
-                return node;
-            }
-            ObjectNode node = NODES.objectNode();
-            node.put(Placeholders.TYPE, info.type.getName());
-            ArrayNode entries = node.putArray(Placeholders.ENTRIES);
-            int i = 0;
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (i >= config.maxElements) {
-                    int dropped = map.size() - i;
-                    ctx.warn("element ceiling " + config.maxElements + " reached; " + dropped + " of " + map.size() + " entries dropped", info.type.getName());
-                    entries.add(Placeholders.truncatedElements("entries", dropped));
-                    break;
-                }
-                ctx.pushIndex(i++);
-                ObjectNode pair = entries.addObject();
-                try {
-                    ctx.pushField("key");
-                    pair.set("key", write(entry.getKey(), ctx));
-                    ctx.pop();
-                    ctx.pushField("value");
-                    pair.set("value", write(entry.getValue(), ctx));
-                    ctx.pop();
-                } finally {
-                    ctx.pop();
-                }
-            }
-            return node;
-        } finally {
-            ctx.leave();
-            tracked.inProgress = false;
-        }
-    }
-
-    /**
-     * A Throwable is walked like any object (its own fields included: application exceptions
-     * carry data), plus the stack trace in full. Two JVM-internal fields of Throwable itself
-     * are listed as skipped: {@code backtrace} (native frame data behind {@code stackTrace})
-     * and {@code depth}. The {@code cause == this} sentinel reads as "no cause".
-     */
-    private ObjectNode writeThrowable(Throwable t, TypeInfo info, SerializationContext ctx) {
-        ObjectNode node = NODES.objectNode();
-        node.put(Placeholders.TYPE, info.type.getName());
-        SerializationContext.Tracked tracked = ctx.track(t, node);
-        ctx.enter();
+        SerializationContext.Tracked tracked = context.track(value, node);
+        context.enter();
         try {
             for (TypeInfo.FieldInfo field : info.fields) {
                 if (!field.walked()) {
-                    Placeholders.skipped(node, field.name, field.skipReason);
+                    Marker.skipped(field.name, field.skipReason).writeTo(node);
+                    continue;
+                }
+                writeField(value, field, node, context);
+            }
+        } finally {
+            context.leave();
+            tracked.inProgress = false;
+        }
+        return node;
+    }
+
+    private void writeField(Object owner, TypeInfo.FieldInfo field, ObjectNode node, SerializationContext context) {
+        context.pushField(field.name);
+        try {
+            node.set(field.name, fieldValue(owner, field, context));
+        } catch (Throwable failure) {
+            String reason = describeFailure(failure);
+            context.warn(reason, field.field.getType().getName());
+            node.set(field.name, Marker.unserializable(null, reason, null).toNode());
+        } finally {
+            context.pop();
+        }
+    }
+
+    private JsonNode fieldValue(Object owner, TypeInfo.FieldInfo field, SerializationContext context) throws IllegalAccessException {
+        if (field.lazyHolder != null) {
+            Object holder = field.lazyHolder.get(owner);
+            LazyState state = LazyState.ofHolder(holder, typeInfos);
+            if (state == LazyState.UNLOADED || state == LazyState.UNKNOWN) {
+                return Marker.lazy().toNode();
+            }
+            if (state == LazyState.LOADED) {
+                return write(LazyState.loadedValue(holder, typeInfos.of(holder.getClass())), context);
+            }
+        }
+        return write(field.field.get(owner), context);
+    }
+
+    private JsonNode writeOptional(Optional<?> optional, SerializationContext context) {
+        ObjectNode node = NODES.objectNode();
+        Marker.type(Optional.class.getName()).writeTo(node);
+        node.put("present", optional.isPresent());
+        if (optional.isPresent()) {
+            context.pushField("value");
+            context.enter();
+            try {
+                node.set("value", write(optional.get(), context));
+            } finally {
+                context.leave();
+                context.pop();
+            }
+        }
+        return node;
+    }
+
+    private JsonNode writeArray(Object array, SerializationContext context) {
+        if (array instanceof byte[]) {
+            byte[] bytes = (byte[]) array;
+            int kept = Math.min(bytes.length, ceilings.maxBytes);
+            byte[] shown = kept == bytes.length ? bytes : Arrays.copyOf(bytes, kept);
+            int dropped = bytes.length - kept;
+            if (dropped > 0) {
+                context.warn("byte[] ceiling " + ceilings.maxBytes + " reached; " + dropped + " of " + bytes.length + " bytes dropped", "byte[]");
+            }
+            return Marker.bytes(Base64.getEncoder().encodeToString(shown), bytes.length, dropped).toNode();
+        }
+        if (array instanceof char[]) {
+            return Scalars.write(new String((char[]) array), context);
+        }
+        ArrayNode node = NODES.arrayNode();
+        SerializationContext.Tracked tracked = context.track(array, null);
+        context.enter();
+        try {
+            int length = Array.getLength(array);
+            for (int index = 0; index < length; index++) {
+                if (index >= ceilings.maxElements) {
+                    int dropped = length - index;
+                    context.warn("element ceiling " + ceilings.maxElements + " reached; " + dropped + " of " + length + " elements dropped", array.getClass().getName());
+                    node.add(Marker.truncated("elements", dropped).toNode());
+                    break;
+                }
+                context.pushIndex(index);
+                try {
+                    node.add(write(Array.get(array, index), context));
+                } finally {
+                    context.pop();
+                }
+            }
+        } finally {
+            context.leave();
+            tracked.inProgress = false;
+        }
+        return node;
+    }
+
+    private JsonNode writeCollection(Collection<?> collection, SerializationContext context) {
+        ArrayNode node = NODES.arrayNode();
+        SerializationContext.Tracked tracked = context.track(collection, null);
+        context.enter();
+        try {
+            int size = collection.size();
+            int index = 0;
+            for (Iterator<?> elements = collection.iterator(); elements.hasNext(); index++) {
+                Object element = elements.next();
+                if (index >= ceilings.maxElements) {
+                    int dropped = size - index;
+                    context.warn("element ceiling " + ceilings.maxElements + " reached; " + dropped + " of " + size + " elements dropped", collection.getClass().getName());
+                    node.add(Marker.truncated("elements", dropped).toNode());
+                    break;
+                }
+                context.pushIndex(index);
+                try {
+                    node.add(write(element, context));
+                } finally {
+                    context.pop();
+                }
+            }
+        } finally {
+            context.leave();
+            tracked.inProgress = false;
+        }
+        return node;
+    }
+
+    private JsonNode writeMap(Map<?, ?> map, TypeInfo info, SerializationContext context) {
+        boolean scalarKeys = map.keySet().stream().allMatch(key -> key instanceof String || key instanceof Enum
+                || key instanceof Number || key instanceof Boolean || key instanceof Character);
+        SerializationContext.Tracked tracked = context.track(map, null);
+        context.enter();
+        try {
+            return scalarKeys ? writeStringKeyedMap(map, info, context) : writeEntryMap(map, info, context);
+        } finally {
+            context.leave();
+            tracked.inProgress = false;
+        }
+    }
+
+    private ObjectNode writeStringKeyedMap(Map<?, ?> map, TypeInfo info, SerializationContext context) {
+        ObjectNode node = NODES.objectNode();
+        int index = 0;
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (index++ >= ceilings.maxElements) {
+                int dropped = map.size() - ceilings.maxElements;
+                context.warn("element ceiling " + ceilings.maxElements + " reached; " + dropped + " of " + map.size() + " entries dropped", info.type.getName());
+                Marker.truncated("entries", dropped).writeTo(node);
+                break;
+            }
+            String key = entry.getKey() instanceof Enum ? ((Enum<?>) entry.getKey()).name() : String.valueOf(entry.getKey());
+            context.pushKey(key);
+            try {
+                node.set(key, write(entry.getValue(), context));
+            } finally {
+                context.pop();
+            }
+        }
+        return node;
+    }
+
+    private ObjectNode writeEntryMap(Map<?, ?> map, TypeInfo info, SerializationContext context) {
+        ObjectNode node = NODES.objectNode();
+        Marker.type(info.type.getName()).writeTo(node);
+        ArrayNode entries = NODES.arrayNode();
+        Marker.entries(entries).writeTo(node);
+        int index = 0;
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (index >= ceilings.maxElements) {
+                int dropped = map.size() - index;
+                context.warn("element ceiling " + ceilings.maxElements + " reached; " + dropped + " of " + map.size() + " entries dropped", info.type.getName());
+                entries.add(Marker.truncated("entries", dropped).toNode());
+                break;
+            }
+            context.pushIndex(index++);
+            ObjectNode pair = entries.addObject();
+            try {
+                context.pushField("key");
+                pair.set("key", write(entry.getKey(), context));
+                context.pop();
+                context.pushField("value");
+                pair.set("value", write(entry.getValue(), context));
+                context.pop();
+            } finally {
+                context.pop();
+            }
+        }
+        return node;
+    }
+
+    /**
+     * A Throwable is walked like any object, its own fields included because application
+     * exceptions carry data, plus the stack trace in full. Two JVM-internal fields of Throwable
+     * itself are listed as skipped: {@code backtrace} (native frame data behind {@code stackTrace})
+     * and {@code depth}. The {@code cause == this} sentinel reads as "no cause".
+     */
+    private ObjectNode writeThrowable(Throwable throwable, TypeInfo info, SerializationContext context) {
+        ObjectNode node = NODES.objectNode();
+        Marker.type(info.type.getName()).writeTo(node);
+        SerializationContext.Tracked tracked = context.track(throwable, node);
+        context.enter();
+        try {
+            for (TypeInfo.FieldInfo field : info.fields) {
+                if (!field.walked()) {
+                    Marker.skipped(field.name, field.skipReason).writeTo(node);
                     continue;
                 }
                 boolean declaredByThrowable = field.field.getDeclaringClass() == Throwable.class;
                 if (declaredByThrowable && (field.name.equals("backtrace") || field.name.equals("depth"))) {
-                    Placeholders.skipped(node, field.name, "JVM-internal frame data; see stackTrace");
+                    Marker.skipped(field.name, "JVM-internal frame data; see stackTrace").writeTo(node);
                     continue;
                 }
                 if (declaredByThrowable && field.name.equals("stackTrace")) {
                     continue; // written below from getStackTrace(), which materialises it
                 }
-                ctx.pushField(field.name);
+                context.pushField(field.name);
                 try {
-                    Object value = field.field.get(t);
-                    if (declaredByThrowable && field.name.equals("cause") && value == t) {
+                    Object value = field.field.get(throwable);
+                    if (declaredByThrowable && field.name.equals("cause") && value == throwable) {
                         value = null;
                     }
-                    node.set(field.name, write(value, ctx));
-                } catch (Throwable e) {
-                    String reason = describeFailure(e);
-                    ctx.warn(reason, field.field.getType().getName());
-                    node.set(field.name, Placeholders.unserializable(null, reason, null));
+                    node.set(field.name, write(value, context));
+                } catch (Throwable failure) {
+                    String reason = describeFailure(failure);
+                    context.warn(reason, field.field.getType().getName());
+                    node.set(field.name, Marker.unserializable(null, reason, null).toNode());
                 } finally {
-                    ctx.pop();
+                    context.pop();
                 }
             }
-            ctx.pushField("stackTrace");
+            context.pushField("stackTrace");
             try {
-                node.set("stackTrace", write(t.getStackTrace(), ctx));
+                node.set("stackTrace", write(throwable.getStackTrace(), context));
             } finally {
-                ctx.pop();
+                context.pop();
             }
         } finally {
-            ctx.leave();
+            context.leave();
             tracked.inProgress = false;
         }
         return node;
     }
 
-    // ---- helpers ------------------------------------------------------------------------
-
-    private static String safeToString(Object value) {
-        return safeToString(value, TypeInfo.of(value.getClass()));
+    private String safeToString(Object value) {
+        return safeToString(value, typeInfos.of(value.getClass()));
     }
 
     /**
-     * toString() for markers, except on JPA entities and lazy wrappers, whose toString may
-     * touch lazy state: those get null (the marker's identity still names the object).
+     * {@code toString()} for markers, except on JPA entities and lazy wrappers, whose toString may
+     * touch lazy state: those get null, and the marker's identity still names the object.
      */
     private static String safeToString(Object value, TypeInfo info) {
         if (info.entity || info.lazyKind != TypeInfo.LazyKind.NONE) {
@@ -408,19 +402,19 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         }
         try {
             return String.valueOf(value);
-        } catch (Throwable t) {
+        } catch (Throwable failure) {
             return null;
         }
     }
 
-    private static String describeFailure(Throwable t) {
-        String message = t.getMessage();
-        return t.getClass().getName() + (message == null ? "" : ": " + message);
+    private static String describeFailure(Throwable failure) {
+        String message = failure.getMessage();
+        return failure.getClass().getName() + (message == null ? "" : ": " + message);
     }
 
-    private static void safeWarn(SerializationContext ctx, String reason, Object value) {
+    private static void safeWarn(SerializationContext context, String reason, Object value) {
         try {
-            ctx.warn(reason, value == null ? "null" : value.getClass().getName());
+            context.warn(reason, value == null ? "null" : value.getClass().getName());
         } catch (Throwable ignored) {
             // nothing left to do
         }

@@ -5,11 +5,12 @@ import ca.gc.cra.xz02.devops.wltrace.plugin.domain.Domain;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * What a person needs to know about a domain at one moment: enabled on disk or not, which
- * server JVMs of this domain run, which of them have the agent, and whether a recording is
- * active. Every message is one of five sentences.
+ * What a person needs to know about a domain at one moment: enabled on disk or not, which server
+ * JVMs of this domain run, which of them have the agent, and whether a recording is active. The
+ * message is one of five sentences, with the specifics after a colon.
  */
 public final class DomainState {
 
@@ -51,16 +52,19 @@ public final class DomainState {
             this.traceCount = status == null ? 0 : status.traceCount;
             this.droppedTraces = status == null ? 0 : status.droppedTraces;
         }
+
+        String label() {
+            return serverName + " (pid " + pid + ")";
+        }
     }
 
     public final Kind kind;
-    /** The headline sentence, with the specifics after a colon. */
     public final String message;
     public final boolean blockPresent;
     public final boolean jarPresent;
     public final boolean jarCurrent;
     public final List<Server> servers;
-    /** The id every recording server reports, or null when none records. */
+    /** The id the recording servers report, or null when none records. */
     public final String activeRecordingId;
     public final String activeRecordingName;
 
@@ -68,52 +72,48 @@ public final class DomainState {
         this.blockPresent = blockPresent;
         this.jarPresent = jarPresent;
         this.jarCurrent = jarCurrent;
-        this.servers = Collections.unmodifiableList(new ArrayList<Server>(servers));
-        String id = null;
-        String name = null;
-        for (Server s : servers) {
-            if (s.recording && id == null) {
-                id = s.recordingId;
-                name = s.recordingName;
-            }
-        }
-        this.activeRecordingId = id;
-        this.activeRecordingName = name;
+        this.servers = Collections.unmodifiableList(new ArrayList<>(servers));
+        Server recordingServer = servers.stream().filter(server -> server.recording).findFirst().orElse(null);
+        this.activeRecordingId = recordingServer == null ? null : recordingServer.recordingId;
+        this.activeRecordingName = recordingServer == null ? null : recordingServer.recordingName;
 
-        boolean enabledOnDisk = blockPresent && jarPresent && jarCurrent;
-        List<String> withAgent = new ArrayList<String>();
-        List<String> withoutAgent = new ArrayList<String>();
-        for (Server s : servers) {
-            (s.agentLoaded ? withAgent : withoutAgent).add(s.serverName + " (pid " + s.pid + ")");
-        }
-        if (!enabledOnDisk) {
+        String withAgent = servers.stream().filter(server -> server.agentLoaded).map(Server::label).collect(Collectors.joining(", "));
+        String withoutAgent = servers.stream().filter(server -> !server.agentLoaded).map(Server::label).collect(Collectors.joining(", "));
+        if (!enabledOnDisk()) {
             if (blockPresent && jarPresent) {
                 // Enabled, but with an agent jar this plugin did not ship: a rebuilt plugin, or a mix of versions.
                 kind = Kind.NOT_ENABLED;
                 message = kind.message + ": the installed agent jar is not the one this plugin ships; run wltrace:enable"
-                        + (withAgent.isEmpty() ? "" : ", then restart " + join(withAgent) + " (running an older agent)");
+                        + (withAgent.isEmpty() ? "" : ", then restart " + withAgent + " (running an older agent)");
             } else if (!withAgent.isEmpty()) {
                 kind = Kind.DISABLED_AGENT_LOADED;
-                message = kind.message + ": " + join(withAgent) + "; the agent is idle, no advice is installed";
+                message = kind.message + ": " + withAgent + "; the agent is idle, no advice is installed";
             } else {
                 kind = Kind.NOT_ENABLED;
-                String why = !blockPresent && !jarPresent ? "run wltrace:enable -Dwltrace.domain=" + domain
-                        : !blockPresent ? "the agent jar is installed but bin/setUserOverrides.sh has no weblogic-trace block; run wltrace:enable"
-                        : !jarPresent ? "bin/setUserOverrides.sh has the block but " + domain.installedAgentJar() + " is missing; run wltrace:enable"
-                        : "run wltrace:enable";
-                message = kind.message + ": " + why;
+                message = kind.message + ": " + notEnabledReason(domain);
             }
         } else if (servers.isEmpty()) {
             kind = Kind.ENABLED_SERVER_DOWN;
             message = kind.message + ": no JVM of " + domain + " is running for this user";
         } else if (!withoutAgent.isEmpty()) {
             kind = Kind.ENABLED_SERVER_NO_AGENT;
-            message = kind.message + ": " + join(withoutAgent) + "; nothing is captured until then";
+            message = kind.message + ": " + withoutAgent + "; nothing is recorded until then";
         } else {
             kind = Kind.READY;
-            message = kind.message + ": " + join(withAgent)
-                    + (id == null ? "" : "; recording " + id + " (" + name + ") active");
+            message = kind.message + ": " + withAgent
+                    + (activeRecordingId == null ? "" : "; recording " + activeRecordingId + " (" + activeRecordingName + ") active");
         }
+    }
+
+    private String notEnabledReason(Domain domain) {
+        String overrides = domain.overridesFile().getFileName().toString();
+        if (!blockPresent && !jarPresent) {
+            return "run wltrace:enable -Dwltrace.domain=" + domain;
+        }
+        if (!blockPresent) {
+            return "the agent jar is installed but bin/" + overrides + " has no weblogic-trace block; run wltrace:enable";
+        }
+        return "bin/" + overrides + " has the block but " + domain.installedAgentJar() + " is missing; run wltrace:enable";
     }
 
     public boolean enabledOnDisk() {
@@ -125,19 +125,6 @@ public final class DomainState {
     }
 
     public boolean anyAgentLoaded() {
-        for (Server s : servers) {
-            if (s.agentLoaded) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String join(List<String> items) {
-        StringBuilder sb = new StringBuilder();
-        for (String item : items) {
-            sb.append(sb.length() == 0 ? "" : ", ").append(item);
-        }
-        return sb.toString();
+        return servers.stream().anyMatch(server -> server.agentLoaded);
     }
 }

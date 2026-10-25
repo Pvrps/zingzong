@@ -3,12 +3,12 @@ package ca.gc.cra.xz02.devops.wltrace.agent.http;
 import java.io.ByteArrayOutputStream;
 
 /**
- * Collects a body as it streams past. Everything is kept up to the safety ceiling; beyond
- * it, bytes are counted but not stored, so the trace can say how much was dropped.
+ * Collects a body as it streams past. Everything is kept up to the ceiling; beyond it bytes are
+ * counted but not stored, so the trace can say how much was dropped.
  */
 public final class BodyBuffer {
 
-    /** 64 MiB: a body past this is a file transfer, not a request payload; a marker says how much more there was. */
+    /** 64 MiB: a body past this is a file transfer, not a request payload; the trace says how much more there was. */
     public static final long DEFAULT_CEILING = 64L * 1024 * 1024;
 
     private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -20,27 +20,27 @@ public final class BodyBuffer {
         this.ceiling = ceiling;
     }
 
-    public synchronized void write(int b) {
+    public synchronized void write(int value) {
         touched = true;
         if (length < ceiling) {
-            bytes.write(b);
+            bytes.write(value);
         }
         length++;
     }
 
-    public synchronized void write(byte[] b, int off, int len) {
-        if (len <= 0) {
+    public synchronized void write(byte[] buffer, int offset, int count) {
+        if (count <= 0) {
             return;
         }
         touched = true;
         long room = ceiling - length;
         if (room > 0) {
-            bytes.write(b, off, (int) Math.min(len, room));
+            bytes.write(buffer, offset, (int) Math.min(count, room));
         }
-        length += len;
+        length += count;
     }
 
-    /** Whether any byte went through, even zero-length reads count as "the stream was used". */
+    /** Records that the stream was used, even by a read that returned nothing. */
     public synchronized void touch() {
         touched = true;
     }

@@ -96,7 +96,7 @@ class RawCaptureAuditTest {
         Object monitor = new Object();
     }
 
-    private final SerializerConfig config = new SerializerConfig()
+    private final SerializationCeilings config = new SerializationCeilings()
             .withMaxStringLength(40).withMaxBytes(8).withMaxElements(5).withMaxDepth(6);
 
     @Test
@@ -285,7 +285,7 @@ class RawCaptureAuditTest {
 
     /** A value the serializer writes as one JSON scalar, so it has no fields to audit. */
     private static boolean isScalar(Object value) {
-        return Scalars.write(value, new SerializationContext(new SerializerConfig(), "$")) != null;
+        return Scalars.write(value, new SerializationContext(new SerializationCeilings(), "$")) != null;
     }
 
     static IndirectList<String> unloadedList() {

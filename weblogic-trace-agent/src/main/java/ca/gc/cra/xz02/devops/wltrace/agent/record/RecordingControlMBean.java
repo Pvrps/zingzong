@@ -1,18 +1,15 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.record;
 
-/** JMX contract at {@code ca.gc.cra.xz02.devops.wltrace:type=Control}. Standard MBean naming. */
+/** The JMX contract at {@code ca.gc.cra.xz02.devops.wltrace:type=Control}, in standard MBean naming. */
 public interface RecordingControlMBean {
 
-    /**
-     * Begins a recording window under the given id (assigned by the caller: one capture has
-     * one id across every server of a domain) and returns it.
-     */
+    /** Begins a recording under the id the caller assigned (one recording has one id across every server of a domain) and returns it. */
     String start(String recordingId, String name);
 
-    /** Ends the active recording; returns its id or null if none was active. */
+    /** Ends the active recording; returns its id, or null when none was active. */
     String stop();
 
-    /** "ready", "recording <id>", or "inert: <reason>" when the agent found no WebLogic and installs nothing. */
+    /** {@code ready}, {@code recording <id>}, or {@code inert: <reason>} when the agent found no WebLogic and installs nothing. */
     String getState();
 
     boolean isEnabled();

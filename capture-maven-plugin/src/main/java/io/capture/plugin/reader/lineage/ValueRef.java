@@ -1,4 +1,4 @@
-package io.capture.reader.lineage;
+package io.capture.plugin.reader.lineage;
 
 /** One scalar found in a span: where it is and its normalized string form. */
 public final class ValueRef {

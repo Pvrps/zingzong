@@ -1,4 +1,4 @@
-package io.capture.reader.lineage;
+package io.capture.plugin.reader.lineage;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.Test;

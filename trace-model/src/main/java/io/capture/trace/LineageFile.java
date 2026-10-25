@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.List;
 
-/** {@code lineage.json}: written by trace-reader into the recording directory, never by the agent. */
+/** The lineage entries of one recording, as the plugin computes them. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LineageFile {
 

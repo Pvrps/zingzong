@@ -15,7 +15,6 @@
   <modules>
     <module>trace-model</module>
     <module>capture-agent</module>
-    <module>trace-reader</module>
     <module>capture-maven-plugin</module>
   </modules>
 

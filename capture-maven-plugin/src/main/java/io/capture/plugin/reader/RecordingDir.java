@@ -1,4 +1,4 @@
-package io.capture.reader;
+package io.capture.plugin.reader;
 
 import io.capture.trace.RecordingManifest;
 import io.capture.trace.Trace;
@@ -24,10 +24,8 @@ import java.util.regex.Pattern;
 public final class RecordingDir {
 
     public static final Pattern TRACE_FILE = Pattern.compile("\\d{6}-t-[0-9a-f]+\\.json");
-    /** recording.json or recording-<server>.json; never the index the prototype's viewer used. */
+    /** recording.json or recording-<server>.json. */
     public static final Pattern MANIFEST_FILE = Pattern.compile("recording(-(?!index\\.json$)[A-Za-z0-9._-]+)?\\.json");
-    public static final String LINEAGE_FILE = "lineage.json";
-    public static final String INDEX_FILE = "recording-index.json";
 
     public final Path dir;
     public final RecordingManifest manifest;

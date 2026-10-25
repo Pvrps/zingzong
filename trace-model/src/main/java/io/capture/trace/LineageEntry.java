@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.List;
 
-/** A value in a later input that came from an earlier output. Produced by trace-reader. */
+/** A value in a later input that came from an earlier output; detected by the plugin, never written by the agent. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LineageEntry {
 

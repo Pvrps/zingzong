@@ -1,4 +1,4 @@
-package io.capture.reader;
+package io.capture.plugin.reader;
 
 import org.junit.jupiter.api.Test;
 

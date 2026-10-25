@@ -1,6 +1,6 @@
-package io.capture.reader;
+package io.capture.plugin.reader;
 
-import io.capture.reader.lineage.LineageDetector;
+import io.capture.plugin.reader.lineage.LineageDetector;
 import io.capture.trace.LineageEntry;
 import io.capture.trace.LineageFile;
 import io.capture.trace.RecordingIndex;

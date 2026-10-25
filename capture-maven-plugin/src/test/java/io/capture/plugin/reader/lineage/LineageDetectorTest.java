@@ -1,6 +1,6 @@
-package io.capture.reader.lineage;
+package io.capture.plugin.reader.lineage;
 
-import io.capture.reader.LoadedTrace;
+import io.capture.plugin.reader.LoadedTrace;
 import io.capture.trace.LineageEntry;
 import io.capture.trace.LineageFile;
 import org.junit.jupiter.api.Test;
@@ -9,8 +9,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static io.capture.reader.lineage.Traces.span;
-import static io.capture.reader.lineage.Traces.trace;
+import static io.capture.plugin.reader.lineage.Traces.span;
+import static io.capture.plugin.reader.lineage.Traces.trace;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;

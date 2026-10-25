@@ -1,6 +1,6 @@
-package io.capture.reader.lineage;
+package io.capture.plugin.reader.lineage;
 
-import io.capture.reader.LoadedTrace;
+import io.capture.plugin.reader.LoadedTrace;
 import io.capture.trace.EjbInfo;
 import io.capture.trace.RecordingRef;
 import io.capture.trace.Span;

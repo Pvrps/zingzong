@@ -1,7 +1,7 @@
-package io.capture.reader.lineage;
+package io.capture.plugin.reader.lineage;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.capture.reader.LoadedTrace;
+import io.capture.plugin.reader.LoadedTrace;
 import io.capture.trace.Span;
 import io.capture.trace.ValueCapture;
 

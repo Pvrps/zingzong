@@ -1,7 +1,7 @@
 package io.capture.plugin;
 
-import io.capture.reader.Indexer;
-import io.capture.reader.RecordingDir;
+import io.capture.plugin.reader.Indexer;
+import io.capture.plugin.reader.RecordingDir;
 import io.capture.trace.RecordingIndex;
 import io.capture.trace.RecordingManifest;
 

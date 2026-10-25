@@ -14,6 +14,6 @@ public class Trace {
     public RecordingRef recording;
     public TraceInfo trace;
     public List<Span> spans = new ArrayList<Span>();
-    /** Written by trace-reader, never by the agent. */
+    /** Set by the plugin when it indexes a recording, never by the agent. */
     public List<LineageEntry> lineage;
 }

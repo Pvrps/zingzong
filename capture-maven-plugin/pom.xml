@@ -48,11 +48,6 @@
       <groupId>io.capture</groupId>
       <artifactId>trace-model</artifactId>
     </dependency>
-    <dependency>
-      <groupId>io.capture</groupId>
-      <artifactId>trace-reader</artifactId>
-      <version>${project.version}</version>
-    </dependency>
     <!--
       The agent jar capture:enable installs. Kept as a plain dependency (not shaded in) so
       Maven resolves it next to the plugin and the goal finds it among the plugin's artifacts.

@@ -139,9 +139,7 @@
         "updateCount": { "type": "integer" },
         "updateCounts": { "type": "array", "items": { "type": "integer" } },
         "resultSet": { "type": "boolean" },
-        "rows": { "type": "integer" },
-        "data": { "type": "array", "items": { "type": "object" } },
-        "rowsNotRecorded": { "type": "integer" }
+        "rows": { "type": "integer" }
       }
     },
     "valueCapture": {

@@ -327,21 +327,8 @@ public final class Recorder {
     }
 
     private static final Map<Object, Binds> BINDS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, Binds>());
-    /** What is being read from a statement's result set: its SQL record and the row under the cursor. */
-    private static final class Reading {
-        final io.capture.trace.SqlInfo info;
-        Map<String, JsonNode> row;
-
-        Reading(io.capture.trace.SqlInfo info) {
-            this.info = info;
-        }
-    }
-
-    private static final Map<Object, Reading> READING = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, Reading>());
-    /** ResultSet getters that do not read a column. */
-    private static final java.util.Set<String> NOT_COLUMNS = new java.util.HashSet<String>(java.util.Arrays.asList(
-            "getStatement", "getMetaData", "getWarnings", "getType", "getRow", "getFetchSize", "getFetchDirection",
-            "getConcurrency", "getHoldability", "getCursorName"));
+    /** The SQL record of each statement's last execution that produced a result set, while its rows are being read. */
+    private static final Map<Object, io.capture.trace.SqlInfo> OPEN_RESULTS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, io.capture.trace.SqlInfo>());
 
     /** PreparedStatement wrapper: set*(index, value), setNull, addBatch, clearParameters. */
     public static void bindJdbc(Object statement, String method, Object[] args) {
@@ -455,12 +442,12 @@ public final class Recorder {
                 span.sql.resultSet = (Boolean) result;
                 if ((Boolean) result) {
                     span.sql.rows = 0L;
-                    READING.put(statement, new Reading(span.sql));
+                    OPEN_RESULTS.put(statement, span.sql);
                 }
             } else if (result != null && implementsNamed(result.getClass(), "java.sql.ResultSet")) {
                 span.sql.resultSet = Boolean.TRUE;
                 span.sql.rows = 0L;
-                READING.put(statement, new Reading(span.sql));
+                OPEN_RESULTS.put(statement, span.sql);
             }
             if (!warnings.isEmpty()) {
                 span.serializationWarnings = warnings;
@@ -476,42 +463,16 @@ public final class Recorder {
         }
     }
 
-    /**
-     * ResultSet wrapper, every call through its handler: { next()} is one more row read
-     * from the statement's last result; a { get*(column)} is a value the application read
-     * from that row, recorded as it was returned (the agent never moves the cursor itself).
-     */
-    public static void readJdbc(Object resultSet, String method, Object[] args, Object returned) {
-        if (ACTIVE.get() == null) {
+    /** ResultSet wrapper, every call through its handler: a {@code next()} that returned true is one more row the application read. */
+    public static void rowRead(Object resultSet, String method, Object returned) {
+        if (ACTIVE.get() == null || !method.equals("next") || !Boolean.TRUE.equals(returned)) {
             return;
         }
         try {
             Object statement = ContainerInvocation.fieldUp(resultSet, "stmt");
-            Reading reading = statement == null ? null : READING.get(statement);
-            if (reading == null || reading.info.rows == null) {
-                return;
-            }
-            io.capture.trace.SqlInfo info = reading.info;
-            if (method.equals("next")) {
-                if (!Boolean.TRUE.equals(returned)) {
-                    reading.row = null;
-                    return;
-                }
+            io.capture.trace.SqlInfo info = statement == null ? null : OPEN_RESULTS.get(statement);
+            if (info != null && info.rows != null) {
                 info.rows = info.rows + 1;
-                if (info.data == null) {
-                    info.data = new ArrayList<Map<String, JsonNode>>();
-                }
-                if (info.data.size() < serializerConfig.maxElements) {
-                    reading.row = new java.util.LinkedHashMap<String, JsonNode>();
-                    info.data.add(reading.row);
-                } else {
-                    reading.row = null;
-                    info.rowsNotRecorded = info.rowsNotRecorded == null ? 1 : info.rowsNotRecorded + 1;
-                }
-            } else if (reading.row != null && method.startsWith("get") && !NOT_COLUMNS.contains(method)
-                    && args != null && args.length >= 1 && (args[0] instanceof Integer || args[0] instanceof String)) {
-                String column = args[0] instanceof Integer ? "#" + args[0] : (String) args[0];
-                reading.row.put(column, serialize(returned, returned == null ? Object.class : returned.getClass(), "1sql.data", new ArrayList<SerializationWarning>()));
             }
         } catch (Throwable ignored) {
             // observing only

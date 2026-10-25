@@ -819,9 +819,7 @@ function renderDetail(focusPath) {
   section('Output', span.kind === 'SQL' ? (span.sql.rows != null ? `${span.sql.rows} row${span.sql.rows === 1 ? '' : 's'} read` : span.sql.updateCount != null ? `${span.sql.updateCount} updated` : null) : isReq && span.http.status != null ? `HTTP ${span.http.status}` : null, true, j => {
     if (span.exception) { j.appendChild(el('span', 'hint', 'none: the call threw')); return; }
     if (span.kind === 'SQL') {
-      if (span.sql.data) renderValue(j, span.sql.data, 'sql.data', 0, badges, 'rows');
-      else if (span.sql.rows != null) j.appendChild(el('span', 'hint', `${span.sql.rows} row${span.sql.rows === 1 ? '' : 's'} read, no column values asked for`));
-      if (span.sql.rowsNotRecorded) j.appendChild(el('div', 'hint', `${span.sql.rowsNotRecorded} more rows read past the element ceiling, not recorded`));
+      if (span.sql.rows != null) renderValue(j, span.sql.rows, 'sql.rows', 0, badges, 'rows');
       if (span.sql.updateCount != null) renderValue(j, span.sql.updateCount, 'sql.updateCount', 0, badges, 'updateCount');
       if (span.sql.updateCounts) renderValue(j, span.sql.updateCounts, 'sql.updateCounts', 0, badges, 'updateCounts');
       if (span.sql.resultSet === false && span.sql.updateCount == null) j.appendChild(el('span', 'hint', 'no result set'));
@@ -834,7 +832,7 @@ function renderDetail(focusPath) {
   if (span.exception) section('Exception', simple(span.exception.className), true, j => renderValue(j, span.exception, 'exception', 0, badges, 'exception'));
   if (res && res.exception) section(`Exception in ${spanLabel(res)}`, simple(res.exception.className), true, j => renderValue(j, res.exception, 'exception', 0, resBadges, 'exception'));
   if (span.http) section(isReq ? 'HTTP request and response' : 'HTTP', null, false, j => { const h = {}; for (const kk of Object.keys(span.http)) if (kk !== 'requestBody' && kk !== 'responseBody') h[kk] = span.http[kk]; renderValue(j, h, 'http', 0, badges, 'http'); });
-  if (span.kind === 'SQL') section('Data source', null, false, j => { const d = {}; for (const kk of Object.keys(span.sql)) if (!['sql', 'parameters', 'batches', 'data', 'rows', 'rowsNotRecorded', 'updateCount', 'updateCounts', 'resultSet'].includes(kk)) d[kk] = span.sql[kk]; renderValue(j, d, 'sql', 0, badges, 'sql'); });
+  if (span.kind === 'SQL') section('Data source', null, false, j => { const d = {}; for (const kk of Object.keys(span.sql)) if (!['sql', 'parameters', 'batches', 'rows', 'updateCount', 'updateCounts', 'resultSet'].includes(kk)) d[kk] = span.sql[kk]; renderValue(j, d, 'sql', 0, badges, 'sql'); });
   if ((span.serializationWarnings || []).length) section('Notes from the capture', `${span.serializationWarnings.length}`, false, j => renderValue(j, span.serializationWarnings, 'serializationWarnings', 0, badges, 'serializationWarnings'));
   section('Everything else on this call', null, false, j => { for (const kk of ORIGINAL.get(span) || Object.keys(span)) { if (shown.has(kk)) continue; renderValue(j, span[kk], kk, 0, badges, kk); } });
   const unplaced = Object.entries(badges).filter(([, v]) => !v.placed);

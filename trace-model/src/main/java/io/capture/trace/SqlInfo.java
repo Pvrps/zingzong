@@ -33,11 +33,4 @@ public class SqlInfo {
     /** True when the statement produced a result set; rows is how many rows the application read from it. */
     public Boolean resultSet;
     public Long rows;
-    /**
-     * The values the application read from the result set, row by row, keyed by the column it
-     * asked for (its label, or "#n" for an index): what crossed the boundary, without the agent
-     * reading the cursor itself. Rows past the element ceiling are counted in rowsNotRecorded.
-     */
-    public List<java.util.Map<String, JsonNode>> data;
-    public Integer rowsNotRecorded;
 }

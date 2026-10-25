@@ -192,7 +192,7 @@ public final class CaptureHook {
                             .advice(isPublic().and(not(isStatic())).and(nameStartsWith("execute")), JdbcAdvice.Execute.class.getName())
                             .advice(isPublic().and(not(isStatic())).and(nameStartsWith("set").and(takesArgument(0, int.class)).or(named("addBatch")).or(named("clearParameters"))), JdbcAdvice.Bind.class.getName()))
                     .type(named(JdbcTargets.RESULT_SET))
-                    .transform(advice(named("postInvocationHandler").and(takesArguments(3)), JdbcAdvice.Row.class));
+                    .transform(advice(named("postInvocationHandler").and(takesArguments(3)), JdbcAdvice.Next.class));
         }
         return builder
                 .type(ownedBy(resourceTypes, "resource"))

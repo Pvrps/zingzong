@@ -23,6 +23,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import weblogic.ejb.container.internal.MDListener;
+import weblogic.jdbc.wrapper.Connection;
+import weblogic.jdbc.wrapper.PreparedStatement;
+import weblogic.jdbc.wrapper.Statement;
 import weblogic.servlet.internal.FilterChainImpl;
 import weblogic.servlet.internal.ServletStubImpl;
 import weblogic.utils.classloaders.GenericClassLoader;
@@ -86,6 +89,7 @@ class CaptureHookTest {
     @Test
     void allTargetsArePresentAndNothingIsInstrumentedWhileOff() throws Exception {
         assertTrue(ContainerTargets.missing().isEmpty(), ContainerTargets.missing().toString());
+        assertTrue(JdbcTargets.present());
         assertFalse(hook.isInstalled(), "stop() restores the original bytecode");
         long logBefore = AgentLog.file().length();
         File[] dirsBefore = recordingDirs();
@@ -236,6 +240,56 @@ class CaptureHookTest {
         assertEquals("/tax/TaxWebService", get.http.path);
         assertEquals("plain", get.http.responseBody, "written through the tee stream");
         assertEquals("plain", new String(direct.streamed.toByteArray(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void statementWrappersProduceSqlSpansWithParametersAndCounts() throws Exception {
+        Recording recording = Recorder.start("rec-sql", "sql");
+        Connection conn = new Connection("OrdersDS");
+        PreparedStatement select = new PreparedStatement(conn, "SELECT ID, STATUS FROM ORDERS WHERE ID = ? AND STATUS <> ?");
+        select.rowsToYield = 2;
+        select.setLong(1, 5L);
+        select.setString(2, "CANCELLED");
+        java.sql.ResultSet rows = select.executeQuery();
+        int read = 0;
+        while (rows.next()) {
+            read++;
+        }
+        rows.close();
+        assertEquals(2, read);
+        PreparedStatement update = new PreparedStatement(conn, "UPDATE ORDERS SET STATUS = ? WHERE ID = ?");
+        update.setString(1, "CONFIRMED");
+        update.setLong(2, 5L);
+        assertEquals(1, update.executeUpdate());
+        Statement broken = new Statement(conn);
+        broken.failure = new java.sql.SQLException("Table \"NOPE\" not found");
+        assertThrows(java.sql.SQLException.class, () -> broken.executeUpdate("DELETE FROM NOPE"));
+        assertTrue(Recorder.flush(5000));
+
+        List<Trace> traces = traces(recording);
+        assertEquals(3, traces.size(), "every statement outside a request is its own trace");
+        Span query = traces.get(0).spans.get(0);
+        assertEquals(Span.KIND_SQL, query.kind);
+        assertEquals("OrdersDS", query.sql.dataSource);
+        assertEquals("prepared", query.sql.statementType);
+        assertEquals("executeQuery", query.sql.operation);
+        assertEquals("SELECT ID, STATUS FROM ORDERS WHERE ID = ? AND STATUS <> ?", query.sql.sql);
+        assertEquals(5L, query.sql.parameters.get(0).asLong());
+        assertEquals("CANCELLED", query.sql.parameters.get(1).asText());
+        assertEquals(Boolean.TRUE, query.sql.resultSet);
+        assertEquals(Long.valueOf(2), query.sql.rows, "rows counted as the application stepped through them");
+        assertNull(query.sql.updateCount);
+
+        Span updated = traces.get(1).spans.get(0);
+        assertEquals("executeUpdate", updated.sql.operation);
+        assertEquals(Integer.valueOf(1), updated.sql.updateCount);
+        assertEquals(Arrays.asList("CONFIRMED", "5"), Arrays.asList(updated.sql.parameters.get(0).asText(), updated.sql.parameters.get(1).asText()));
+
+        Span failed = traces.get(2).spans.get(0);
+        assertEquals("statement", failed.sql.statementType);
+        assertEquals("DELETE FROM NOPE", failed.sql.sql);
+        assertEquals("java.sql.SQLException", failed.exception.className);
+        assertTrue(failed.exception.message.contains("NOPE"));
     }
 
     @Test

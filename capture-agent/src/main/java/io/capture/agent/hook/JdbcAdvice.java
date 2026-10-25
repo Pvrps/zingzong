@@ -7,8 +7,8 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
 /**
  * Inlined into WebLogic's JDBC wrappers ({@link JdbcTargets}): {@link Execute} around the
  * {@code execute*} methods of a statement wrapper, {@link Bind} at the start of a prepared
- * statement's {@code set*} / {@code addBatch} / {@code clearParameters}, {@link Row} after a
- * result set wrapper's {@code next()}.
+ * statement's {@code set*} / {@code addBatch} / {@code clearParameters}, {@link Next} after
+ * each call the result-set wrapper routes through its handler, to count the rows read.
  */
 public final class JdbcAdvice {
 
@@ -47,17 +47,16 @@ public final class JdbcAdvice {
         }
     }
 
-    /** The result set wrapper has no {@code next()} of its own: the generated subclass passes every call through {@code postInvocationHandler(name, args, ret)}. */
-    public static final class Row {
-        private Row() {
+    /** The result-set wrapper defines no {@code next()} itself; the generated subclass passes every call through {@code postInvocationHandler(name, args, returned)}. */
+    public static final class Next {
+        private Next() {
         }
 
         @Advice.OnMethodEnter(suppress = Throwable.class)
         public static void enter(@Advice.This(typing = Assigner.Typing.DYNAMIC) Object resultSet,
                                  @Advice.Argument(0) String method,
-                                 @Advice.Argument(value = 1, typing = Assigner.Typing.DYNAMIC) Object[] args,
                                  @Advice.Argument(value = 2, typing = Assigner.Typing.DYNAMIC) Object returned) {
-            Recorder.readJdbc(resultSet, method, args, returned);
+            Recorder.rowRead(resultSet, method, returned);
         }
     }
 }

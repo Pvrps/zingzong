@@ -1,0 +1,15 @@
+{
+  "formatVersion" : 1,
+  "id" : "rec-20261023-170623",
+  "name" : "create-confirm-soap",
+  "startedAt" : "2026-10-23T21:06:23.389Z",
+  "endedAt" : "2026-10-23T21:06:24.420Z",
+  "serverName" : "AdminServer",
+  "agent" : {
+    "version" : "1.0.0-SNAPSHOT",
+    "build" : "2026-10-23T21:04:18Z",
+    "jvm" : "21.0.12.1"
+  },
+  "traceCount" : 3,
+  "droppedTraces" : 0
+}

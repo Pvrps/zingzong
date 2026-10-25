@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lets `mvn capture:enable` resolve the plugin by its short prefix inside this repository.
+<!-- Lets `mvn wltrace:enable` resolve the plugin by its short prefix inside this repository.
      Outside it, add the pluginGroup to ~/.m2/settings.xml (see USAGE.md). -->
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
   <pluginGroups>
-    <pluginGroup>io.capture</pluginGroup>
+    <pluginGroup>ca.gc.cra.xz02.devops</pluginGroup>
   </pluginGroups>
 </settings>

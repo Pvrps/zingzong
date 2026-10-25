@@ -187,7 +187,7 @@ logged as instrumented twice per install on 14.
 `com.bea.core.workarea.jar`: `weblogic.workarea.WorkContextHelper.getWorkContextHelper().getWorkContextMap()`
 → `WorkContextMap.put(String, WorkContext, int)` / `get(String)` / `remove(String)`,
 `PrimitiveContextFactory.create(String)`, `PrimitiveWorkContext.get()`. The agent keeps one key,
-`io.capture.trace`, with value `<traceId>/<spanId>`, written at every span push and pop and removed
+`ca.gc.cra.xz02.devops.wltrace.model`, with value `<traceId>/<spanId>`, written at every span push and pop and removed
 when the trace ends. The propagation mode is `LOCAL | WORK | RMI | JMS_QUEUE | JMS_TOPIC | SOAP |
 MIME_HEADER` composed from `weblogic.workarea.PropagationMode`'s named constants: on both versions
 `GLOBAL == DEFAULT == 212`, which leaves out `WORK` (2), the flag that follows a work-manager
@@ -233,8 +233,8 @@ HTTP roots take principal and session from the request itself.
 
 ## 9. Re-verifying on a new WebLogic build
 
-1. Install the build in the lab (`wls-install`, `wls-domain`, `wls-deploy`) and run `capture enable`,
-   a restart and `capture start`; `agent.log` lists `hook target discovered` and `instrumented`
+1. Install the build in the lab (`wls-install`, `wls-domain`, `wls-deploy`) and run `wltrace enable`,
+   a restart and `wltrace start`; `agent.log` lists `hook target discovered` and `instrumented`
    for every class in sections 1 to 4, or `hook targets loaded but not instrumented` when a
    method shape changed.
 2. For each advised method, `javap -p -cp <jar> <class>` on the module jar named in its section

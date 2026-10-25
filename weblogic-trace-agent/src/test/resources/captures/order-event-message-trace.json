@@ -1,0 +1,115 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261024-224813",
+    "name" : "step2-wls14",
+    "seq" : 5
+  },
+  "trace" : {
+    "id" : "t-44caa65c",
+    "startedAt" : "2026-10-25T02:48:14.524Z",
+    "durationMs" : 18,
+    "serverName" : "AdminServer",
+    "parentTraceId" : "t-224874a5",
+    "parentSpanId" : "s3",
+    "deployments" : [ {
+      "name" : "tax-ear",
+      "sourcePath" : "/opt/applications/tax-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "orders-ear",
+      "sourcePath" : "/opt/applications/orders-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "notify-ear",
+      "sourcePath" : "/opt/applications/notify-ear.ear",
+      "moduleType" : "ear"
+    } ]
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "EJB",
+    "ejb" : {
+      "app" : "notify-ear",
+      "module" : "notify-ejb",
+      "beanName" : "OrderEventListener",
+      "beanClass" : "com.acme.notify.OrderEventListener",
+      "invocation" : "MESSAGE",
+      "beanType" : "MESSAGE_DRIVEN",
+      "destination" : "jms/OrderEvents",
+      "method" : "onMessage",
+      "signature" : "void onMessage(javax.jms.Message)",
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "javax.jms.MessageListener"
+    },
+    "app" : "notify-ear",
+    "module" : "notify-ejb",
+    "thread" : "[ACTIVE] ExecuteThread: '12' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "javax.jms.Message",
+      "value" : {
+        "@type" : "weblogic.jms.common.TextMessageImpl",
+        "@jms" : "TextMessage",
+        "headers" : {
+          "JMSMessageID" : "ID:<584691.1792896494482.0>",
+          "JMSTimestamp" : 1792896494482,
+          "JMSDeliveryMode" : 2,
+          "JMSPriority" : 4,
+          "JMSExpiration" : 0,
+          "JMSRedelivered" : false,
+          "JMSDestination" : "OrdersJMSModule!OrderEvents"
+        },
+        "properties" : {
+          "orderId" : 6,
+          "by" : "ada",
+          "event" : "CONFIRMED",
+          "JMS_BEA_DeliveryTime" : 1792896494482,
+          "JMSXDeliveryCount" : 1
+        },
+        "text" : "{\"orderId\":6,\"event\":\"CONFIRMED\",\"by\":\"ada\"}"
+      }
+    } ],
+    "startNs" : 0,
+    "durationNs" : 18136814
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "EJB",
+    "ejb" : {
+      "app" : "notify-ear",
+      "module" : "notify-ejb",
+      "beanName" : "NotificationService",
+      "beanClass" : "com.acme.notify.NotificationServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/notify-ear/notify-ejb/NotificationService!com.acme.notify.NotificationService", "java:app/notify-ejb/NotificationService", "java:app/notify-ejb/NotificationService!com.acme.notify.NotificationService", "java:global/notify-ear/notify-ejb/NotificationService", "java:module/NotificationService", "java:module/NotificationService!com.acme.notify.NotificationService" ],
+      "beanType" : "STATELESS",
+      "method" : "record",
+      "signature" : "java.lang.String record(long, java.lang.String, java.lang.String)",
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.notify.NotificationService"
+    },
+    "app" : "notify-ear",
+    "module" : "notify-ejb",
+    "thread" : "[ACTIVE] ExecuteThread: '12' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "long",
+      "value" : 6
+    }, {
+      "declaredType" : "java.lang.String",
+      "value" : "CONFIRMED"
+    }, {
+      "declaredType" : "java.lang.String",
+      "value" : "ID:<584691.1792896494482.0>"
+    } ],
+    "result" : {
+      "declaredType" : "java.lang.String",
+      "value" : "N-1"
+    },
+    "startNs" : 8653749,
+    "durationNs" : 2706237
+  } ]
+}

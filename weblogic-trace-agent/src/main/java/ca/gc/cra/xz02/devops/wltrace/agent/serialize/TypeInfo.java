@@ -1,0 +1,252 @@
+package ca.gc.cra.xz02.devops.wltrace.agent.serialize;
+
+import java.io.Serializable;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * What the serializer needs to know about a class: its instance fields, walked or skipped with a
+ * reason, and whether it is a JPA entity, a runtime handle, serializable or a known lazy wrapper.
+ * Cached per {@link Class} object through {@link ClassValue}; every detection is by name, nothing
+ * is resolved through the agent's loader.
+ */
+final class TypeInfo {
+
+    private static final ClassValue<TypeInfo> CACHE = new ClassValue<TypeInfo>() {
+        @Override
+        protected TypeInfo computeValue(Class<?> type) {
+            return new TypeInfo(type);
+        }
+    };
+
+    static final String ECLIPSELINK_CONTAINER = "org.eclipse.persistence.indirection.IndirectContainer";
+    static final String ECLIPSELINK_VALUE_HOLDER = "org.eclipse.persistence.indirection.ValueHolderInterface";
+    static final String HIBERNATE_COLLECTION = "org.hibernate.collection.spi.PersistentCollection";
+    static final String HIBERNATE_PROXY = "org.hibernate.proxy.HibernateProxy";
+    private static final String ECLIPSELINK_FIELD_PREFIX = "_persistence_";
+    private static final String ECLIPSELINK_HOLDER_SUFFIX = "_vh";
+
+    enum LazyKind { NONE, ECLIPSELINK_CONTAINER, ECLIPSELINK_VALUE_HOLDER, HIBERNATE_COLLECTION, HIBERNATE_PROXY }
+
+    final Class<?> type;
+    final List<FieldInfo> fields;
+    final Map<String, FieldInfo> fieldsByName;
+    /** Transport concern only: captured either way, flagged with "@serializable": false when not. */
+    final boolean serializable;
+    final boolean entity;
+    /** Non-null for a non-walkable runtime handle; see {@link InfrastructureTypes}. */
+    final String handleKind;
+    /** True when the type implements javax.jms.Message: recorded as its API view ({@link JmsMessages}). */
+    final boolean jmsMessage;
+    final LazyKind lazyKind;
+    /** isInstantiated() / wasInitialized() / getHibernateLazyInitializer(), per kind. */
+    final Method lazyStateMethod;
+    /** getValue() / getImplementation() where applicable. */
+    final Method lazyValueMethod;
+
+    static TypeInfo of(Class<?> type) {
+        return CACHE.get(type);
+    }
+
+    private TypeInfo(Class<?> type) {
+        this.type = type;
+        Set<Class<?>> hierarchy = hierarchyOf(type);
+        this.serializable = Serializable.class.isAssignableFrom(type);
+        this.entity = hasAnnotationNamed(type, "javax.persistence.Entity") || hasAnnotationNamed(type, "jakarta.persistence.Entity");
+        this.handleKind = InfrastructureTypes.handleKind(hierarchy);
+        this.jmsMessage = JmsMessages.isMessage(hierarchy);
+
+        Class<?> lazyInterface;
+        if ((lazyInterface = find(hierarchy, ECLIPSELINK_CONTAINER)) != null) {
+            lazyKind = LazyKind.ECLIPSELINK_CONTAINER;
+            lazyStateMethod = method(lazyInterface, "isInstantiated");
+            lazyValueMethod = null;
+        } else if ((lazyInterface = find(hierarchy, ECLIPSELINK_VALUE_HOLDER)) != null) {
+            lazyKind = LazyKind.ECLIPSELINK_VALUE_HOLDER;
+            lazyStateMethod = method(lazyInterface, "isInstantiated");
+            lazyValueMethod = method(lazyInterface, "getValue");
+        } else if ((lazyInterface = find(hierarchy, HIBERNATE_COLLECTION)) != null) {
+            lazyKind = LazyKind.HIBERNATE_COLLECTION;
+            lazyStateMethod = method(lazyInterface, "wasInitialized");
+            lazyValueMethod = null;
+        } else if ((lazyInterface = find(hierarchy, HIBERNATE_PROXY)) != null) {
+            lazyKind = LazyKind.HIBERNATE_PROXY;
+            lazyStateMethod = method(lazyInterface, "getHibernateLazyInitializer");
+            lazyValueMethod = null;
+        } else {
+            lazyKind = LazyKind.NONE;
+            lazyStateMethod = null;
+            lazyValueMethod = null;
+        }
+
+        this.fields = collectFields(type);
+        Map<String, FieldInfo> byName = new LinkedHashMap<String, FieldInfo>();
+        for (FieldInfo field : fields) {
+            if (field.walked()) {
+                byName.put(field.name, field);
+            }
+        }
+        this.fieldsByName = Collections.unmodifiableMap(byName);
+    }
+
+    /**
+     * Instance fields of the class and its superclasses, superclass first. Transient fields are
+     * walked like any other: they are part of the object as it was. Static fields are class
+     * state, not instance state, and are not listed. Every instance field that is not walked
+     * is kept with a reason so the serializer can list it under {@code @skipped}:
+     * compiler-injected ({@code this$0}, synthetic), weaver-injected ({@code _persistence_*},
+     * {@code $$_hibernate_*}), or inaccessible under JDK encapsulation without --add-opens.
+     */
+    private static List<FieldInfo> collectFields(Class<?> type) {
+        List<Class<?>> chain = new ArrayList<Class<?>>();
+        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+            chain.add(0, c);
+        }
+        List<FieldInfo> result = new ArrayList<FieldInfo>();
+        for (Class<?> c : chain) {
+            Field[] declared;
+            try {
+                declared = c.getDeclaredFields();
+            } catch (Throwable t) {
+                result.add(FieldInfo.skipped("<" + c.getName() + ">", "declared fields unavailable: " + t));
+                continue;
+            }
+            Map<String, Field> holders = new LinkedHashMap<String, Field>();
+            for (Field f : declared) {
+                if (f.getName().startsWith(ECLIPSELINK_FIELD_PREFIX) && f.getName().endsWith(ECLIPSELINK_HOLDER_SUFFIX)) {
+                    holders.put(f.getName(), f);
+                }
+            }
+            for (Field f : declared) {
+                int mod = f.getModifiers();
+                if (Modifier.isStatic(mod)) {
+                    continue;
+                }
+                String name = f.getName();
+                if (f.isSynthetic() || name.indexOf('$') >= 0) {
+                    result.add(FieldInfo.skipped(name, "compiler-injected (synthetic)"));
+                    continue;
+                }
+                if (name.startsWith(ECLIPSELINK_FIELD_PREFIX)) {
+                    result.add(FieldInfo.skipped(name, name.endsWith(ECLIPSELINK_HOLDER_SUFFIX)
+                            ? "weaver-injected (EclipseLink); its state is reported on the field it backs"
+                            : "weaver-injected (EclipseLink)"));
+                    continue;
+                }
+                if (name.startsWith("$$_hibernate_")) {
+                    result.add(FieldInfo.skipped(name, "weaver-injected (Hibernate)"));
+                    continue;
+                }
+                String inaccessible = makeAccessible(f);
+                if (inaccessible != null) {
+                    result.add(FieldInfo.skipped(name, "inaccessible: " + inaccessible));
+                    continue;
+                }
+                Field holder = holders.get(ECLIPSELINK_FIELD_PREFIX + name + ECLIPSELINK_HOLDER_SUFFIX);
+                if (holder != null && makeAccessible(holder) != null) {
+                    holder = null;
+                }
+                result.add(new FieldInfo(f, holder));
+            }
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    /** Null when accessible, else why not (JDK 9+ strong encapsulation without --add-opens). */
+    private static String makeAccessible(Field field) {
+        try {
+            field.setAccessible(true);
+            return null;
+        } catch (Throwable t) {
+            return t.getClass().getSimpleName() + (t.getMessage() == null ? "" : ": " + t.getMessage());
+        }
+    }
+
+    static Set<Class<?>> hierarchyOf(Class<?> type) {
+        Set<Class<?>> result = new LinkedHashSet<Class<?>>();
+        addHierarchy(type, result);
+        return result;
+    }
+
+    private static void addHierarchy(Class<?> type, Set<Class<?>> into) {
+        if (type == null || !into.add(type)) {
+            return;
+        }
+        for (Class<?> i : type.getInterfaces()) {
+            addHierarchy(i, into);
+        }
+        addHierarchy(type.getSuperclass(), into);
+    }
+
+    private static Class<?> find(Set<Class<?>> hierarchy, String name) {
+        for (Class<?> c : hierarchy) {
+            if (c.getName().equals(name)) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    private static boolean hasAnnotationNamed(Class<?> type, String name) {
+        try {
+            for (Annotation a : type.getAnnotations()) {
+                if (a.annotationType().getName().equals(name)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+            // annotation classes missing at runtime: treat as absent
+        }
+        return false;
+    }
+
+    private static Method method(Class<?> owner, String name) {
+        try {
+            Method m = owner.getMethod(name);
+            m.setAccessible(true);
+            return m;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    static final class FieldInfo {
+        final String name;
+        /** Null when the field is skipped; see {@link #skipReason}. */
+        final Field field;
+        /** EclipseLink weaving: the ValueHolder that backs this field, or null. */
+        final Field lazyHolder;
+        final String skipReason;
+
+        FieldInfo(Field field, Field lazyHolder) {
+            this.name = field.getName();
+            this.field = field;
+            this.lazyHolder = lazyHolder;
+            this.skipReason = null;
+        }
+
+        private FieldInfo(String name, String skipReason) {
+            this.name = name;
+            this.field = null;
+            this.lazyHolder = null;
+            this.skipReason = skipReason;
+        }
+
+        static FieldInfo skipped(String name, String reason) {
+            return new FieldInfo(name, reason);
+        }
+
+        boolean walked() {
+            return field != null;
+        }
+    }
+}

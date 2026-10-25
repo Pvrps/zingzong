@@ -4,18 +4,18 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.capture</groupId>
-  <artifactId>ejb-capture-parent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <groupId>ca.gc.cra.xz02.devops</groupId>
+  <artifactId>weblogic-trace</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>ejb-capture</name>
+  <name>weblogic-trace</name>
   <description>Java agent that records EJB and HTTP invocations on WebLogic as JSON traces, packaged as a Maven plugin.</description>
 
   <modules>
-    <module>trace-model</module>
-    <module>capture-agent</module>
-    <module>capture-maven-plugin</module>
+    <module>weblogic-trace-model</module>
+    <module>weblogic-trace-agent</module>
+    <module>weblogic-trace-maven-plugin</module>
   </modules>
 
   <properties>
@@ -26,7 +26,7 @@
          the plugin inside whatever JDK the developer's Maven uses. Builds under JDK 8 or later. -->
     <maven.compiler.release>8</maven.compiler.release>
 
-    <!-- Test scope only (capture-agent fixtures): Java EE 8 javax.* API and the EclipseLink bundled with WebLogic 14.1.2. -->
+    <!-- Test scope only (agent test fixtures): Java EE 8 javax.* API and the EclipseLink bundled with WebLogic 14.1.2. -->
     <javaee-api.version>8.0.1</javaee-api.version>
     <eclipselink.version>2.7.15</eclipselink.version>
     <bytebuddy.version>1.17.5</bytebuddy.version>
@@ -81,8 +81,8 @@
 
       <!-- In-repo modules -->
       <dependency>
-        <groupId>io.capture</groupId>
-        <artifactId>trace-model</artifactId>
+        <groupId>ca.gc.cra.xz02.devops</groupId>
+        <artifactId>weblogic-trace-model</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

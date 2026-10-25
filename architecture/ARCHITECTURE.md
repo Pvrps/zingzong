@@ -1,6 +1,6 @@
 # Architecture
 
-How ejb-capture is built: three modules, an agent that records, a plugin that installs the agent
+How weblogic-trace is built: three modules, an agent that records, a plugin that installs the agent
 and shows what it recorded. WebLogic internals are in [HOOKS.md](HOOKS.md).
 
 ## Contents
@@ -18,11 +18,11 @@ and shows what it recorded. WebLogic internals are in [HOOKS.md](HOOKS.md).
 
 | module | artifact | depends on | compiles with |
 | --- | --- | --- | --- |
-| `trace-model` | `io.capture:trace-model` | Jackson | `--release 8` |
-| `capture-agent` | `io.capture:capture-agent` (shaded, `Premain-Class: io.capture.agent.Agent`) | trace-model, Byte Buddy, Jackson; nothing from `javax.*` or `weblogic.*` | `--release 8` |
-| `capture-maven-plugin` | `io.capture:capture-maven-plugin` (shaded) | trace-model, Maven plugin API (provided), capture-agent as a plain dependency | `--release 8` |
+| `weblogic-trace-model` | `ca.gc.cra.xz02.devops:weblogic-trace-model` | Jackson | `--release 8` |
+| `weblogic-trace-agent` | `ca.gc.cra.xz02.devops:weblogic-trace-agent` (shaded, `Premain-Class: ca.gc.cra.xz02.devops.wltrace.agent.Agent`) | weblogic-trace-model, Byte Buddy, Jackson; nothing from `javax.*` or `weblogic.*` | `--release 8` |
+| `weblogic-trace-maven-plugin` | `ca.gc.cra.xz02.devops:weblogic-trace-maven-plugin` (shaded) | weblogic-trace-model, Maven plugin API (provided), weblogic-trace-agent as a plain dependency | `--release 8` |
 
-`trace-model` is the format: plain classes with public fields, one JSON file per trace, and
+`weblogic-trace-model` is the format: plain classes with public fields, one JSON file per trace, and
 `trace.schema.json` as its description. The agent writes it, the plugin reads it. The plugin's
 `reader` package (`RecordingDir`, `Indexer`, `Labels`, `LoadedTrace`, `lineage`) loads recordings
 and computes what the page shows.
@@ -32,7 +32,7 @@ be a JDK 8, and the agent runs inside a 12.2.1.4 server on JDK 8.
 
 ## 2. How the agent loads
 
-`-javaagent:<domain>/ejb-capture/capture-agent.jar=out=<dir>` loads `io.capture.agent.Agent` in
+`-javaagent:<domain>/weblogic-trace/weblogic-trace-agent.jar=out=<dir>` loads `ca.gc.cra.xz02.devops.wltrace.agent.Agent` in
 the system class loader. `Agent` parses its one argument, appends its own jar to the bootstrap
 class loader search path and hands over to `AgentBootstrap`; from then on every agent class
 resolves through the bootstrap loader, which is what lets advice inlined into server classes,
@@ -40,13 +40,13 @@ loaded by WebLogic's own loaders, reach the same `Recorder`.
 
 Consequences:
 
-- Byte Buddy and Jackson are shaded under `io.capture.shaded` so the server's and the applications'
+- Byte Buddy and Jackson are shaded under `ca.gc.cra.xz02.devops.wltrace.shaded` so the server's and the applications'
   copies are never confused with the agent's.
 - Bootstrap-loaded code links only against boot-layer modules (`java.base`, `java.logging`,
   `java.naming`, `java.management`, `java.instrument`). `java.sql`, `javax.servlet`, `javax.jms`,
   `javax.ejb` and every `weblogic.*` type are recognised by name and reached by reflection;
   `BootstrapVisibilityTest` scans the compiled classes for forbidden constant-pool references.
-- Serializing JDK value types as fields needs `--add-opens` on JDK 9+; `capture:enable` writes
+- Serializing JDK value types as fields needs `--add-opens` on JDK 9+; `wltrace:enable` writes
   the five flags next to the `-javaagent` option.
 
 `AgentBootstrap` decides whether this JVM is a WebLogic server: the `weblogic.home` system property
@@ -57,7 +57,7 @@ system class path. Anywhere else it logs one line, registers the control MBean w
 ## 3. Recording lifecycle
 
 ```
-plugin ── JMX (local connector) ──> io.capture:type=Control (RecordingControl)
+plugin ── JMX (local connector) ──> ca.gc.cra.xz02.devops.wltrace:type=Control (RecordingControl)
                                       │ start(id, name)        stop()
                                       ▼                        ▼
                                    Recorder.start           Recorder.stop
@@ -137,7 +137,7 @@ an ISO instant, `java.sql.Timestamp` with nanoseconds, `Calendar` as a zoned dat
 ## 5. The trace model
 
 One file per trace; spans flat, linked by `parentId`, ordered by `order`. An abbreviated Create
-order trace from the lab (`capture-agent/src/test/resources/captures/create-order-trace.json`):
+order trace from the lab (`weblogic-trace-agent/src/test/resources/captures/create-order-trace.json`):
 
 ```jsonc
 {
@@ -189,12 +189,12 @@ order trace from the lab (`capture-agent/src/test/resources/captures/create-orde
 }
 ```
 
-`trace.schema.json` in `trace-model` describes every field.
+`trace.schema.json` in `weblogic-trace-model` describes every field.
 
 ## 6. The plugin
 
-Three goals, no project needed, three parameters: `capture.domain` (required), `capture.port`
-(default 8077), `capture.out` (default `~/.ejb-capture/<domain directory name>`). Every path is a
+Three goals, no project needed, three parameters: `wltrace.domain` (required), `wltrace.port`
+(default 8077), `wltrace.out` (default `~/.weblogic-trace/<domain directory name>`). Every path is a
 `java.nio.file.Path`.
 
 - **Platform detection** (`Domain`). `bin/setDomainEnv.sh` means a Unix domain, `bin/setDomainEnv.cmd`
@@ -205,9 +205,9 @@ Three goals, no project needed, three parameters: `capture.domain` (required), `
   `rt.jar`; without a readable JDK, a running server's `java.specification.version` decides whether
   the `--add-opens` flags are written.
 - **The overrides block** (`OverridesBlock`). `enable` copies the agent jar to
-  `<domain>/ejb-capture/capture-agent.jar` (replacing by rename, so a running server's mapped jar is
-  untouched) and writes a block delimited by `# >>> ejb-capture >>>` / `# <<< ejb-capture <<<` in
-  the `.sh` or `rem >>> ejb-capture >>>` / `rem <<< ejb-capture <<<` in the `.cmd`. The shell form
+  `<domain>/weblogic-trace/weblogic-trace-agent.jar` (replacing by rename, so a running server's mapped jar is
+  untouched) and writes a block delimited by `# >>> weblogic-trace >>>` / `# <<< weblogic-trace <<<` in
+  the `.sh` or `rem >>> weblogic-trace >>>` / `rem <<< weblogic-trace <<<` in the `.cmd`. The shell form
   appends to `JAVA_OPTIONS` with `JAVA_OPTIONS="${JAVA_OPTIONS} ..."` lines and `export JAVA_OPTIONS`;
   the cmd form with `set JAVA_OPTIONS=%JAVA_OPTIONS% ...` lines, CRLF, an option quoted when it
   contains a space or a cmd metacharacter. A file the plugin created carries a line saying so and is
@@ -228,7 +228,7 @@ Three goals, no project needed, three parameters: `capture.domain` (required), `
   | `GET /`, `/index.html`, `/style.css`, `/app.js`, `/diagram.js` | the page, four static files |
   | `GET /api/state` | the domain state, re-evaluated per call |
   | `POST /api/capture/start` `{"name"}` / `POST /api/capture/stop` | start on every server JVM under one id / stop |
-  | `GET /api/recordings` | every recording under `capture.out`, newest first |
+  | `GET /api/recordings` | every recording under `wltrace.out`, newest first |
   | `GET /api/recordings/{id}` | the index: merged manifest, trace summaries, lineage |
   | `GET /api/recordings/{id}/traces/{file}` | one trace file |
   | `DELETE /api/recordings/{id}` | remove a finished recording (409 while active) |

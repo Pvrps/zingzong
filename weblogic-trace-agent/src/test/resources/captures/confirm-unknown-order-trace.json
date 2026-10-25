@@ -1,0 +1,413 @@
+{
+  "formatVersion" : 1,
+  "recording" : {
+    "id" : "rec-20261024-224813",
+    "name" : "step2-wls14",
+    "seq" : 7
+  },
+  "trace" : {
+    "id" : "t-7675396c",
+    "startedAt" : "2026-10-25T02:48:14.584Z",
+    "durationMs" : 5,
+    "httpSessionId" : "nTpw9WogdCzVpCd2qA3rk_qhuXNlaA8PgZOfWLp_1R9-f0fJetPZ!1990016549!1792896494112",
+    "serverName" : "AdminServer",
+    "deployments" : [ {
+      "name" : "tax-ear",
+      "sourcePath" : "/opt/applications/tax-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "orders-ear",
+      "sourcePath" : "/opt/applications/orders-ear.ear",
+      "moduleType" : "ear"
+    }, {
+      "name" : "notify-ear",
+      "sourcePath" : "/opt/applications/notify-ear.ear",
+      "moduleType" : "ear"
+    } ]
+  },
+  "spans" : [ {
+    "id" : "s1",
+    "depth" : 0,
+    "order" : 0,
+    "kind" : "HTTP",
+    "http" : {
+      "method" : "POST",
+      "path" : "/orders/api/orders/999999/confirm",
+      "contextPath" : "/orders",
+      "servletPath" : "/api",
+      "pathInfo" : "/orders/999999/confirm",
+      "protocol" : "HTTP/1.1",
+      "scheme" : "http",
+      "serverName" : "localhost",
+      "serverPort" : 7001,
+      "remoteAddr" : "127.0.0.1",
+      "status" : 404,
+      "contentType" : "application/json",
+      "responseContentType" : "application/json",
+      "requestHeaders" : {
+        "Host" : [ "localhost:7001" ],
+        "User-Agent" : [ "curl/8.22.0" ],
+        "Accept" : [ "*/*" ],
+        "Cookie" : [ "JSESSIONID=nTpw9WogdCzVpCd2qA3rk_qhuXNlaA8PgZOfWLp_1R9-f0fJetPZ!1990016549" ],
+        "Content-Type" : [ "application/json" ],
+        "Content-Length" : [ "33" ]
+      },
+      "responseHeaders" : {
+        "Date" : [ "Sun, 25 Oct 2026 02:48:14 GMT" ],
+        "Content-Length" : [ "34" ],
+        "Content-Type" : [ "application/json" ],
+        "X-ORACLE-DMS-ECID" : [ "173ae290-9e34-4358-9636-6660b257131e-00000019" ],
+        "X-ORACLE-DMS-RID" : [ "0" ]
+      },
+      "requestBody" : "{\"confirmedBy\":\"ada\",\"notes\":\"x\"}",
+      "requestBodyEncoding" : "UTF-8 (assumed)",
+      "requestBodyLength" : 33,
+      "responseBody" : "{\"error\":\"Order 999999 not found\"}",
+      "responseBodyEncoding" : "UTF-8 (assumed)",
+      "responseBodyLength" : 34
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '6' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "startNs" : 0,
+    "durationNs" : 5409794
+  }, {
+    "id" : "s2",
+    "parentId" : "s1",
+    "depth" : 1,
+    "order" : 1,
+    "kind" : "HTTP",
+    "layer" : "jaxrs",
+    "http" : {
+      "resourceClass" : "com.acme.orders.web.OrdersResource",
+      "resourceMethod" : "confirm",
+      "resourceSignature" : "javax.ws.rs.core.Response confirm(long, java.lang.String)"
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '6' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "long",
+      "value" : 999999
+    }, {
+      "declaredType" : "java.lang.String",
+      "value" : "{\"confirmedBy\":\"ada\",\"notes\":\"x\"}"
+    } ],
+    "result" : {
+      "declaredType" : "javax.ws.rs.core.Response",
+      "value" : {
+        "@type" : "org.glassfish.jersey.message.internal.OutboundJaxrsResponse",
+        "@serializable" : false,
+        "context" : {
+          "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext",
+          "@serializable" : false,
+          "runtimeDelegateDecorator" : {
+            "@type" : "org.glassfish.jersey.internal.RuntimeDelegateDecorator$ConfigurableRuntimeDelegate",
+            "@serializable" : false,
+            "runtimeDelegate" : {
+              "@type" : "org.glassfish.jersey.server.internal.RuntimeDelegateImpl",
+              "@serializable" : false,
+              "hps" : [ {
+                "@type" : "org.glassfish.jersey.message.internal.CookieProvider",
+                "@serializable" : false,
+                "@id" : 2
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.MediaTypeProvider",
+                "@serializable" : false,
+                "@id" : 3
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.EntityTagProvider",
+                "@serializable" : false,
+                "@id" : 8
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.UriProvider",
+                "@serializable" : false,
+                "@id" : 7
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.DateProvider",
+                "@serializable" : false,
+                "@id" : 4
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.NewCookieProvider",
+                "@serializable" : false,
+                "@id" : 6
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.CacheControlProvider",
+                "@serializable" : false,
+                "@id" : 1
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.StringHeaderProvider",
+                "@serializable" : false,
+                "@id" : 5
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LinkProvider",
+                "@serializable" : false
+              }, {
+                "@type" : "org.glassfish.jersey.message.internal.LocaleProvider",
+                "@serializable" : false
+              } ],
+              "map" : {
+                "@type" : "java.util.WeakHashMap",
+                "@entries" : [ {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@57ac42aa",
+                    "toString" : "class javax.ws.rs.core.CacheControl"
+                  },
+                  "value" : {
+                    "@ref" : 1
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@7d517549",
+                    "toString" : "class javax.ws.rs.core.Cookie"
+                  },
+                  "value" : {
+                    "@ref" : 2
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@1aa70afd",
+                    "toString" : "class javax.ws.rs.core.MediaType"
+                  },
+                  "value" : {
+                    "@ref" : 3
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@a38c7fe",
+                    "toString" : "class java.util.Date"
+                  },
+                  "value" : {
+                    "@ref" : 4
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@6d6f6e28",
+                    "toString" : "class java.lang.String"
+                  },
+                  "value" : {
+                    "@ref" : 5
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@74cad196",
+                    "toString" : "class javax.ws.rs.core.NewCookie"
+                  },
+                  "value" : {
+                    "@ref" : 6
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@1dab9dd6",
+                    "toString" : "class java.net.URI"
+                  },
+                  "value" : {
+                    "@ref" : 7
+                  }
+                }, {
+                  "key" : {
+                    "@handle" : "java.lang.Class",
+                    "kind" : "class reference",
+                    "identity" : "java.lang.Class@68faff78",
+                    "toString" : "class javax.ws.rs.core.EntityTag"
+                  },
+                  "value" : {
+                    "@ref" : 8
+                  }
+                } ]
+              }
+            },
+            "configuration" : null
+          },
+          "headers" : { },
+          "committingOutputStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@16ba0f28",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@16ba0f28"
+          },
+          "configuration" : null,
+          "mediaTypeCache" : {
+            "@type" : "org.glassfish.jersey.internal.util.collection.Values$LazyValueImpl",
+            "@serializable" : false,
+            "lock" : {
+              "@type" : "java.lang.Object",
+              "@serializable" : false
+            },
+            "delegate" : {
+              "@type" : "org.glassfish.jersey.message.internal.OutboundMessageContext$$Lambda/0x000071f6ed46d108",
+              "@serializable" : false,
+              "@skipped" : [ {
+                "field" : "arg$1",
+                "reason" : "compiler-injected (synthetic)"
+              } ]
+            },
+            "value" : null
+          },
+          "entity" : "{\"error\":\"Order 999999 not found\"}",
+          "entityType" : {
+            "@type" : "javax.ws.rs.core.GenericType",
+            "@serializable" : false,
+            "type" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            },
+            "rawType" : {
+              "@handle" : "java.lang.Class",
+              "kind" : "class reference",
+              "identity" : "java.lang.Class@6d6f6e28",
+              "toString" : "class java.lang.String"
+            }
+          },
+          "entityAnnotations" : [ ],
+          "entityStream" : {
+            "@handle" : "org.glassfish.jersey.message.internal.CommittingOutputStream",
+            "kind" : "stream",
+            "identity" : "org.glassfish.jersey.message.internal.CommittingOutputStream@16ba0f28",
+            "toString" : "org.glassfish.jersey.message.internal.CommittingOutputStream@16ba0f28"
+          }
+        },
+        "status" : "NOT_FOUND",
+        "closed" : false,
+        "buffered" : false
+      }
+    },
+    "serializationWarnings" : [ {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[0].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[1].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[2].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[3].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[4].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[5].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[6].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.runtimeDelegateDecorator.runtimeDelegate.map[7].key",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.committingOutputStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    }, {
+      "path" : "$.result.context.entityType.type",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityType.rawType",
+      "reason" : "runtime handle (class reference), recorded as reference",
+      "typeName" : "java.lang.Class"
+    }, {
+      "path" : "$.result.context.entityStream",
+      "reason" : "runtime handle (stream), recorded as reference",
+      "typeName" : "org.glassfish.jersey.message.internal.CommittingOutputStream"
+    } ],
+    "startNs" : 1277704,
+    "durationNs" : 3163805
+  }, {
+    "id" : "s3",
+    "parentId" : "s2",
+    "depth" : 2,
+    "order" : 2,
+    "kind" : "EJB",
+    "ejb" : {
+      "app" : "orders-ear",
+      "module" : "orders-ejb",
+      "beanName" : "OrderService",
+      "beanClass" : "com.acme.orders.OrderServiceBean",
+      "invocation" : "LOCAL",
+      "jndiNames" : [ "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:module/OrderService!com.acme.orders.api.OrderServiceLocal", "java:module/OrderService!com.acme.orders.api.OrderServiceRemote", "orders/OrderService" ],
+      "beanType" : "STATELESS",
+      "method" : "confirmOrder",
+      "signature" : "com.acme.common.dto.ConfirmResult confirmOrder(com.acme.common.dto.ConfirmRequest)",
+      "transactionAttribute" : "REQUIRED",
+      "interface" : "com.acme.orders.api.OrderServiceLocal"
+    },
+    "app" : "orders-ear",
+    "module" : "orders-ejb",
+    "thread" : "[ACTIVE] ExecuteThread: '6' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "args" : [ {
+      "declaredType" : "com.acme.common.dto.ConfirmRequest",
+      "value" : {
+        "@type" : "com.acme.common.dto.ConfirmRequest",
+        "orderId" : 999999,
+        "confirmedBy" : "ada",
+        "confirmedAt" : "2026-10-25T02:48:14.585Z",
+        "notes" : "x"
+      }
+    } ],
+    "exception" : {
+      "className" : "com.acme.orders.api.OrderNotFoundException",
+      "message" : "Order 999999 not found",
+      "value" : {
+        "@type" : "com.acme.orders.api.OrderNotFoundException",
+        "@skipped" : [ {
+          "field" : "backtrace",
+          "reason" : "JVM-internal frame data; see stackTrace"
+        }, {
+          "field" : "depth",
+          "reason" : "JVM-internal frame data; see stackTrace"
+        } ],
+        "detailMessage" : "Order 999999 not found",
+        "cause" : null,
+        "suppressedExceptions" : [ ],
+        "orderId" : 999999,
+        "stackTrace" : [ "com.acme.orders.OrderServiceBean.findOrder(OrderServiceBean.java:200)", "com.acme.orders.OrderServiceBean.confirmOrder(OrderServiceBean.java:95)", "java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)", "java.base/java.lang.reflect.Method.invoke(Method.java:580)", "com.bea.core.repackaged.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:344)", "com.bea.core.repackaged.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:198)", "com.bea.core.repackaged.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)", "com.oracle.pitchfork.intercept.MethodInvocationInvocationContext.proceed(MethodInvocationInvocationContext.java:101)", "com.oracle.pitchfork.intercept.JeeInterceptorInterceptor.invoke(JeeInterceptorInterceptor.java:101)", "com.bea.core.repackaged.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:186)", "com.oracle.pitchfork.intercept.MethodInvocationInvocationContext.proceed(MethodInvocationInvocationContext.java:101)", "org.jboss.weld.module.ejb.AbstractEJBRequestScopeActivationInterceptor.aroundInvoke(AbstractEJBRequestScopeActivationInterceptor.java:72)", "org.jboss.weld.module.ejb.SessionBeanInterceptor.aroundInvoke(SessionBeanInterceptor.java:52)", "java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)", "java.base/java.lang.reflect.Method.invoke(Method.java:580)", "com.oracle.pitchfork.intercept.JeeInterceptorInterceptor.invoke(JeeInterceptorInterceptor.java:94)", "com.bea.core.repackaged.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:186)", "com.bea.core.repackaged.springframework.aop.support.DelegatingIntroductionInterceptor.doProceed(DelegatingIntroductionInterceptor.java:137)", "com.bea.core.repackaged.springframework.aop.support.DelegatingIntroductionInterceptor.invoke(DelegatingIntroductionInterceptor.java:124)", "com.bea.core.repackaged.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:186)", "com.bea.core.repackaged.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:241)", "jdk.proxy4/jdk.proxy4.$Proxy308.confirmOrder(Unknown Source)", "com.acme.orders.OrderService_wdu466_OrderServiceLocalImpl.__WL_invoke(Unknown Source)", "weblogic.ejb.container.internal.SessionLocalMethodInvoker.invoke(SessionLocalMethodInvoker.java:33)", "com.acme.orders.OrderService_wdu466_OrderServiceLocalImpl.confirmOrder(Unknown Source)", "com.acme.orders.web.OrdersResource.confirm(OrdersResource.java:74)", "java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)", "java.base/java.lang.reflect.Method.invoke(Method.java:580)", "org.glassfish.jersey.server.model.internal.ResourceMethodInvocationHandlerFactory.lambda$static$0(ResourceMethodInvocationHandlerFactory.java:52)", "org.glassfish.jersey.server.model.internal.AbstractJavaResourceMethodDispatcher$1.run(AbstractJavaResourceMethodDispatcher.java:146)", "org.glassfish.jersey.server.model.internal.AbstractJavaResourceMethodDispatcher.invoke(AbstractJavaResourceMethodDispatcher.java:189)", "org.glassfish.jersey.server.model.internal.JavaResourceMethodDispatcherProvider$ResponseOutInvoker.doDispatch(JavaResourceMethodDispatcherProvider.java:176)", "org.glassfish.jersey.server.model.internal.AbstractJavaResourceMethodDispatcher.dispatch(AbstractJavaResourceMethodDispatcher.java:93)", "org.glassfish.jersey.server.model.ResourceMethodInvoker.invoke(ResourceMethodInvoker.java:478)", "org.glassfish.jersey.server.model.ResourceMethodInvoker.apply(ResourceMethodInvoker.java:400)", "org.glassfish.jersey.server.model.ResourceMethodInvoker.apply(ResourceMethodInvoker.java:81)", "org.glassfish.jersey.server.ServerRuntime$1.run(ServerRuntime.java:256)", "org.glassfish.jersey.internal.Errors$1.call(Errors.java:248)", "org.glassfish.jersey.internal.Errors$1.call(Errors.java:244)", "org.glassfish.jersey.internal.Errors.process(Errors.java:292)", "org.glassfish.jersey.internal.Errors.process(Errors.java:274)", "org.glassfish.jersey.internal.Errors.process(Errors.java:244)", "org.glassfish.jersey.process.internal.RequestScope.runInScope(RequestScope.java:265)", "org.glassfish.jersey.server.ServerRuntime.process(ServerRuntime.java:235)", "org.glassfish.jersey.server.ApplicationHandler.handle(ApplicationHandler.java:684)", "org.glassfish.jersey.servlet.WebComponent.serviceImpl(WebComponent.java:397)", "org.glassfish.jersey.servlet.WebComponent.service(WebComponent.java:349)", "org.glassfish.jersey.servlet.ServletContainer.service(ServletContainer.java:379)", "org.glassfish.jersey.servlet.ServletContainer.service(ServletContainer.java:312)", "org.glassfish.jersey.servlet.ServletContainer.service(ServletContainer.java:205)", "weblogic.servlet.internal.StubSecurityHelper$ServletServiceAction.run(StubSecurityHelper.java:295)", "weblogic.servlet.internal.StubSecurityHelper$ServletServiceAction.run(StubSecurityHelper.java:260)", "weblogic.servlet.internal.StubSecurityHelper.invokeServlet(StubSecurityHelper.java:137)", "weblogic.servlet.internal.ServletStubImpl.execute(ServletStubImpl.java:353)", "weblogic.servlet.internal.TailFilter.doFilter(TailFilter.java:25)", "weblogic.servlet.internal.FilterChainImpl.doFilter(FilterChainImpl.java:87)", "weblogic.servlet.internal.RequestEventsFilter.doFilter(RequestEventsFilter.java:46)", "weblogic.servlet.internal.FilterChainImpl.doFilter(FilterChainImpl.java:87)", "weblogic.servlet.internal.WebAppServletContext$ServletInvocationAction.wrapRun(WebAppServletContext.java:3895)", "weblogic.servlet.internal.WebAppServletContext$ServletInvocationAction.run(WebAppServletContext.java:3855)", "weblogic.security.acl.internal.AuthenticatedSubject.doAs(AuthenticatedSubject.java:344)", "weblogic.security.service.SecurityManager.runAsForUserCode(SecurityManager.java:198)", "weblogic.servlet.provider.WlsSecurityProvider.runAsForUserCode(WlsSecurityProvider.java:203)", "weblogic.servlet.provider.WlsSubjectHandle.run(WlsSubjectHandle.java:71)", "weblogic.servlet.internal.WebAppServletContext.processSecuredExecute(WebAppServletContext.java:2522)", "weblogic.servlet.internal.WebAppServletContext.doSecuredExecute(WebAppServletContext.java:2371)", "weblogic.servlet.internal.WebAppServletContext.securedExecute(WebAppServletContext.java:2346)", "weblogic.servlet.internal.WebAppServletContext.execute(WebAppServletContext.java:2324)", "weblogic.servlet.internal.ServletRequestImpl.runInternal(ServletRequestImpl.java:1837)", "weblogic.servlet.internal.ServletRequestImpl.run(ServletRequestImpl.java:1783)", "weblogic.servlet.provider.ContainerSupportProviderImpl$WlsRequestExecutor.run(ContainerSupportProviderImpl.java:287)", "weblogic.invocation.ComponentInvocationContextManager._runAs(ComponentInvocationContextManager.java:352)", "weblogic.invocation.ComponentInvocationContextManager.runAs(ComponentInvocationContextManager.java:337)", "weblogic.work.LivePartitionUtility.doRunWorkUnderContext(LivePartitionUtility.java:60)", "weblogic.work.PartitionUtility.runWorkUnderContext(PartitionUtility.java:41)", "weblogic.work.SelfTuningWorkManagerImpl.runWorkUnderContext(SelfTuningWorkManagerImpl.java:695)", "weblogic.work.ExecuteThread.execute(ExecuteThread.java:430)", "weblogic.work.ExecuteThread.run(ExecuteThread.java:370)" ]
+      }
+    },
+    "startNs" : 1858341,
+    "durationNs" : 1636023
+  }, {
+    "id" : "s4",
+    "parentId" : "s3",
+    "depth" : 3,
+    "order" : 3,
+    "kind" : "SQL",
+    "sql" : {
+      "dataSource" : "OrdersDS",
+      "jndiNames" : [ "jdbc/OrdersDS" ],
+      "url" : "jdbc:h2:file:/var/lib/h2/sample;MODE=LEGACY;AUTO_SERVER=FALSE",
+      "database" : "H2 2.3.232 (2024-08-11)",
+      "statementType" : "prepared",
+      "operation" : "executeQuery",
+      "sql" : "SELECT ID, CREATED_AT, CURRENCY, CUSTOMER_EMAIL, CUSTOMER_NAME, DELIVERY_DATE, PAYMENT_SUMMARY, STATUS, SUBTOTAL, TAX, TOTAL FROM ORDERS WHERE (ID = ?)",
+      "parameters" : [ 999999 ],
+      "resultSet" : true,
+      "rows" : 0
+    },
+    "thread" : "[ACTIVE] ExecuteThread: '6' for queue: 'weblogic.kernel.Default (self-tuning)'",
+    "startNs" : 2606238,
+    "durationNs" : 171339
+  } ]
+}

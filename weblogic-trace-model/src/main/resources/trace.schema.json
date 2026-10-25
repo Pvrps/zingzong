@@ -1,0 +1,191 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:ca.gc.cra.xz02.devops:weblogic-trace:trace.schema.json",
+  "title": "weblogic-trace trace",
+  "description": "One trace per file: a tree of spans under one trigger, within a recording. Spans are flat with parentId.",
+  "type": "object",
+  "required": ["formatVersion", "trace", "spans"],
+  "additionalProperties": true,
+  "properties": {
+    "formatVersion": { "type": "integer", "const": 1 },
+    "recording": { "$ref": "#/definitions/recordingRef" },
+    "trace": { "$ref": "#/definitions/traceInfo" },
+    "spans": { "type": "array", "items": { "$ref": "#/definitions/span" } },
+    "lineage": { "type": "array", "items": { "$ref": "#/definitions/lineageEntry" } }
+  },
+  "definitions": {
+    "recordingRef": {
+      "type": "object",
+      "required": ["id", "seq"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "seq": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "traceInfo": {
+      "type": "object",
+      "required": ["id", "startedAt"],
+      "properties": {
+        "id": { "type": "string" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "principal": { "type": ["string", "null"] },
+        "httpSessionId": { "type": ["string", "null"] },
+        "serverName": { "type": ["string", "null"] },
+        "parentTraceId": { "type": ["string", "null"] },
+        "parentSpanId": { "type": ["string", "null"] },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": { "name": { "type": "string" }, "sourcePath": { "type": "string" }, "moduleType": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "span": {
+      "type": "object",
+      "required": ["id", "depth", "order", "kind", "startNs", "durationNs"],
+      "properties": {
+        "id": { "type": "string" },
+        "parentId": { "type": ["string", "null"] },
+        "depth": { "type": "integer", "minimum": 0 },
+        "order": { "type": "integer", "minimum": 0 },
+        "kind": { "type": "string", "enum": ["EJB", "HTTP", "SQL"] },
+        "layer": { "type": "string" },
+        "http": { "$ref": "#/definitions/httpInfo" },
+        "ejb": { "$ref": "#/definitions/ejbInfo" },
+        "sql": { "$ref": "#/definitions/sqlInfo" },
+        "app": { "type": "string" },
+        "module": { "type": "string" },
+        "thread": { "type": "string" },
+        "args": { "type": "array", "items": { "$ref": "#/definitions/valueCapture" } },
+        "result": { "oneOf": [ { "$ref": "#/definitions/valueCapture" }, { "type": "null" } ] },
+        "exception": { "oneOf": [ { "$ref": "#/definitions/exceptionInfo" }, { "type": "null" } ] },
+        "serializationWarnings": { "type": "array", "items": { "$ref": "#/definitions/serializationWarning" } },
+        "startNs": { "type": "integer", "minimum": 0 },
+        "durationNs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "httpInfo": {
+      "type": "object",
+      "properties": {
+        "method": { "type": "string" },
+        "path": { "type": "string" },
+        "contextPath": { "type": "string" },
+        "servletPath": { "type": "string" },
+        "pathInfo": { "type": "string" },
+        "query": { "type": "string" },
+        "protocol": { "type": "string" },
+        "scheme": { "type": "string" },
+        "serverName": { "type": "string" },
+        "serverPort": { "type": "integer" },
+        "remoteAddr": { "type": "string" },
+        "status": { "type": "integer" },
+        "contentType": { "type": "string" },
+        "responseContentType": { "type": "string" },
+        "requestHeaders": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+        "responseHeaders": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+        "requestBody": { "type": "string" },
+        "requestBodyEncoding": { "type": "string" },
+        "requestBodyLength": { "type": "integer" },
+        "requestBodyDropped": { "type": "integer" },
+        "requestBodyComplete": { "type": "boolean" },
+        "responseBody": { "type": "string" },
+        "responseBodyEncoding": { "type": "string" },
+        "responseBodyLength": { "type": "integer" },
+        "responseBodyDropped": { "type": "integer" },
+        "resourceClass": { "type": "string" },
+        "resourceMethod": { "type": "string" },
+        "resourceSignature": { "type": "string" },
+        "sentError": { "type": "object", "properties": { "status": { "type": "integer" }, "message": { "type": ["string", "null"] } } },
+        "responseBodyNote": { "type": "string" }
+      }
+    },
+    "ejbInfo": {
+      "type": "object",
+      "required": ["beanClass", "method"],
+      "properties": {
+        "app": { "type": "string" },
+        "module": { "type": "string" },
+        "beanName": { "type": "string" },
+        "beanClass": { "type": "string" },
+        "interface": { "type": "string" },
+        "invocation": { "type": "string", "enum": ["LOCAL", "REMOTE", "MESSAGE"] },
+        "beanType": { "type": "string", "enum": ["STATELESS", "STATEFUL", "SINGLETON", "MESSAGE_DRIVEN"] },
+        "ejb2x": { "type": "boolean" },
+        "jndiNames": { "type": "array", "items": { "type": "string" } },
+        "destination": { "type": "string" },
+        "method": { "type": "string" },
+        "signature": { "type": "string" },
+        "transactionAttribute": { "type": "string" }
+      }
+    },
+    "sqlInfo": {
+      "type": "object",
+      "required": ["dataSource", "operation"],
+      "properties": {
+        "dataSource": { "type": "string" },
+        "jndiNames": { "type": "array", "items": { "type": "string" } },
+        "url": { "type": "string" },
+        "database": { "type": "string" },
+        "statementType": { "type": "string", "enum": ["statement", "prepared", "callable"] },
+        "operation": { "type": "string" },
+        "sql": { "type": ["string", "null"] },
+        "parameters": { "type": "array" },
+        "batches": { "type": "array", "items": { "type": "array" } },
+        "updateCount": { "type": "integer" },
+        "updateCounts": { "type": "array", "items": { "type": "integer" } },
+        "resultSet": { "type": "boolean" },
+        "rows": { "type": "integer" }
+      }
+    },
+    "valueCapture": {
+      "type": "object",
+      "required": ["declaredType"],
+      "properties": {
+        "declaredType": { "type": "string" },
+        "value": {}
+      }
+    },
+    "exceptionInfo": {
+      "type": "object",
+      "required": ["className"],
+      "properties": {
+        "className": { "type": "string" },
+        "message": { "type": ["string", "null"] },
+        "value": {}
+      }
+    },
+    "serializationWarning": {
+      "type": "object",
+      "required": ["path", "reason"],
+      "properties": {
+        "path": { "type": "string" },
+        "reason": { "type": "string" },
+        "typeName": { "type": "string" }
+      }
+    },
+    "lineageRef": {
+      "type": "object",
+      "required": ["span", "path"],
+      "properties": {
+        "trace": { "type": "string" },
+        "span": { "type": "string" },
+        "path": { "type": "string" }
+      }
+    },
+    "lineageEntry": {
+      "type": "object",
+      "required": ["to"],
+      "properties": {
+        "to": { "$ref": "#/definitions/lineageRef" },
+        "from": { "$ref": "#/definitions/lineageRef" },
+        "value": { "type": "string" },
+        "alternatives": { "type": "array", "items": { "$ref": "#/definitions/lineageRef" } },
+        "classification": { "type": "string", "enum": ["userInput", "environment"] }
+      }
+    }
+  }
+}

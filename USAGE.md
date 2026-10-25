@@ -1,4 +1,4 @@
-# Using ejb-capture
+# Using weblogic-trace
 
 ## Contents
 
@@ -21,29 +21,29 @@ the unit tests run offline, without a server:
 mvn -q install
 ```
 
-Coordinates: `io.capture:capture-maven-plugin:0.1.0-SNAPSHOT`. The agent,
-`io.capture:capture-agent`, is a dependency of the plugin and is installed with it; it is never
-given as a path. The short form `mvn capture:<goal>` needs the plugin group in
+Coordinates: `ca.gc.cra.xz02.devops:weblogic-trace-maven-plugin:1.0.0-SNAPSHOT`. The agent,
+`ca.gc.cra.xz02.devops:weblogic-trace-agent`, is a dependency of the plugin and is installed with it; it is never
+given as a path. The short form `mvn wltrace:<goal>` needs the plugin group in
 `~/.m2/settings.xml`:
 
 ```xml
 <pluginGroups>
-  <pluginGroup>io.capture</pluginGroup>
+  <pluginGroup>ca.gc.cra.xz02.devops</pluginGroup>
 </pluginGroups>
 ```
 
-Without it, use the full form `mvn io.capture:capture-maven-plugin:0.1.0-SNAPSHOT:<goal>`. The
+Without it, use the full form `mvn ca.gc.cra.xz02.devops:weblogic-trace-maven-plugin:1.0.0-SNAPSHOT:<goal>`. The
 goals need no project; run them from any directory.
 
 ## 2. Enable, restart, start
 
 ```
-mvn capture:enable -Dcapture.domain=/path/to/domain
+mvn wltrace:enable -Dwltrace.domain=/path/to/domain
 # restart the domain's servers
-mvn capture:start  -Dcapture.domain=/path/to/domain
+mvn wltrace:start  -Dwltrace.domain=/path/to/domain
 ```
 
-**enable** copies the agent to `<domain>/ejb-capture/capture-agent.jar` and writes a delimited
+**enable** copies the agent to `<domain>/weblogic-trace/weblogic-trace-agent.jar` and writes a delimited
 block into the domain's overrides file (`bin/setUserOverrides.sh` or `bin\setUserOverrides.cmd`,
 section 7) that adds the `-javaagent` option and, on a JDK 9 or later domain, the `--add-opens`
 flags the serializer needs. It creates the file when the domain has none and says so in the
@@ -53,7 +53,7 @@ block. Running it again updates the block in place. The domain's JDK is read fro
 **Restart** the servers. The agent loads at JVM start. A server that was already running keeps
 running without it, and `enable` says so.
 
-**start** serves `http://127.0.0.1:8077/` (`-Dcapture.port` to change), opens it in the browser
+**start** serves `http://127.0.0.1:8077/` (`-Dwltrace.port` to change), opens it in the browser
 when the desktop allows and otherwise prints the URL, and blocks until Ctrl-C. It refuses when the
 domain is not enabled on disk.
 
@@ -105,11 +105,11 @@ completes, and the home list updates.
 ## 4. Disable
 
 ```
-mvn capture:disable -Dcapture.domain=/path/to/domain
+mvn wltrace:disable -Dwltrace.domain=/path/to/domain
 ```
 
 Stops an active recording first (and says so), removes the block from the overrides file, or the
-whole file when `enable` created it, deletes `<domain>/ejb-capture/`, and reports. Recordings are
+whole file when `enable` created it, deletes `<domain>/weblogic-trace/`, and reports. Recordings are
 never touched; the goal prints where they are. A running server keeps the agent loaded, idle,
 until it restarts; after that the domain is exactly as it was.
 
@@ -130,9 +130,9 @@ All `-D`:
 
 | parameter | | default |
 | --- | --- | --- |
-| `capture.domain` | the domain home, the directory with `config/config.xml` | required |
-| `capture.port` | the page's port on 127.0.0.1 | `8077` |
-| `capture.out` | where recordings and `agent.log` go | `~/.ejb-capture/<domain directory name>` |
+| `wltrace.domain` | the domain home, the directory with `config/config.xml` | required |
+| `wltrace.port` | the page's port on 127.0.0.1 | `8077` |
+| `wltrace.out` | where recordings and `agent.log` go | `~/.weblogic-trace/<domain directory name>` |
 
 There are no others. The agent takes only its output directory, written by `enable`; nothing is
 configured per application, type or field.
@@ -146,7 +146,7 @@ plugin.
 | | Linux | Windows |
 | --- | --- | --- |
 | overrides file | `bin/setUserOverrides.sh` | `bin\setUserOverrides.cmd` |
-| block markers | `# >>> ejb-capture >>>` … `# <<< ejb-capture <<<` | `rem >>> ejb-capture >>>` … `rem <<< ejb-capture <<<` |
+| block markers | `# >>> weblogic-trace >>>` … `# <<< weblogic-trace <<<` | `rem >>> weblogic-trace >>>` … `rem <<< weblogic-trace <<<` |
 | option lines | `JAVA_OPTIONS="${JAVA_OPTIONS} -javaagent:…"`, `export JAVA_OPTIONS` | `set JAVA_OPTIONS=%JAVA_OPTIONS% -javaagent:…` |
 | JDK read from | `bin/setDomainEnv.sh` (`JAVA_HOME=`, `SUN_JAVA_HOME=`, `BEA_JAVA_HOME=`) | `bin\setDomainEnv.cmd` (`set JAVA_HOME=`, …) |
 
@@ -157,23 +157,23 @@ the `.cmd` file is written with CRLF, and server JVMs are matched to the domain 
 The Windows path is covered by unit tests on the `.cmd` syntax and the platform detection; its
 first run against a real Windows domain is still to be done. The checks for that run:
 
-1. `mvn capture:enable -Dcapture.domain=C:\...\base_domain`: `bin\setUserOverrides.cmd` exists (or
-   has the block appended), contains the `rem >>> ejb-capture >>>` block with `set JAVA_OPTIONS=`
-   lines and, on a JDK 9+ domain, the five `--add-opens` lines; `ejb-capture\capture-agent.jar` is
+1. `mvn wltrace:enable -Dwltrace.domain=C:\...\base_domain`: `bin\setUserOverrides.cmd` exists (or
+   has the block appended), contains the `rem >>> weblogic-trace >>>` block with `set JAVA_OPTIONS=`
+   lines and, on a JDK 9+ domain, the five `--add-opens` lines; `weblogic-trace\weblogic-trace-agent.jar` is
    in the domain; the output says which `setDomainEnv.cmd` assignment gave the JDK.
-2. Restart the server with `bin\startWebLogic.cmd`: `agent.log` under `capture.out` shows
-   `premain` and `capture-agent ready`; the server starts without errors.
-3. `mvn capture:start`: the state is *ready* with the server's pid; the browser opens or the URL is
+2. Restart the server with `bin\startWebLogic.cmd`: `agent.log` under `wltrace.out` shows
+   `premain` and `weblogic-trace-agent ready`; the server starts without errors.
+3. `mvn wltrace:start`: the state is *ready* with the server's pid; the browser opens or the URL is
    printed.
 4. Record: Start, a few requests, Stop; the traces appear on the page with EJB, HTTP and SQL spans.
-5. `mvn capture:disable`: the block is gone, or the file when `enable` created it;
-   `ejb-capture\` is gone; `bin\` lists exactly what it listed before step 1.
+5. `mvn wltrace:disable`: the block is gone, or the file when `enable` created it;
+   `weblogic-trace\` is gone; `bin\` lists exactly what it listed before step 1.
 6. A domain path with a space (`C:\Program Files\...`): the `-javaagent` option in the block is
    quoted and the server still starts.
 
 ## 8. Recordings
 
-One directory per recording under `capture.out`, `rec-<yyyyMMdd-HHmmss>`:
+One directory per recording under `wltrace.out`, `rec-<yyyyMMdd-HHmmss>`:
 
 - `NNNNNN-t-<id>.json`: one file per trace, written when the trace's root call completes. A trace
   is the work one thread did for one entry point: a flat list of spans with parent ids. Each span
@@ -183,12 +183,12 @@ One directory per recording under `capture.out`, `rec-<yyyyMMdd-HHmmss>`:
   data source, the statement, the bound parameters, and the update count or the rows read.
 - `recording-<serverName>.json`: one manifest per server, with start and end, agent version and
   build, trace count and dropped count.
-- `agent.log` in `capture.out`: the agent's own log, every degraded lookup warned once.
+- `agent.log` in `wltrace.out`: the agent's own log, every degraded lookup warned once.
 
 Capture is raw: no masking, no allow-lists. Cycles become `@ref`, unloaded lazy collections
 `@lazy`, runtime handles `@handle`, non-serializable objects carry `@serializable: false`, fields
 the walker cannot write are listed under `@skipped` with a reason, and a safety ceiling that is
-hit leaves `@truncated` with counts. The format is described by `trace-model`'s `trace.schema.json`.
+hit leaves `@truncated` with counts. The format is described by `weblogic-trace-model`'s `trace.schema.json`.
 
 ## 9. Limitations
 

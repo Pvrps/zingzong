@@ -45,7 +45,7 @@
 
     <dependency>
       <groupId>ca.gc.cra.xz02.devops</groupId>
-      <artifactId>weblogic-trace-model</artifactId>
+      <artifactId>weblogic-trace-viewer</artifactId>
     </dependency>
     <!--
       The agent jar wltrace:enable installs. Kept as a plain dependency (not shaded in) so

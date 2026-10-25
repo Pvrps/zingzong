@@ -1,6 +1,6 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.http;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.AgentLog;
+import ca.gc.cra.xz02.devops.wltrace.agent.bootstrap.AgentLog;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.FieldValue;
 import net.bytebuddy.implementation.bind.annotation.Origin;

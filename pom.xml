@@ -15,6 +15,7 @@
   <modules>
     <module>weblogic-trace-model</module>
     <module>weblogic-trace-agent</module>
+    <module>weblogic-trace-viewer</module>
     <module>weblogic-trace-maven-plugin</module>
   </modules>
 
@@ -85,6 +86,11 @@
       <dependency>
         <groupId>ca.gc.cra.xz02.devops</groupId>
         <artifactId>weblogic-trace-model</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ca.gc.cra.xz02.devops</groupId>
+        <artifactId>weblogic-trace-viewer</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

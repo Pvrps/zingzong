@@ -1,6 +1,6 @@
 package weblogic.ejb.container.internal;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.hook.stubs.MessageDrivenBeanInfoStub;
+import ca.gc.cra.xz02.devops.wltrace.agent.instrument.stubs.MessageDrivenBeanInfoStub;
 
 import javax.jms.Message;
 import javax.jms.MessageListener;

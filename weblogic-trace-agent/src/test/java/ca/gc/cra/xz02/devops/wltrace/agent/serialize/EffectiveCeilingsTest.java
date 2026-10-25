@@ -1,6 +1,6 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.serialize;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.span.Recorder;
+import ca.gc.cra.xz02.devops.wltrace.agent.record.Recorder;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;

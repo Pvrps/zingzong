@@ -1,6 +1,6 @@
 package weblogic.ejb.container.internal;
 
-import ca.gc.cra.xz02.devops.wltrace.agent.hook.stubs.Invocation;
+import ca.gc.cra.xz02.devops.wltrace.agent.instrument.stubs.Invocation;
 
 /** Stub of the WebLogic local-view invoker: the static five-argument {@code invoke} the hook advises. */
 public final class SessionLocalMethodInvoker {

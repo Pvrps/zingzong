@@ -1,4 +1,4 @@
-package com.acme.web;
+package org.example.web;
 
 import javax.ws.rs.Path;
 

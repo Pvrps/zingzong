@@ -27,7 +27,7 @@ public final class Labels {
         return span.kind;
     }
 
-    /** The bean name when the agent knows it (Phase 6), else the class name without a trailing "Bean". */
+    /** The bean name when the agent recorded it, else the class name without a trailing "Bean". */
     public static String bean(Span span) {
         if (span.ejb.beanName != null) {
             return span.ejb.beanName;

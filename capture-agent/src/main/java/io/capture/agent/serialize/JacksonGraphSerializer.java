@@ -15,20 +15,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Builds Jackson {@link JsonNode} trees by walking object graphs field by field, raw: what
- * crossed the boundary, as it was. The only transformations are the structural rules in
- * {@link Placeholders}, each marked in the output; the safety ceilings in
- * {@link SerializerConfig} are never meant to be reached and leave counted markers when they are.
- *
- * This deliberately does <em>not</em> route objects through {@code ObjectMapper}'s bean
- * serialization: Jackson's serializer cache keys on {@code Class} strongly (pinning
- * redeployed loaders), getters would have to be suppressed per type, identity and depth
- * rules would need mixins and a wrapping generator, and lazy JPA wrappers must be
- * recognised before any collection method runs. Jackson provides the tree model, the scalar
- * nodes and the output format. Per-type state lives in {@link TypeInfo} (a {@code ClassValue}).
- *
- * Fields only, never getters. Nothing here throws into the caller: a failure becomes a
- * marked {@code @unserializable} node and a warning.
+ * Builds Jackson {@link JsonNode} trees by walking object graphs field by field, never through
+ * getters or {@code ObjectMapper}; Jackson supplies the tree model only. The structural rules of
+ * {@link Placeholders} are the only transformations and each is marked in the output; a failure
+ * becomes a marked {@code @unserializable} node and a warning, never an exception for the caller.
  */
 public final class JacksonGraphSerializer implements GraphSerializer {
 
@@ -153,7 +143,7 @@ public final class JacksonGraphSerializer implements GraphSerializer {
         ObjectNode node = NODES.objectNode();
         node.put(Placeholders.TYPE, info.type.getName());
         if (!info.serializable) {
-            // Walked all the same; the exporter and replay need to know it cannot cross T3.
+            // Walked all the same; the marker says it could not cross a remote boundary.
             node.put(Placeholders.SERIALIZABLE, false);
         }
         SerializationContext.Tracked tracked = ctx.track(value, node);

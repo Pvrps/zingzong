@@ -2,6 +2,7 @@ package io.capture.trace;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+/** One end of a lineage entry: a path inside a span of a trace. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LineageRef {
 

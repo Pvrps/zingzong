@@ -72,12 +72,10 @@ final class WlsRuntime {
     private static final AtomicBoolean sessionWarned = new AtomicBoolean();
 
     /**
-     * Id of the HTTP session the current thread's request belongs to, or null (no request,
-     * no session yet, not WebLogic). Phase 4 stopgap through WebLogic internals, recorded in
-     * docs/container-hook.md; Phase 5's servlet hook replaces it. Never creates a session.
-     *
-     * Path (14.1.2.0.0): ExecuteThread.getCurrentWork() → WlsRequestExecutor.connectionHandler
-     * → AbstractHttpConnectionHandler.getServletRequest() → HttpServletRequest.getSession(false).
+     * Id of the HTTP session the current thread's request belongs to, or null (no request, no
+     * session yet). Used for roots that no servlet span opened, such as a T3 call; never creates
+     * a session. Path: ExecuteThread.getCurrentWork() → WlsRequestExecutor.connectionHandler →
+     * AbstractHttpConnectionHandler.getServletRequest() → HttpServletRequest.getSession(false).
      */
     static String httpSessionId() {
         if (sessionUnavailable.get()) {

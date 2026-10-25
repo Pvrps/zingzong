@@ -6,7 +6,7 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
 /**
  * Inlined into {@code weblogic.ejb.container.internal.MDListener.onMessage(javax.jms.Message)}:
- * where every JMS message reaches a message-driven bean (docs/container-hook.md). The listener
+ * where every JMS message reaches a message-driven bean (architecture/HOOKS.md). The listener
  * holds the bean's {@code MessageDrivenBeanInfo}; the message is the call's one argument.
  */
 public final class MessageAdvice {

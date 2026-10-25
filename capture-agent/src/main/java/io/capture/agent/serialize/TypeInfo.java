@@ -14,14 +14,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * What the serializer needs to know about a class: its instance fields (walked or skipped
- * with a reason), whether it is a JPA entity, a runtime handle, serializable, or one of the
- * known lazy wrappers.
- *
- * Cached through {@link ClassValue}, i.e. keyed by the {@link Class} object itself. Two
- * loaders defining the same class name get two entries, and an entry is unloaded together
- * with its class, so a redeployed application's loader is never pinned by this cache.
- * All detection here is by <em>name</em>; nothing is resolved through the agent's loader.
+ * What the serializer needs to know about a class: its instance fields, walked or skipped with a
+ * reason, and whether it is a JPA entity, a runtime handle, serializable or a known lazy wrapper.
+ * Cached per {@link Class} object through {@link ClassValue}; every detection is by name, nothing
+ * is resolved through the agent's loader.
  */
 final class TypeInfo {
 

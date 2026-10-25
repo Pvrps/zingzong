@@ -57,7 +57,7 @@ function buildModel() {
     for (const s of t.spans) s.kids.sort((a, b) => a.order - b.order);
   }
   // a REST/SOAP resource belongs to the application of what it calls (the agent records app only on
-  // EJB spans); decided once per resource across the recording, so a request that called no EJB
+  // EJB spans); chosen once per resource across the recording, so a request that called no EJB
   // still lands in the right lane
   const resourceApp = new Map();
   for (const t of traces) for (const s of t.spans) if (s.comp.kind === 'REST' || s.comp.kind === 'SOAP') { const k = s.kids.find(x => x.comp.app && x.comp.app !== 'data sources'); if (k) resourceApp.set(s.comp.name, k.comp.app); }

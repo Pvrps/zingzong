@@ -8,13 +8,10 @@ import java.lang.reflect.Method;
 import java.util.Enumeration;
 
 /**
- * A {@code javax.jms.Message} is recorded as what the JMS API says it is, headers, properties
- * and body, rather than as the vendor object's fields, which describe the session and the
- * connection it came through, not the payload. This is the one place the serializer calls
- * getters: the JMS header and property accessors and {@code TextMessage.getText()},
- * {@code MapMessage} entries and {@code ObjectMessage.getObject()} are plain reads. A bytes or
- * stream body is not read, because reading would consume it; its length is recorded and the
- * omission marked. Everything by method name through the server's own JMS API.
+ * Records a {@code javax.jms.Message} as its API view, headers, properties and body, through the
+ * server's own JMS API by method name; the vendor object's fields describe the session, not the
+ * payload. A bytes or stream body is not read, because reading would consume it: its length is
+ * recorded and the omission marked.
  */
 final class JmsMessages {
 

@@ -3,6 +3,7 @@ package io.capture.trace;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 
+/** The exception a call threw: class, message and the serialized object. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ExceptionInfo {
 

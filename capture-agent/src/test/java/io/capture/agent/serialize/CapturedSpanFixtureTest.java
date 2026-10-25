@@ -23,13 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Proves that recordings captured on WebLogic 14.1.2 carry the format's markers where the
- * raw-capture rule puts them: {@code @type} on every object, {@code @ref} for a repeated object,
- * {@code @lazy} for an unloaded JPA collection, {@code @serializable: false} for a non-Serializable
- * value, {@code @skipped} for weaver- and JVM-injected fields, {@code @handle} for runtime
- * handles, {@code @jms} for a message, and no {@code @truncated} under the production ceilings.
- */
+/** Proves that recordings captured on WebLogic 14.1.2 carry every marker of the format where the raw-capture rule puts it, and no {@code @truncated} under the production ceilings. */
 class CapturedSpanFixtureTest {
 
     private static final Set<String> KNOWN_MARKERS = new HashSet<>(Arrays.asList(

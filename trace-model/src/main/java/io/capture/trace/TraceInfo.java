@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.List;
 
+/** Identity and context of a trace: when it started, who ran it, on which server, and what caused it. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TraceInfo {
 

@@ -2,6 +2,7 @@ package io.capture.trace;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+/** A place in a captured value where the serializer could not write the value as it was, and why. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SerializationWarning {
 

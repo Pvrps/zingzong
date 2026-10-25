@@ -8,7 +8,7 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
  * Inlined into {@code weblogic.ejb.container.internal.SessionLocalMethodInvoker.invoke} and
  * {@code SessionRemoteMethodInvoker.invoke(Invokable, BaseLocal/RemoteObject, InvocationWrapper,
  * Object[], int)}: the one place every business-interface call into a session bean passes
- * (docs/container-hook.md). Arguments 0..3 are the generated client object, the container's
+ * (architecture/HOOKS.md). Arguments 0..3 are the generated client object, the container's
  * local/remote object, the invocation wrapper and the call arguments.
  */
 public final class ContainerAdvice {

@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Proves the lineage rules on hand-built traces: nearest earlier source wins, user-originated values are never linked, the rest is classified. */
 class LineageDetectorTest {
 
     private final LineageDetector detector = new LineageDetector();

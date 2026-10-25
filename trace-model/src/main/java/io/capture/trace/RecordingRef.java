@@ -2,6 +2,7 @@ package io.capture.trace;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+/** The recording a trace belongs to and the trace's position in it. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RecordingRef {
 

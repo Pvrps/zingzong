@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * What a WebLogic data source is, by its pool name: JNDI names, URL and database product,
  * read once per name from the server's MBeans (the config {@code JDBCSystemResource} and the
- * {@code JDBCDataSourceRuntime}); docs/container-hook.md, "JDBC". Resolution failures are
+ * {@code JDBCDataSourceRuntime}); architecture/HOOKS.md. Resolution failures are
  * remembered too, so a data source is looked up once.
  */
 public final class WlsDataSources {

@@ -14,8 +14,7 @@ import java.util.regex.Pattern;
  *   <li>UUIDs; ISO dates, times and instants</li>
  *   <li>numbers ≥ 1000 or with a decimal part</li>
  *   <li>smaller integers only where the path names an identifier ({@code id}, {@code orderId},
- *       {@code ...Key}, {@code ...Number}, {@code ...Ref}); without this the plan's own example,
- *       order 42, could never link</li>
+ *       {@code ...Key}, {@code ...Number}, {@code ...Ref}), so that an order id like 42 can link</li>
  * </ul>
  * Booleans, nulls, enum-like words and small quantities are never indexed. Markers
  * ({@code @type}, {@code @id}, {@code @ref}, ...) are skipped by the flattener.

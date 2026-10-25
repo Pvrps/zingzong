@@ -47,11 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Proves that the hook lands on classes named like the WebLogic targets, that each advice
- * produces the span the recorder expects from the container's objects, and that nothing is
- * instrumented while no recording is active.
- */
+/** Proves that the hook lands on classes named like the WebLogic targets, that each advice yields the expected span, and that nothing is instrumented while no recording is active. */
 class CaptureHookTest {
 
     @TempDir

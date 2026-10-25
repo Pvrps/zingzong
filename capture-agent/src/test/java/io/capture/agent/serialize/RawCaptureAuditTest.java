@@ -33,12 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-/**
- * The raw-capture rule, checked mechanically: an object containing every category the rule
- * names is serialized, then every instance field of every walked object is looked up in the
- * output. A field may be absent only if the object's {@code @skipped} list names it with a
- * reason, and every value that is not written as it was carries a marker saying why.
- */
+/** Proves the raw-capture rule mechanically: every instance field of every walked object is in the output or listed under {@code @skipped} with a reason, and every transformed value carries its marker. */
 class RawCaptureAuditTest {
 
     enum Color { RED, GREEN }

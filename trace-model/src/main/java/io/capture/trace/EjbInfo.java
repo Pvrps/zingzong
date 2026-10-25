@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 
+/** The EJB facts of a span: which bean, through which view, which method, under which transaction attribute. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EjbInfo {
 

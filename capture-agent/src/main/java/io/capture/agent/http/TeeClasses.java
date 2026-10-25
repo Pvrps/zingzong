@@ -15,12 +15,10 @@ import static net.bytebuddy.matcher.ElementMatchers.isAbstract;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 
 /**
- * The agent cannot extend {@code javax.servlet} classes at compile time (no javax dependency),
- * so the request/response wrappers and the tee streams are generated with Byte Buddy against
- * the servlet API the server actually loaded, once per servlet-API class loader. The
- * generated classes live in a child loader of that loader (they see javax.servlet through
- * the parent and the agent through the bootstrap loader) and are cached on the
- * {@code HttpServletRequestWrapper} Class object, so they go away with it.
+ * The request and response wrappers and the tee streams, generated with Byte Buddy against the
+ * servlet API the server loaded, once per servlet-API class loader. The generated classes live
+ * in a child of that loader and are cached on its {@code HttpServletRequestWrapper} Class
+ * object, so they go away with it.
  */
 public final class TeeClasses {
 

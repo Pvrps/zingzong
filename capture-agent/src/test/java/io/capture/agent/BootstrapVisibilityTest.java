@@ -14,12 +14,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * The agent runs on the bootstrap class loader, which cannot see platform-loader modules.
- * A class-literal or instanceof against one of them compiles and passes unit tests (where
- * everything is visible) and then throws NoClassDefFoundError on the server. This scans the
- * compiled agent classes for constant-pool references to such packages.
- */
+/** Proves that no compiled agent class links against a platform-loader module, which the bootstrap loader cannot see. */
 class BootstrapVisibilityTest {
 
     /** Packages of modules defined to the platform loader in JDK 9+ that the agent must not link to. */

@@ -1,5 +1,6 @@
 package io.capture.agent.span;
 
+import io.capture.agent.meta.BeanMeta;
 import io.capture.trace.Span;
 import io.capture.trace.Trace;
 
@@ -8,12 +9,8 @@ import java.util.Deque;
 
 /**
  * Per-thread stack of open spans and the trace they belong to. A span pushed on an empty
- * stack starts a trace; popping the last span completes it. Nested calls on the same thread
- * (local EJB calls, and WebLogic's same-server remote path) form the tree naturally.
- *
- * Cross-server stitching hooks in through {@link TracePropagation}: an inbound trace id on
- * an empty stack becomes {@code parentTraceId}/{@code parentSpanId}, and the active span is published
- * for handoffs to other threads. See docs/trace-propagation.md.
+ * stack starts a trace, recording the inbound handoff as its parent when there is one;
+ * popping the last span completes the trace.
  */
 final class SpanStack {
 
@@ -54,20 +51,17 @@ final class SpanStack {
     }
 
     OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
-                  Object http, TracePropagation propagation) {
+                  Object http, WorkContextPropagation propagation) {
         return push(recording, kind, layer, beanClass, method, nowNanos, http, null, null, null, null, null, propagation);
     }
 
     OpenSpan push(Recording recording, String kind, String layer, String beanClass, String method, long nowNanos,
-                  Object http, Object container, io.capture.agent.meta.BeanMeta meta, String interfaceName,
-                  String invocation, String transactionAttribute, TracePropagation propagation) {
+                  Object http, Object container, BeanMeta meta, String interfaceName,
+                  String invocation, String transactionAttribute, WorkContextPropagation propagation) {
         if (open.isEmpty() || trace == null || trace.recording != recording) {
-            // New trace: either nothing is open, or the recording changed under an open stack
-            // (start/stop mid-call); the stale spans are abandoned.
+            // A recording that changed under an open stack (start/stop mid-call) abandons the stale spans.
             open.clear();
-            // A handoff from another thread of this server (@Asynchronous, JMS to an MDB) carries
-            // the causing trace and span in: docs/trace-propagation.md.
-            TracePropagation.Inbound inbound = propagation.inbound();
+            WorkContextPropagation.Inbound inbound = propagation.inbound();
             trace = new TraceBuilder(recording, nowNanos, inbound == null ? null : inbound.traceId,
                     inbound == null ? null : inbound.spanId);
         }
@@ -80,11 +74,8 @@ final class SpanStack {
         return span;
     }
 
-    /**
-     * Pops the top span, adds its completed form to the trace, and returns the finished
-     * {@link Trace} when this was the root, else null.
-     */
-    Trace pop(Span completed, TracePropagation propagation) {
+    /** Pops the top span into the trace and returns the finished {@link Trace} when it was the root, else null. */
+    Trace pop(Span completed, WorkContextPropagation propagation) {
         if (open.isEmpty() || trace == null) {
             return null;
         }

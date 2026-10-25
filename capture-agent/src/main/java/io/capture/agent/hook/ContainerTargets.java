@@ -1,75 +1,44 @@
 package io.capture.agent.hook;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * The EJB container choke points the container hook advises, per WebLogic generation,
- * resolved once at startup: the first entry whose classes exist on the system class path
- * is the one. Each entry is verified by thread dump and recorded in docs/container-hook.md
- * with version and patch level; a WebLogic whose invokers match no entry gets the
- * annotation hook, and {@link FallbackHook} still checks that the advice landed.
+ * The WebLogic classes the agent advises by name: the session-bean invokers, the MDB listener
+ * and the two servlet pipeline entries. One shape serves 12.2.1.4.0 and 14.1.2.0.0
+ * (architecture/HOOKS.md).
  */
 public final class ContainerTargets {
 
-    /**
-     * One verified shape of the container: the static
-     * {@code invoke(Invokable, BaseXObject, InvocationWrapper, Object[], int)} pair for session
-     * beans, and the listener whose {@code onMessage(javax.jms.Message)} every MDB delivery passes.
-     */
-    public static final class Target {
-        public final String versions;
-        public final String[] invokers;
-        public final String messageListener;
+    public static final String SESSION_LOCAL_INVOKER = "weblogic.ejb.container.internal.SessionLocalMethodInvoker";
+    public static final String SESSION_REMOTE_INVOKER = "weblogic.ejb.container.internal.SessionRemoteMethodInvoker";
+    public static final String MESSAGE_LISTENER = "weblogic.ejb.container.internal.MDListener";
+    public static final String FILTER_CHAIN = "weblogic.servlet.internal.FilterChainImpl";
+    public static final String SERVLET_STUB = "weblogic.servlet.internal.ServletStubImpl";
 
-        Target(String versions, String messageListener, String... invokers) {
-            this.versions = versions;
-            this.messageListener = messageListener;
-            this.invokers = invokers;
-        }
-    }
-
-    /** Newest first. 12.2.1.4.0 and 14.1.2.0.0 share one shape (same classes, methods, even line numbers). */
-    static final Target[] KNOWN = {
-            new Target("WebLogic 12.2.1.4.0 and 14.1.2.0.0",
-                    "weblogic.ejb.container.internal.MDListener",
-                    "weblogic.ejb.container.internal.SessionLocalMethodInvoker",
-                    "weblogic.ejb.container.internal.SessionRemoteMethodInvoker"),
-    };
+    static final String[] INVOKERS = {SESSION_LOCAL_INVOKER, SESSION_REMOTE_INVOKER};
+    static final String[] ALL = {SESSION_LOCAL_INVOKER, SESSION_REMOTE_INVOKER, MESSAGE_LISTENER, FILTER_CHAIN, SERVLET_STUB};
 
     private ContainerTargets() {
     }
 
-    /** The target whose classes this JVM can resolve, or null (then: annotation hook). */
-    public static Target resolve() {
-        for (Target target : KNOWN) {
-            boolean all = resolvable(target.messageListener);
-            for (String name : target.invokers) {
-                all &= resolvable(name);
-            }
-            if (all) {
-                return target;
+    /** The target classes the system class path cannot resolve; empty on a WebLogic server. */
+    public static List<String> missing() {
+        List<String> missing = new ArrayList<String>();
+        for (String name : ALL) {
+            if (ClassLoader.getSystemResource(name.replace('.', '/') + ".class") == null) {
+                missing.add(name);
             }
         }
-        return null;
+        return missing;
     }
 
-    static boolean isNamedInvoker(String typeName) {
-        for (Target target : KNOWN) {
-            if (typeName.equals(target.messageListener)) {
+    static boolean isNamed(String typeName) {
+        for (String name : ALL) {
+            if (name.equals(typeName)) {
                 return true;
             }
-            for (String name : target.invokers) {
-                if (name.equals(typeName)) {
-                    return true;
-                }
-            }
         }
-        return false;
-    }
-
-    private static boolean resolvable(String name) {
-        try {
-            return ClassLoader.getSystemResource(name.replace('.', '/') + ".class") != null;
-        } catch (Throwable t) {
-            return false;
-        }
+        return JdbcTargets.isNamed(typeName);
     }
 }

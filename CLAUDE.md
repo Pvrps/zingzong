@@ -35,6 +35,12 @@ in one repository; `v0.1-prototype` has everything that was removed when the too
 - `capture-agent` test fixtures live in `src/test/java/io/capture/agent/fixtures/` (copies of the lab's `common-dto` types with the package renamed; the recordings under `src/test/resources/captures/` name them) and in `src/test/java/com/acme/fixtures/` (fake beans the hook instruments). EclipseLink and `javaee-api` are test-scoped only. No test may depend on the lab.
 - Verification against real servers happens in the lab: `mvn -q install` here, then in `../ejb-capture-lab` `capture enable` → `wls-start -b` → `wls-deploy` → `capture start` → the page (Start, the three sample buttons, Stop) → `capture disable`, on the 14 domain and with `WLS_VERSION=12` on the 12 domain.
 
+## Code documentation
+- Javadoc states what a class or method does and any constraint a caller must know, in one to three sentences, present tense, no history, no rationale essays, no restating the signature.
+- A private method gets a comment only when its name is not enough. Comments inside methods explain a non-obvious why, never a what.
+- No comment narrates a phase, a session, a finding or a decision; that belongs in architecture/.
+- Every public class in main sources has a Javadoc; every test class has one line saying what it proves.
+
 ## Style
 - Small classes, explicit names, no frameworks beyond ByteBuddy/Jackson/JUnit in the agent; the plugin uses the JDK's `com.sun.net.httpserver`, no web framework, and one HTML file with no build step.
 - When an internal WebLogic class is referenced, record the version and stack frame in docs/container-hook.md, for both 12.2.1.4 and 14.1.2; version differences go in the lab's docs/weblogic-12-vs-14.md.

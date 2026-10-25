@@ -38,9 +38,6 @@ public class Span {
     public ExceptionInfo exception;
     public List<SerializationWarning> serializationWarnings;
 
-    /** A bean calling its own public method; kept, so viewers can hide it. */
-    public Boolean selfInvocation;
-
     /** Nanoseconds relative to the trace start. */
     public long startNs;
     public long durationNs;

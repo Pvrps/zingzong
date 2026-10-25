@@ -12,6 +12,9 @@ public interface RecordingControlMBean {
     /** Ends the active recording; returns its id or null if none was active. */
     String stop();
 
+    /** "ready", "recording <id>", or "inert: <reason>" when the agent found no WebLogic and installs nothing. */
+    String getState();
+
     boolean isEnabled();
 
     String getRecordingId();

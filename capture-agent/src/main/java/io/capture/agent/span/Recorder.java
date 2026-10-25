@@ -3,12 +3,10 @@ package io.capture.agent.span;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.capture.agent.AgentConfig;
 import io.capture.agent.AgentLog;
-import io.capture.agent.hook.InstrumentationHook;
+import io.capture.agent.hook.CaptureHook;
 import io.capture.agent.http.HttpCapture;
 import io.capture.agent.meta.BeanMeta;
 import io.capture.agent.meta.ContainerInvocation;
-import io.capture.agent.meta.EjbAnnotations;
-import io.capture.agent.meta.InvokedInterface;
 import io.capture.agent.meta.WlsDataSources;
 import io.capture.agent.meta.WlsMetadata;
 import io.capture.trace.HttpInfo;
@@ -45,21 +43,32 @@ public final class Recorder {
     private static volatile SerializerConfig serializerConfig = new SerializerConfig();
     private static volatile GraphSerializer serializer = new JacksonGraphSerializer(serializerConfig);
     private static volatile TraceWriter writer;
-    private static volatile TracePropagation propagation = TracePropagation.NONE;
-
-    /** How traces link across threads of this server; WebLogic's WorkContext when present. */
-    public static void propagation(TracePropagation tracePropagation) {
-        propagation = tracePropagation;
-    }
-    private static volatile InstrumentationHook hook = InstrumentationHook.NONE;
+    private static volatile WorkContextPropagation propagation = WorkContextPropagation.create();
+    private static volatile CaptureHook hook;
+    private static volatile String inertReason;
     private static final AtomicBoolean containerWarned = new AtomicBoolean();
 
     private Recorder() {
     }
 
-    /** The hook to install while recording. */
-    public static void hook(InstrumentationHook instrumentationHook) {
-        hook = instrumentationHook;
+    /** The hook to install while recording, and the propagation that links traces across this server's threads. */
+    public static void hook(CaptureHook captureHook, WorkContextPropagation tracePropagation) {
+        hook = captureHook;
+        propagation = tracePropagation;
+    }
+
+    /** Marks the agent as inert: no recording can start, and {@link #state()} says why. */
+    public static void inert(String reason) {
+        inertReason = reason;
+    }
+
+    /** "ready", "recording <id>" or "inert: <reason>". */
+    public static String state() {
+        if (inertReason != null) {
+            return "inert: " + inertReason;
+        }
+        Recording recording = ACTIVE.get();
+        return recording == null ? "ready" : "recording " + recording.id;
     }
 
     /** The serializer runs with the documented ceilings of {@link SerializerConfig}; only the output directory is configurable. */
@@ -106,17 +115,22 @@ public final class Recorder {
      * under the caller's id. A recording already active is replaced (and logged).
      */
     public static synchronized Recording start(String recordingId, String name) {
+        if (inertReason != null) {
+            throw new IllegalStateException("agent is inert: " + inertReason);
+        }
         Recording recording = new Recording(recordingId, name);
         WlsMetadata.reset();
         WlsMetadata.deployments();
         File dir = writer == null ? null : writer.recordingDir(recording);
         try {
-            hook.install();
+            if (hook != null) {
+                hook.install();
+            }
         } catch (Throwable t) {
             AgentLog.error("hook installation failed; recording " + recording.id + " will see no calls", t);
         }
         if (dir != null) {
-            ManifestWriter.write(dir, recording, hook.name(), null, null, null);
+            ManifestWriter.write(dir, recording, null, null, null);
         }
         Recording previous = ACTIVE.getAndSet(recording);
         if (previous != null) {
@@ -133,14 +147,16 @@ public final class Recorder {
             TraceWriter w = writer;
             boolean flushed = w == null || w.flush(5000);
             if (w != null) {
-                ManifestWriter.write(w.recordingDir(recording), recording, hook.name(), System.currentTimeMillis(),
+                ManifestWriter.write(w.recordingDir(recording), recording, System.currentTimeMillis(),
                         recording.traceCount(), droppedTraces());
             }
             AgentLog.info("RECORDING STOP id=" + recording.id + " name=" + recording.name
                     + " traces=" + recording.traceCount() + " dropped=" + droppedTraces()
                     + (flushed ? "" : " (writer still busy after 5s)"));
             try {
-                hook.uninstall();
+                if (hook != null) {
+                    hook.uninstall();
+                }
             } catch (Throwable t) {
                 AgentLog.error("hook removal failed; advice stays in place until the next stop", t);
             }
@@ -154,50 +170,12 @@ public final class Recorder {
         return w == null || w.flush(timeoutMillis);
     }
 
-    /**
-     * Annotation hook, method entry inside the bean. Returns 0 when nothing is recorded,
-     * otherwise a non-zero token that {@link #exit} uses to find its span (the top of the
-     * thread's stack). Metadata comes from the bean class and the server; the invoked
-     * interface is read from the stack (null for a self-invocation).
-     */
-    public static long enter(Object self, String beanClass, String method, String descriptor) {
-        Recording recording = ACTIVE.get();
-        if (recording == null) {
-            return 0L;
-        }
-        try {
-            SpanStack stack = SpanStack.current();
-            boolean root = stack.isEmpty();
-            String principal = null;
-            String httpSessionId = null;
-            if (root) {
-                principal = WlsRuntime.principal();
-                httpSessionId = WlsRuntime.httpSessionId();
-            }
-            Class<?> bean = MethodSignatures.beanClass(self, beanClass);
-            BeanMeta meta = WlsMetadata.of(bean);
-            MethodSignatures.MethodInfo info = MethodSignatures.resolve(bean, method, descriptor);
-            String iface = meta == null ? null : InvokedInterface.fromStack(beanClass, meta.ejbName, meta.interfaces);
-            String invocation = meta == null ? null : meta.invocationOf(iface);
-            String txAttribute = bean == null ? null : EjbAnnotations.transactionAttribute(bean, info.method);
-
-            long now = System.nanoTime();
-            stack.push(recording, Span.KIND_EJB, null, beanClass, method, now, null, null, meta, iface, invocation, txAttribute, propagation);
-            if (root) {
-                stack.trace().principal(principal);
-                stack.trace().httpSessionId(httpSessionId);
-            }
-            return now == 0L ? 1L : now;
-        } catch (Throwable t) {
-            return 0L;
-        }
-    }
-
     // ---- container hook --------------------------------------------------------------------
 
     /**
-     * Container hook, entry of the invoker: everything comes from the container's invocation
-     * wrapper and the generated client object. Returns 0 when nothing is recorded.
+     * Entry of a session-bean invoker: everything comes from the container's invocation wrapper
+     * and the generated client object. Returns 0 when nothing is recorded, else the token
+     * {@link #exitContainer} needs.
      */
     public static long enterContainer(Object invokable, Object clientObject, Object wrapper) {
         Recording recording = ACTIVE.get();
@@ -222,8 +200,7 @@ public final class Recorder {
                 httpSessionId = WlsRuntime.httpSessionId();
             }
             BeanMeta meta = WlsMetadata.of(ci.beanClass, new WlsMetadata.Hint(ci.ejbName, ci.beanInfo));
-            String txAttribute = ci.transactionAttribute != null ? ci.transactionAttribute
-                    : EjbAnnotations.transactionAttribute(ci.beanClass, ci.method);
+            String txAttribute = ci.transactionAttribute;
             String invocation = ci.local ? BeanMeta.LOCAL : BeanMeta.REMOTE;
             String methodName = ci.method == null ? "?" : ci.method.getName();
             String iface = ci.businessInterface(meta == null ? null : meta.interfaces);
@@ -299,7 +276,7 @@ public final class Recorder {
             BeanMeta meta = WlsMetadata.of(bean, new WlsMetadata.Hint(null, info));
             Object destination = ContainerInvocation.call(info, "getDestinationName");
             MethodSignatures.MethodInfo onMessage = MethodSignatures.resolve(bean, "onMessage", "(Ljavax/jms/Message;)V");
-            String txAttribute = EjbAnnotations.transactionAttribute(bean, onMessage.method);
+            String txAttribute = ContainerInvocation.transactionAttribute(ContainerInvocation.call(info, "getOnMessageMethodDescriptor"), info);
             long now = System.nanoTime();
             OpenSpan span = stack.push(recording, Span.KIND_EJB, null, bean.getName(), "onMessage", now, null, message, meta,
                     "javax.jms.MessageListener", io.capture.trace.EjbInfo.INVOCATION_MESSAGE, txAttribute, propagation);
@@ -682,7 +659,7 @@ public final class Recorder {
         }
     }
 
-    /** Called on method exit, normal or exceptional. Token 0 means {@link #enter} recorded nothing. */
+    /** Resource method exit, normal or exceptional. Token 0 means {@link #enterResource} recorded nothing. */
     public static void exit(long token, Object self, String beanClass, String method, String descriptor,
                             Object[] args, Object result, Throwable thrown) {
         if (token == 0L) {
@@ -692,7 +669,7 @@ public final class Recorder {
             SpanStack stack = SpanStack.current();
             OpenSpan open = stack.top();
             if (open == null || !open.beanClass.equals(beanClass) || !open.method.equals(method)) {
-                // Enter/exit mismatch (recording boundary crossed mid-trace): abandon this thread's state.
+                // The recording boundary was crossed mid-trace: abandon this thread's state.
                 stack.reset();
                 return;
             }
@@ -704,7 +681,7 @@ public final class Recorder {
         } catch (Throwable t) {
             try {
                 SpanStack.current().reset();
-                AgentLog.error("exit handling failed for " + beanClass + "." + method, t);
+                AgentLog.error("resource exit handling failed for " + beanClass + "." + method, t);
             } catch (Throwable ignored) {
                 // never into the business call
             }

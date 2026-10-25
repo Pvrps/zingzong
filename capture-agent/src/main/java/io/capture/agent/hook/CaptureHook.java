@@ -25,22 +25,13 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 /**
- * The agent's instrumentation, installed only while a recording is active. EJB calls are
- * captured by one of two strategies:
- * <ul>
- *   <li>{@link EjbStrategy#CONTAINER}: advice on WebLogic's {@code SessionLocalMethodInvoker} /
- *       {@code SessionRemoteMethodInvoker} ({@link ContainerAdvice}), one choke point for every
- *       business-interface call, with the container's own view of interface, transaction
- *       attribute and bean. Preferred on WebLogic.</li>
- *   <li>{@link EjbStrategy#ANNOTATION}: advice inlined into classes annotated with the EJB
- *       component annotations, matched by name ({@link EjbAdvice}). Portable; the fallback.</li>
- * </ul>
- * JAX-RS/JAX-WS resources ({@link ResourceAdvice}) and the servlet pipeline ({@link ServletAdvice})
- * are instrumented the same way under both.
+ * The agent's instrumentation, installed while a recording is active and removed when it
+ * stops. Advises WebLogic's session-bean invokers ({@link ContainerAdvice}), the MDB listener
+ * ({@link MessageAdvice}), the servlet pipeline ({@link ServletAdvice}), the JDBC wrappers
+ * ({@link JdbcAdvice}) and, in application loaders only, JAX-RS and JAX-WS resource classes
+ * ({@link ResourceAdvice}).
  */
-public final class CaptureHook implements InstrumentationHook {
-
-    public enum EjbStrategy { ANNOTATION, CONTAINER }
+public final class CaptureHook {
 
     private static final String[] EJB_ANNOTATIONS = {
             "javax.ejb.Stateless",
@@ -49,24 +40,14 @@ public final class CaptureHook implements InstrumentationHook {
             "javax.ejb.MessageDriven",
     };
 
-    /** Resource-layer classes become HTTP child spans; an EJB that is also a resource stays an EJB span. */
     private static final String[] RESOURCE_ANNOTATIONS = {
             "javax.ws.rs.Path",
             "javax.jws.WebService",
     };
 
-    /** The container's choke points for this WebLogic ({@link ContainerTargets}); null with the annotation strategy. */
-    private final ContainerTargets.Target target;
-
-    /** WebLogic's servlet pipeline entries taking the servlet API interfaces (docs/container-hook.md). */
-    static final String FILTER_CHAIN = "weblogic.servlet.internal.FilterChainImpl";
-    static final String SERVLET_STUB = "weblogic.servlet.internal.ServletStubImpl";
-
     /**
      * Never instrumented wherever they are loaded: the JVM, the agent, the server's own packages
-     * and the frameworks it embeds (which an application may also bundle). Vendor code outside
-     * these packages is kept out by {@link ApplicationLoaders}: application classes are
-     * recognised by their defining loader, not by a growing list of package prefixes.
+     * and the frameworks it embeds, which an application may also bundle.
      */
     private static final String[] IGNORED_PACKAGES = {
             "weblogic.", "oracle.", "com.oracle.", "com.bea.",
@@ -76,56 +57,18 @@ public final class CaptureHook implements InstrumentationHook {
     };
 
     private final Instrumentation instrumentation;
-    private final EjbStrategy strategy;
     private final HookListener listener = new HookListener();
-    /** SQL through data sources is recorded wherever WebLogic's JDBC wrappers exist, under either EJB strategy. */
     private final boolean jdbc = JdbcTargets.present();
     private ResettableClassFileTransformer transformer;
 
-    public CaptureHook(Instrumentation instrumentation, EjbStrategy strategy) {
-        this(instrumentation, strategy, strategy == EjbStrategy.CONTAINER ? ContainerTargets.resolve() : null);
-    }
-
-    public CaptureHook(Instrumentation instrumentation, EjbStrategy strategy, ContainerTargets.Target target) {
-        if (strategy == EjbStrategy.CONTAINER && target == null) {
-            throw new IllegalArgumentException("container strategy without a resolved target");
-        }
+    public CaptureHook(Instrumentation instrumentation) {
         this.instrumentation = instrumentation;
-        this.strategy = strategy;
-        this.target = target;
     }
 
-    public EjbStrategy strategy() {
-        return strategy;
-    }
-
-    @Override
-    public String name() {
-        return strategy.name().toLowerCase();
-    }
-
-    /** The server classes advised by name (container invokers of any known shape, servlet pipeline). */
-    static boolean isNamedTarget(String typeName) {
-        return typeName.equals(FILTER_CHAIN) || typeName.equals(SERVLET_STUB) || ContainerTargets.isNamedInvoker(typeName) || JdbcTargets.isNamed(typeName);
-    }
-
-    /** The container classes this hook advises for EJBs: the session invokers and the MDB listener. */
-    private String[] invokers() {
-        if (target == null) {
-            return new String[0];
-        }
-        String[] all = new String[target.invokers.length + 1];
-        System.arraycopy(target.invokers, 0, all, 0, target.invokers.length);
-        all[target.invokers.length] = target.messageListener;
-        return all;
-    }
-
-    @Override
     public synchronized boolean isInstalled() {
         return transformer != null;
     }
 
-    @Override
     public synchronized void install() {
         if (transformer != null) {
             return;
@@ -134,48 +77,10 @@ public final class CaptureHook implements InstrumentationHook {
         listener.resetCount();
         transformer = builder().installOn(instrumentation);
         retransformMissedTargets();
-        AgentLog.info(strategy.name().toLowerCase() + " hook installed: " + listener.count() + " classes instrumented in "
+        AgentLog.info("hook installed: " + listener.count() + " classes instrumented in "
                 + (System.nanoTime() - start) / 1000000L + "ms");
     }
 
-    /**
-     * A named target that the install pass loaded as a side effect (describing a loaded type
-     * reflectively resolves the types its methods mention: FilterChainImpl while
-     * ServletStubImpl is retransformed) is skipped by Byte Buddy's circularity lock and was
-     * not in the loaded-class list either. Retransform such classes explicitly now.
-     */
-    private void retransformMissedTargets() {
-        List<Class<?>> missed = loadedTargetsNotTransformed();
-        if (missed.isEmpty()) {
-            return;
-        }
-        try {
-            instrumentation.retransformClasses(missed.toArray(new Class<?>[0]));
-            AgentLog.info("retransformed " + missed.size() + " hook target(s) loaded during installation: " + missed);
-        } catch (Throwable t) {
-            AgentLog.error("retransformation of hook targets loaded during installation failed: " + missed, t);
-        }
-    }
-
-    private List<Class<?>> loadedTargetsNotTransformed() {
-        List<Class<?>> result = new ArrayList<Class<?>>();
-        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-            String name = loaded.getName();
-            if (isNamedTarget(name) && !listener.transformed(name) && appliesTo(name)) {
-                result.add(loaded);
-            }
-        }
-        return result;
-    }
-
-    private boolean appliesTo(String targetName) {
-        if (targetName.equals(FILTER_CHAIN) || targetName.equals(SERVLET_STUB)) {
-            return true;
-        }
-        return strategy == EjbStrategy.CONTAINER;
-    }
-
-    @Override
     public synchronized void uninstall() {
         if (transformer == null) {
             return;
@@ -183,32 +88,43 @@ public final class CaptureHook implements InstrumentationHook {
         long start = System.nanoTime();
         boolean reset = transformer.reset(instrumentation, AgentBuilder.RedefinitionStrategy.RETRANSFORMATION);
         transformer = null;
-        AgentLog.info(strategy.name().toLowerCase() + " hook removed (" + (reset ? "bytecode restored" : "nothing to restore") + ") in "
+        AgentLog.info("hook removed (" + (reset ? "bytecode restored" : "nothing to restore") + ") in "
                 + (System.nanoTime() - start) / 1000000L + "ms");
     }
 
     /**
-     * Self-check for the container strategy: true when the invoker classes are loaded but were
-     * not transformed, i.e. the advice found no {@code invoke} method with the expected shape.
+     * Retransforms named targets that the install pass loaded as a side effect: describing a
+     * loaded type resolves the types its methods mention, and Byte Buddy's circularity lock
+     * skips a class loaded that way.
      */
-    public synchronized boolean containerTargetsMissed() {
-        if (strategy != EjbStrategy.CONTAINER || transformer == null) {
-            return false;
-        }
-        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-            for (String name : invokers()) {
-                if (loaded.getName().equals(name) && !listener.transformed(name)) {
-                    return true;
-                }
+    private void retransformMissedTargets() {
+        List<Class<?>> missed = loadedTargetsNotTransformed();
+        if (!missed.isEmpty()) {
+            try {
+                instrumentation.retransformClasses(missed.toArray(new Class<?>[0]));
+                AgentLog.info("retransformed " + missed.size() + " hook target(s) loaded during installation: " + missed);
+            } catch (Throwable t) {
+                AgentLog.error("retransformation of hook targets loaded during installation failed: " + missed, t);
             }
         }
-        return false;
+        List<Class<?>> still = loadedTargetsNotTransformed();
+        if (!still.isEmpty()) {
+            AgentLog.warn("hook targets loaded but not instrumented (no method of the expected shape): " + still);
+        }
     }
 
-    /**
-     * An annotated type is instrumented only when an application loader defined it; a vendor
-     * class that carries the annotation on the server class path is logged as kept out, once.
-     */
+    private List<Class<?>> loadedTargetsNotTransformed() {
+        List<Class<?>> result = new ArrayList<Class<?>>();
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            String name = loaded.getName();
+            if (ContainerTargets.isNamed(name) && !listener.transformed(name) && (jdbc || !JdbcTargets.isNamed(name))) {
+                result.add(loaded);
+            }
+        }
+        return result;
+    }
+
+    /** Matches annotated types defined by an application loader; logs, once per class, those another loader defined. */
     private AgentBuilder.RawMatcher ownedBy(final ElementMatcher<TypeDescription> annotated, final String layer) {
         return new AgentBuilder.RawMatcher() {
             @Override
@@ -235,18 +151,18 @@ public final class CaptureHook implements InstrumentationHook {
         for (String annotation : RESOURCE_ANNOTATIONS) {
             resourceTypes = resourceTypes.or(isAnnotatedWith(named(annotation)));
         }
+        // An EJB that is also a resource is seen by the container hook; it stays an EJB span.
         resourceTypes = resourceTypes.and(not(ejbTypes));
 
         ElementMatcher.Junction<TypeDescription> ignored = isSynthetic();
         for (String prefix : IGNORED_PACKAGES) {
             ignored = ignored.or(nameStartsWith(prefix));
         }
-        ignored = ignored.and(not(named(FILTER_CHAIN))).and(not(named(SERVLET_STUB)));
+        for (String target : ContainerTargets.ALL) {
+            ignored = ignored.and(not(named(target)));
+        }
         for (String wrapper : JdbcTargets.ALL) {
             ignored = ignored.and(not(named(wrapper)));
-        }
-        for (String invoker : invokers()) {
-            ignored = ignored.and(not(named(invoker)));
         }
 
         ElementMatcher.Junction<MethodDescription> businessMethods = isPublic()
@@ -264,49 +180,35 @@ public final class CaptureHook implements InstrumentationHook {
                 .with(listener)
                 .ignore(ignored);
 
-        if (strategy == EjbStrategy.ANNOTATION) {
-            builder = builder.type(ownedBy(ejbTypes, "EJB"))
-                    .transform(new AgentBuilder.Transformer.ForAdvice()
-                            // The agent jar is on the system class path (-javaagent) and on the
-                            // bootstrap path; locate the advice class file through the former.
-                            .include(ClassLoader.getSystemClassLoader())
-                            .advice(businessMethods, EjbAdvice.class.getName()));
-        } else {
-            for (String invoker : target.invokers) {
-                builder = builder.type(named(invoker))
-                        .transform(new AgentBuilder.Transformer.ForAdvice()
-                                .include(ClassLoader.getSystemClassLoader())
-                                .advice(named("invoke").and(isStatic()).and(takesArguments(5)), ContainerAdvice.class.getName()));
-            }
-            builder = builder.type(named(target.messageListener))
-                    .transform(new AgentBuilder.Transformer.ForAdvice()
-                            .include(ClassLoader.getSystemClassLoader())
-                            .advice(named("onMessage").and(not(isStatic())).and(takesArguments(1)), MessageAdvice.class.getName()));
+        for (String invoker : ContainerTargets.INVOKERS) {
+            builder = builder.type(named(invoker))
+                    .transform(advice(named("invoke").and(isStatic()).and(takesArguments(5)), ContainerAdvice.class));
         }
+        builder = builder.type(named(ContainerTargets.MESSAGE_LISTENER))
+                .transform(advice(named("onMessage").and(not(isStatic())).and(takesArguments(1)), MessageAdvice.class));
         if (jdbc) {
-            // SQL through data sources: WebLogic's own wrappers around any driver (JdbcTargets).
             builder = builder.type(named(JdbcTargets.STATEMENT).or(named(JdbcTargets.PREPARED_STATEMENT)).or(named(JdbcTargets.CALLABLE_STATEMENT)))
-                    .transform(new AgentBuilder.Transformer.ForAdvice()
-                            .include(ClassLoader.getSystemClassLoader())
+                    .transform(forAdvice()
                             .advice(isPublic().and(not(isStatic())).and(nameStartsWith("execute")), JdbcAdvice.Execute.class.getName())
                             .advice(isPublic().and(not(isStatic())).and(nameStartsWith("set").and(takesArgument(0, int.class)).or(named("addBatch")).or(named("clearParameters"))), JdbcAdvice.Bind.class.getName()))
                     .type(named(JdbcTargets.RESULT_SET))
-                    .transform(new AgentBuilder.Transformer.ForAdvice()
-                            .include(ClassLoader.getSystemClassLoader())
-                            .advice(named("postInvocationHandler").and(takesArguments(3)), JdbcAdvice.Row.class.getName()));
+                    .transform(advice(named("postInvocationHandler").and(takesArguments(3)), JdbcAdvice.Row.class));
         }
         return builder
                 .type(ownedBy(resourceTypes, "resource"))
-                .transform(new AgentBuilder.Transformer.ForAdvice()
-                        .include(ClassLoader.getSystemClassLoader())
-                        .advice(businessMethods, ResourceAdvice.class.getName()))
-                .type(named(FILTER_CHAIN))
-                .transform(new AgentBuilder.Transformer.ForAdvice()
-                        .include(ClassLoader.getSystemClassLoader())
-                        .advice(named("doFilter").and(takesArguments(2)), ServletAdvice.class.getName()))
-                .type(named(SERVLET_STUB))
-                .transform(new AgentBuilder.Transformer.ForAdvice()
-                        .include(ClassLoader.getSystemClassLoader())
-                        .advice(named("execute").and(takesArguments(2)), ServletAdvice.class.getName()));
+                .transform(advice(businessMethods, ResourceAdvice.class))
+                .type(named(ContainerTargets.FILTER_CHAIN))
+                .transform(advice(named("doFilter").and(takesArguments(2)), ServletAdvice.class))
+                .type(named(ContainerTargets.SERVLET_STUB))
+                .transform(advice(named("execute").and(takesArguments(2)), ServletAdvice.class));
+    }
+
+    private static AgentBuilder.Transformer advice(ElementMatcher<? super MethodDescription> methods, Class<?> adviceClass) {
+        return forAdvice().advice(methods, adviceClass.getName());
+    }
+
+    /** The agent jar is on the system class path and on the bootstrap path; the advice class file is located through the former. */
+    private static AgentBuilder.Transformer.ForAdvice forAdvice() {
+        return new AgentBuilder.Transformer.ForAdvice().include(ClassLoader.getSystemClassLoader());
     }
 }

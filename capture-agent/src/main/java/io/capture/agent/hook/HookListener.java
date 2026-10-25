@@ -6,13 +6,17 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.utility.JavaModule;
 
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Writes transformations and errors to agent.log, never to stdout. */
+/** Writes transformations, errors and ignored named targets to agent.log, never to stdout. */
 final class HookListener extends AgentBuilder.Listener.Adapter {
 
     private final AtomicInteger count = new AtomicInteger();
-    private final java.util.Set<String> transformedNames = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+    private final Set<String> transformedNames = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+    private final Set<String> keptOut = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
     @Override
     public void onTransformation(TypeDescription typeDescription, ClassLoader classLoader, JavaModule module,
@@ -29,17 +33,16 @@ final class HookListener extends AgentBuilder.Listener.Adapter {
         AgentLog.error("failed to instrument " + typeName + " loader=" + describe(classLoader), throwable);
     }
 
-    /** The named server targets must never be skipped silently: say so when they are. */
     @Override
     public void onIgnored(TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, boolean loaded) {
-        if (CaptureHook.isNamedTarget(typeDescription.getName())) {
+        if (ContainerTargets.isNamed(typeDescription.getName())) {
             AgentLog.warn("hook target ignored by the matcher: " + typeDescription.getName() + " loader=" + describe(classLoader));
         }
     }
 
     @Override
     public void onDiscovery(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded) {
-        if (CaptureHook.isNamedTarget(typeName)) {
+        if (ContainerTargets.isNamed(typeName)) {
             AgentLog.info("hook target discovered: " + typeName + (loaded ? " (loaded)" : " (loading)") + " loader=" + describe(classLoader));
         }
     }
@@ -53,18 +56,16 @@ final class HookListener extends AgentBuilder.Listener.Adapter {
         transformedNames.clear();
     }
 
+    boolean transformed(String className) {
+        return transformedNames.contains(className);
+    }
 
-    private final java.util.Set<String> keptOut = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
-
-    /** An annotated class the ownership rule refused: not defined by an application loader. Logged once per class. */
+    /** An annotated class the ownership rule refused, logged once per class. */
     void keptOut(String layer, String className, ClassLoader loader) {
         if (keptOut.add(className)) {
             AgentLog.info("not instrumented (" + layer + " annotation, but not an application class): " + className
                     + " loader=" + describe(loader));
         }
-    }
-    boolean transformed(String className) {
-        return transformedNames.contains(className);
     }
 
     private static String describe(ClassLoader classLoader) {

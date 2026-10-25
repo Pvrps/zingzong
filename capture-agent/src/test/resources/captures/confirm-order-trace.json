@@ -455,7 +455,6 @@
         } ]
       }
     },
-    "selfInvocation" : true,
     "startNs" : 3752642,
     "durationNs" : 4123240
   } ]

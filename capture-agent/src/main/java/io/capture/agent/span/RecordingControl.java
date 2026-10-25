@@ -7,6 +7,7 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 
+/** The {@code io.capture:type=Control} MBean on the platform MBeanServer: start, stop and status of recordings. */
 public final class RecordingControl implements RecordingControlMBean {
 
     public static final String OBJECT_NAME = "io.capture:type=Control";
@@ -34,6 +35,11 @@ public final class RecordingControl implements RecordingControlMBean {
     public String stop() {
         Recording recording = Recorder.stop();
         return recording == null ? null : recording.id;
+    }
+
+    @Override
+    public String getState() {
+        return Recorder.state();
     }
 
     @Override

@@ -30,7 +30,7 @@ final class ManifestWriter {
     private ManifestWriter() {
     }
 
-    static void write(File dir, Recording recording, String hook, Long endedAtMillis, Long traceCount, Long dropped) {
+    static void write(File dir, Recording recording, Long endedAtMillis, Long traceCount, Long dropped) {
         try {
             RecordingManifest manifest = new RecordingManifest();
             manifest.id = recording.id;
@@ -41,7 +41,6 @@ final class ManifestWriter {
             manifest.agent = new RecordingManifest.Agent();
             manifest.agent.version = AgentVersion.VERSION;
             manifest.agent.build = AgentVersion.BUILD;
-            manifest.agent.hook = hook;
             manifest.agent.jvm = System.getProperty("java.version");
             manifest.traceCount = traceCount;
             manifest.droppedTraces = dropped;

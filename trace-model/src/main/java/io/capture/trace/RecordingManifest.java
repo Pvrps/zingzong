@@ -30,7 +30,6 @@ public class RecordingManifest {
     public static class Agent {
         public String version;
         public String build;
-        public String hook;
         public String jvm;
     }
 }

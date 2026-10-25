@@ -59,9 +59,6 @@ class CapturedSpanFixtureTest {
         assertEquals("s3", ejb.get(3).parentId);
         assertEquals("s6", ejb.get(6).parentId, "computeTax is a child of price despite living in tax-ear");
         assertEquals(4, ejb.get(6).depth);
-        assertEquals(Boolean.TRUE, ejb.get(4).selfInvocation);
-        assertNull(ejb.get(4).ejb.interfaceName, "a self-invocation comes through no business interface");
-        assertNull(ejb.get(7).selfInvocation, "unitPrice called by OrderService is a real EJB call");
         for (Span span : ejb) {
             assertNull(span.serializationWarnings, "no warnings expected in " + span.id);
             assertEquals("REQUIRED", span.ejb.transactionAttribute);
@@ -137,7 +134,6 @@ class CapturedSpanFixtureTest {
         Trace create = load("captures/create-order-trace.json");
         Trace confirm = load("captures/confirm-order-trace.json");
         assertEquals(Arrays.asList("confirmOrder", "findOrder"), methods(confirm.spans.subList(2, 4)));
-        assertEquals(Boolean.TRUE, confirm.spans.get(3).selfInvocation);
 
         long createdId = create.spans.get(2).result.value.get("id").asLong();
         ConfirmRequest request = (ConfirmRequest) serializer.deserialize(confirm.spans.get(2).args.get(0).value, ConfirmRequest.class, loader);

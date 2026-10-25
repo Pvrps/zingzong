@@ -763,7 +763,6 @@ function renderDetail(focusPath) {
   if (span.kind === 'SQL') chips.push(`<span class="chip">${esc(span.sql.statementType || '')} · ${esc(span.sql.operation)}</span>`);
   if (span.http && span.http.status != null) chips.push(`<span class="chip ${span.http.status >= 400 ? 'err' : ''}">HTTP ${span.http.status}</span>`);
   if (span.exception) chips.push(`<span class="chip err">✗ ${esc(simple(span.exception.className))}</span>`);
-  if (span.selfInvocation) chips.push('<span class="chip">self-invocation</span>');
   const trunc = truncation(span);
   if (trunc.length) chips.push(`<span class="chip trunc" title="${esc(trunc.join('\n'))}">truncated</span>`);
   const ch = el('div', 'chips'); ch.innerHTML = chips.join(''); body.appendChild(ch);

@@ -65,7 +65,6 @@
         "result": { "oneOf": [ { "$ref": "#/definitions/valueCapture" }, { "type": "null" } ] },
         "exception": { "oneOf": [ { "$ref": "#/definitions/exceptionInfo" }, { "type": "null" } ] },
         "serializationWarnings": { "type": "array", "items": { "$ref": "#/definitions/serializationWarning" } },
-        "selfInvocation": { "type": "boolean" },
         "startNs": { "type": "integer", "minimum": 0 },
         "durationNs": { "type": "integer", "minimum": 0 }
       }

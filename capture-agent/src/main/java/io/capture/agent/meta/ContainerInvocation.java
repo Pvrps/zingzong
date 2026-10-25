@@ -9,16 +9,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Reads WebLogic's EJB invocation objects reflectively, by getter and field name
- * (docs/container-hook.md, 14.1.2.0.0). The invoker's arguments are the generated client
- * object ({@code Invokable}: implements the business interface, directly for a local view or
- * through a generated {@code *RIntf} for a remote one), the container's
- * {@code BaseLocalObject}/{@code BaseRemoteObject} (field {@code beanInfo} →
- * {@code BeanInfo.getBeanClassName()}) and the {@code InvocationWrapper}
- * ({@code getMethodDescriptor()} → {@code getApplicationName()/getModuleId()/getEjbName()/
- * getMethod()/getTransactionPolicy().getTxAttribute()}, {@code isLocal()}).
+ * Reads WebLogic's EJB invocation objects reflectively, by getter and field name: the generated
+ * client object ({@code Invokable}), the container's {@code BaseLocalObject}/{@code BaseRemoteObject}
+ * (field {@code beanInfo}) and the {@code InvocationWrapper} (method descriptor, local/remote).
  */
 public final class ContainerInvocation {
+
+    private static final Pattern GENERATED_REMOTE = Pattern.compile("(.+)\\.[^.]+_[0-9a-z]+_([^.]+)RIntf$");
 
     public final String application;
     public final String moduleId;
@@ -27,7 +24,7 @@ public final class ContainerInvocation {
     public final String transactionAttribute;
     public final boolean local;
     public final Class<?> beanClass;
-    /** The container's BeanInfo behind the client object (BaseLocalObject/BaseRemoteObject.beanInfo). */
+    /** The container's BeanInfo behind the client object. */
     public final Object beanInfo;
     private final Object invokable;
 
@@ -55,36 +52,40 @@ public final class ContainerInvocation {
             String moduleId = str(call(descriptor, "getModuleId"));
             String ejbName = str(call(descriptor, "getEjbName"));
             Method method = (Method) call(descriptor, "getMethod");
-            Object policy = call(descriptor, "getTransactionPolicy");
-            String txAttribute = policy == null ? null : str(call(policy, "getTxAttribute"));
+            Object beanInfo = fieldUp(clientObject, "beanInfo");
+            String txAttribute = transactionAttribute(descriptor, beanInfo);
             Object isLocal = call(wrapper, "isLocal");
             boolean local = isLocal instanceof Boolean ? (Boolean) isLocal
                     : !superclassNamed(clientObject, "weblogic.ejb.container.internal.BaseRemoteObject");
-            Class<?> beanClass = beanClassOf(clientObject, invokable);
-            return new ContainerInvocation(application, moduleId, ejbName, method, txAttribute, local, beanClass, fieldUp(clientObject, "beanInfo"), invokable);
+            Class<?> beanClass = beanClassOf(beanInfo, invokable);
+            return new ContainerInvocation(application, moduleId, ejbName, method, txAttribute, local, beanClass, beanInfo, invokable);
         } catch (Throwable t) {
             return null;
         }
     }
 
+    /** The method descriptor's transaction attribute; BEAN for a bean-managed bean without one. */
+    public static String transactionAttribute(Object methodDescriptor, Object beanInfo) {
+        Object policy = call(methodDescriptor, "getTransactionPolicy");
+        String attribute = policy == null ? null : str(call(policy, "getTxAttribute"));
+        if (attribute == null && Boolean.TRUE.equals(call(beanInfo, "usesBeanManagedTx"))) {
+            return "BEAN";
+        }
+        return attribute;
+    }
+
     /**
-     * The business interface the call came in through, among {@code candidates} (interface
-     * name → view, from {@link BeanMeta#interfaces}): the one the client object implements
-     * (local view), else the one named by its generated remote interface
-     * {@code <pkg>.<Ejb>_<hash>_<IfaceSimpleName>RIntf}, which extends only java.rmi.Remote
-     * (remote view); failing that, the only candidate of the call's view.
+     * The business interface the call came in through, among {@code candidates} (interface name →
+     * view): the one the client object implements, else the one named by its generated remote
+     * interface {@code <pkg>.<Ejb>_<hash>_<IfaceSimpleName>RIntf}, else the only candidate of the
+     * call's view.
      */
     public String businessInterface(Map<String, String> candidates) {
-        Set<Class<?>> implemented = new LinkedHashSet<Class<?>>();
-        collectInterfaces(invokable.getClass(), implemented);
         if (candidates == null || candidates.isEmpty()) {
-            for (Class<?> i : implemented) {
-                if (EjbAnnotations.viewOf(i) != null) {
-                    return i.getName();
-                }
-            }
             return null;
         }
+        Set<Class<?>> implemented = new LinkedHashSet<Class<?>>();
+        collectInterfaces(invokable.getClass(), implemented);
         for (Class<?> i : implemented) {
             if (candidates.containsKey(i.getName())) {
                 return i.getName();
@@ -93,7 +94,7 @@ public final class ContainerInvocation {
         for (Class<?> i : implemented) {
             Matcher m = GENERATED_REMOTE.matcher(i.getName());
             if (m.matches()) {
-                String resolved = InvokedInterface.resolve(m.group(2), candidates);
+                String resolved = bySimpleName(m.group(2), candidates);
                 if (resolved != null) {
                     return resolved;
                 }
@@ -112,7 +113,14 @@ public final class ContainerInvocation {
         return only;
     }
 
-    private static final Pattern GENERATED_REMOTE = Pattern.compile("(.+)\\.[^.]+_[0-9a-z]+_([^.]+)RIntf$");
+    private static String bySimpleName(String simpleName, Map<String, String> candidates) {
+        for (String name : candidates.keySet()) {
+            if (name.substring(name.lastIndexOf('.') + 1).equals(simpleName)) {
+                return name;
+            }
+        }
+        return null;
+    }
 
     private static void collectInterfaces(Class<?> type, Set<Class<?>> into) {
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
@@ -124,8 +132,7 @@ public final class ContainerInvocation {
         }
     }
 
-    private static Class<?> beanClassOf(Object clientObject, Object invokable) {
-        Object beanInfo = fieldUp(clientObject, "beanInfo");
+    private static Class<?> beanClassOf(Object beanInfo, Object invokable) {
         String name = beanInfo == null ? null : str(call(beanInfo, "getBeanClassName"));
         if (name == null) {
             return null;
@@ -137,6 +144,7 @@ public final class ContainerInvocation {
         }
     }
 
+    /** Invokes a public no-argument method by name; null when absent or failing. */
     public static Object call(Object target, String getter) {
         if (target == null) {
             return null;
@@ -150,6 +158,7 @@ public final class ContainerInvocation {
         }
     }
 
+    /** Reads a field by name from the object's class or any superclass; null when absent or failing. */
     public static Object fieldUp(Object target, String name) {
         for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
             try {

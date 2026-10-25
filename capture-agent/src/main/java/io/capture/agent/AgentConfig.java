@@ -4,9 +4,7 @@ import java.io.File;
 
 /**
  * Agent arguments. There is one: {@code out=DIR}, where agent.log and the recordings go
- * (default: {@code java.io.tmpdir/capture}). Everything else is decided by the agent: the
- * hook by {@link ServerDetection}, the serializer ceilings by
- * {@link io.capture.agent.serialize.SerializerConfig}.
+ * (default: {@code java.io.tmpdir/capture}).
  */
 public final class AgentConfig {
 

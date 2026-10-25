@@ -260,7 +260,6 @@
       "declaredType" : "java.math.BigDecimal",
       "value" : "12.50"
     },
-    "selfInvocation" : true,
     "startNs" : 4570385,
     "durationNs" : 8230
   }, {
@@ -284,7 +283,6 @@
       "declaredType" : "java.math.BigDecimal",
       "value" : "99.99"
     },
-    "selfInvocation" : true,
     "startNs" : 4637765,
     "durationNs" : 4210
   }, {

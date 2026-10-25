@@ -3,8 +3,9 @@ package io.capture.agent.meta;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-/** What the server knows about one bean class. Immutable; cached per Class by {@link WlsMetadata}. */
+/** What the server knows about one bean class; cached per Class by {@link WlsMetadata}. */
 public final class BeanMeta {
 
     public static final String LOCAL = "LOCAL";
@@ -21,7 +22,7 @@ public final class BeanMeta {
     /** STATELESS, STATEFUL, SINGLETON or MESSAGE_DRIVEN as the container says; null when unknown. */
     public String beanType;
     /** EJB 2.x component interfaces (EJBObject / EJBLocalObject views), by name. */
-    public java.util.Set<String> componentInterfaces = java.util.Collections.emptySet();
+    public Set<String> componentInterfaces = Collections.emptySet();
     /** Why a field is null, for the log; null when complete. */
     public final String problem;
 
@@ -36,11 +37,7 @@ public final class BeanMeta {
         this.problem = problem;
     }
 
-    public String invocationOf(String interfaceName) {
-        return interfaceName == null ? null : interfaces.get(interfaceName);
-    }
-
-    /** The deterministic portable name for one interface. */
+    /** The portable {@code java:global} name of one interface view, or null when app, module or EJB name is unknown. */
     public String globalName(String interfaceName) {
         if (app == null || module == null || ejbName == null) {
             return null;

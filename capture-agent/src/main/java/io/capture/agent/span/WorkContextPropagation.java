@@ -6,21 +6,25 @@ import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * {@link TracePropagation} over WebLogic's WorkContext (the {@code weblogic.workarea} API,
- * reached reflectively): the thread's {@code WorkContextMap} travels with the work the server
- * hands to other threads ({@code @Asynchronous} invocations, JMS messages to MDBs, and also
- * RMI, which is not relied on). The agent keeps one entry, {@value #KEY}, whose value is
- * {@code <traceId>/<spanId>} of the span active when the handoff happened.
- *
- * Path (12.2.1.4.0, 14.1.2.0.0; docs/container-hook.md): {@code WorkContextHelper
- * .getWorkContextHelper().getWorkContextMap()}, {@code WorkContextMap.put(key, WorkContext,
- * LOCAL | WORK | RMI | JMS_QUEUE | JMS_TOPIC | SOAP | MIME_HEADER)} / {@code get(key)} / {@code remove(key)},
- * {@code PrimitiveContextFactory.create(String)}, {@code PrimitiveWorkContext.get()}.
- * Every failure degrades to "no propagation" and is logged once.
+ * Carries "which trace and span caused this" across a thread handoff inside one server (an
+ * {@code @Asynchronous} call, a JMS message to an MDB) through WebLogic's WorkContext, reached
+ * reflectively. The one entry, {@value #KEY}, holds {@code <traceId>/<spanId>} of the span active
+ * when the handoff happened. Without the WorkContext API every method is a no-op.
  */
-public final class WlsWorkContextPropagation implements TracePropagation {
+public final class WorkContextPropagation {
 
     static final String KEY = "io.capture.trace";
+
+    /** What a handoff carried in: trace id and causing span id. */
+    static final class Inbound {
+        final String traceId;
+        final String spanId;
+
+        Inbound(String traceId, String spanId) {
+            this.traceId = traceId;
+            this.spanId = spanId;
+        }
+    }
 
     private static final AtomicBoolean warned = new AtomicBoolean();
 
@@ -32,7 +36,7 @@ public final class WlsWorkContextPropagation implements TracePropagation {
     private final Method create;
     private final int mode;
 
-    private WlsWorkContextPropagation(ClassLoader loader) throws Exception {
+    private WorkContextPropagation(ClassLoader loader) throws Exception {
         Class<?> helperClass = Class.forName("weblogic.workarea.WorkContextHelper", true, loader);
         Class<?> mapClass = Class.forName("weblogic.workarea.WorkContextMap", true, loader);
         Class<?> contextClass = Class.forName("weblogic.workarea.WorkContext", true, loader);
@@ -44,8 +48,7 @@ public final class WlsWorkContextPropagation implements TracePropagation {
         get = mapClass.getMethod("get", String.class);
         remove = mapClass.getMethod("remove", String.class);
         create = factoryClass.getMethod("create", String.class);
-        // Not GLOBAL: on 12.2.1.4 and 14.1.2 GLOBAL == DEFAULT == 212 (RMI | JMS_QUEUE | SOAP | MIME_HEADER)
-        // and leaves out WORK, the flag that follows a work manager handoff (@Asynchronous).
+        // GLOBAL leaves out WORK, the flag that follows a work-manager handoff (@Asynchronous).
         int m = 0;
         for (String flag : new String[]{"LOCAL", "WORK", "RMI", "JMS_QUEUE", "JMS_TOPIC", "SOAP", "MIME_HEADER"}) {
             try {
@@ -57,18 +60,25 @@ public final class WlsWorkContextPropagation implements TracePropagation {
         mode = m;
     }
 
-    /** The WebLogic implementation when the API is on the system class path, else {@link TracePropagation#NONE}. */
-    public static TracePropagation create() {
+    private WorkContextPropagation() {
+        getHelper = getMap = put = get = remove = create = null;
+        mode = 0;
+    }
+
+    /** Bound to the WorkContext API on the system class path, or inert when it is absent. */
+    public static WorkContextPropagation create() {
         try {
-            return new WlsWorkContextPropagation(ClassLoader.getSystemClassLoader());
+            return new WorkContextPropagation(ClassLoader.getSystemClassLoader());
         } catch (Throwable t) {
             AgentLog.info("WorkContext propagation unavailable (" + t + "); traces are not linked across threads");
-            return NONE;
+            return new WorkContextPropagation();
         }
     }
 
-    @Override
-    public Inbound inbound() {
+    Inbound inbound() {
+        if (get == null) {
+            return null;
+        }
         try {
             Object context = get.invoke(map(), KEY);
             if (context == null) {
@@ -84,8 +94,11 @@ public final class WlsWorkContextPropagation implements TracePropagation {
         }
     }
 
-    @Override
-    public void publish(String traceId, String spanId) {
+    /** The active span of the thread's trace changed: make it visible to handoffs. */
+    void publish(String traceId, String spanId) {
+        if (put == null) {
+            return;
+        }
         try {
             put.invoke(map(), KEY, create.invoke(null, traceId + "/" + spanId), mode);
         } catch (Throwable t) {
@@ -93,8 +106,11 @@ public final class WlsWorkContextPropagation implements TracePropagation {
         }
     }
 
-    @Override
-    public void clear() {
+    /** The trace completed on this thread. */
+    void clear() {
+        if (remove == null) {
+            return;
+        }
         try {
             remove.invoke(map(), KEY);
         } catch (Throwable t) {

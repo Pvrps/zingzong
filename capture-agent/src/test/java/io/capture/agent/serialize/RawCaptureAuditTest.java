@@ -201,7 +201,7 @@ class RawCaptureAuditTest {
         if (value == null || node == null || node.isNull() || isMarked(node) || seen.containsKey(value)) {
             return;
         }
-        if (Scalars.isScalarType(value.getClass()) || value instanceof Optional || value instanceof Map
+        if (isScalar(value) || value instanceof Optional || value instanceof Map
                 || value instanceof Iterable || value.getClass().isArray()) {
             return;
         }
@@ -286,6 +286,11 @@ class RawCaptureAuditTest {
 
     private static void assertFalse(boolean condition) {
         assertTrue(!condition);
+    }
+
+    /** A value the serializer writes as one JSON scalar, so it has no fields to audit. */
+    private static boolean isScalar(Object value) {
+        return Scalars.write(value, new SerializationContext(new SerializerConfig(), "$")) != null;
     }
 
     static IndirectList<String> unloadedList() {

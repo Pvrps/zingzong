@@ -17,9 +17,9 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Proves that every safety ceiling and every non-walkable value leaves a counted, named marker and never throws. */
 class LimitsAndPlaceholdersTest {
 
     static class Node implements Serializable {
@@ -140,7 +140,6 @@ class LimitsAndPlaceholdersTest {
         assertEquals(5, label.get("@truncated").asInt());
         assertEquals("chars", label.get("what").asText());
         assertTrue(r.hasWarning("$.label", "5 of 10 chars dropped"), r.warnings());
-        assertEquals("abcde", graphs.<Node>read(r.node, Node.class).label, "the kept prefix reads back");
     }
 
     @Test
@@ -174,10 +173,6 @@ class LimitsAndPlaceholdersTest {
             assertEquals("not serializable but plain data", data.get("label").asText());
             assertEquals(3, data.get("count").asInt());
             assertEquals(5, r.warnings.size(), r.warnings());
-
-            WithHandles back = new Graphs().read(r.node, WithHandles.class);
-            assertEquals(3, back.data.count);
-            assertNotNull(back.executor, "handle keeps the constructor default");
         } finally {
             value.executor.shutdownNow();
         }
@@ -223,12 +218,6 @@ class LimitsAndPlaceholdersTest {
             assertTrue(skipped.contains("backtrace") && skipped.contains("depth"), "JVM-internal fields listed: " + skipped);
         }
         assertTrue(r.warnings.isEmpty(), r.warnings());
-
-        Throwable back = graphs.read(r.node, Throwable.class);
-        assertEquals(CustomException.class, back.getClass());
-        assertEquals("outer", back.getMessage());
-        assertEquals("GIZMO-3", ((CustomException) back).sku);
-        assertEquals(IllegalArgumentException.class, back.getCause().getClass());
     }
 
     @Test
@@ -246,8 +235,8 @@ class LimitsAndPlaceholdersTest {
         assertTrue(r.hasWarning("$.bytes", "2 of 6 bytes dropped"), r.warnings());
 
         holder.bytes = new byte[]{1, 2};
-        Holder back = new Graphs().roundTrip(holder, Holder.class);
-        assertTrue(Arrays.equals(new byte[]{1, 2}, back.bytes));
+        assertEquals("AQI=", new Graphs().write(holder).node.get("bytes").get("@bytes").asText(), "under the ceiling: no truncation marker");
+        assertFalse(new Graphs().write(holder).node.get("bytes").has("@truncated"));
     }
 
     @Test
@@ -257,13 +246,12 @@ class LimitsAndPlaceholdersTest {
         JsonNode empty = graphs.write(holder).node.get("maybe");
         assertEquals("java.util.Optional", empty.get("@type").asText());
         assertFalse(empty.get("present").asBoolean());
-        assertFalse(graphs.<Holder>read(graphs.write(holder).node, Holder.class).maybe.isPresent());
+        assertFalse(empty.has("value"));
 
         holder.maybe = Optional.of("there");
         JsonNode present = graphs.write(holder).node.get("maybe");
         assertTrue(present.get("present").asBoolean());
         assertEquals("there", present.get("value").asText());
-        assertEquals(Optional.of("there"), graphs.roundTrip(holder, Holder.class).maybe);
     }
 
     @Test
@@ -277,9 +265,6 @@ class LimitsAndPlaceholdersTest {
         assertEquals("java.util.HashMap", map.get("@type").asText(), r.json());
         assertEquals("list-key", map.get("@entries").get(0).get("value").asText());
         assertEquals(2, map.get("@entries").get(0).get("key").size());
-
-        Holder back = graphs.read(r.node, Holder.class);
-        assertEquals("list-key", back.byObjectKey.get(Arrays.asList(1, 2)));
     }
 
     @Test
@@ -293,23 +278,5 @@ class LimitsAndPlaceholdersTest {
         assertEquals("java.lang.IllegalStateException: iterator exploded", items.get("reason").asText());
         assertTrue(r.hasWarning("$.items", "IllegalStateException: iterator exploded"), r.warnings());
         assertEquals(1, r.warnings.size(), r.warnings());
-    }
-
-    @Test
-    void placeholdersLeaveFieldsAtConstructorDefaultsAndReadAsNullAtTopLevel() throws Exception {
-        Graphs graphs = new Graphs();
-        String type = Node.class.getName();
-
-        Node lazy = graphs.read(io.capture.trace.TraceJson.mapper().readTree(
-                "{\"@type\":\"" + type + "\",\"label\":\"a\",\"next\":{\"@lazy\":true,\"loaded\":false}}"), Node.class);
-        assertEquals("a", lazy.label);
-        assertNull(lazy.next);
-
-        Node handle = graphs.read(io.capture.trace.TraceJson.mapper().readTree(
-                "{\"@type\":\"" + type + "\",\"label\":\"b\",\"next\":{\"@handle\":\"x\",\"kind\":\"thread\",\"identity\":\"x@1\"}}"), Node.class);
-        assertEquals("b", handle.label);
-        assertNull(handle.next);
-
-        assertNull(graphs.read(io.capture.trace.TraceJson.mapper().readTree("{\"@unserializable\":\"x\",\"reason\":\"r\"}"), Node.class));
     }
 }

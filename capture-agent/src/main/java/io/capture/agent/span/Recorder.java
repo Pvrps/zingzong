@@ -14,7 +14,6 @@ import io.capture.agent.serialize.GraphSerializer;
 import io.capture.agent.serialize.JacksonGraphSerializer;
 import io.capture.agent.serialize.SerializationContext;
 import io.capture.agent.serialize.SerializerConfig;
-import io.capture.agent.serialize.TypeAllowList;
 import io.capture.trace.ExceptionInfo;
 import io.capture.trace.SerializationWarning;
 import io.capture.trace.Span;

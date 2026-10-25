@@ -40,93 +40,65 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** One test per awkward type in the fixtures package: round-trips, or the expected placeholder plus warning. */
+/** Proves the JSON form of every awkward type in the fixtures package: nested objects, polymorphism, lazy JPA state, cycles, non-serializable data. */
 class AwkwardTypesTest {
 
     private final Graphs graphs = new Graphs();
 
     @Test
-    void nestedObjectsWithTypeOnEveryObject() throws Exception {
-        CreateOrderRequest request = sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6)));
-
-        Graphs.Result r = graphs.write(request);
+    void nestedObjectsWithTypeOnEveryObject() {
+        Graphs.Result r = graphs.write(sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6))));
         JsonNode n = r.node;
         assertEquals("io.capture.agent.fixtures.CreateOrderRequest", n.get("@type").asText());
         assertEquals("io.capture.agent.fixtures.Customer", n.get("customer").get("@type").asText());
         assertEquals("Amsterdam", n.get("customer").get("address").get("city").asText());
+        assertEquals("NL", n.get("customer").get("address").get("country").asText());
         assertTrue(r.warnings.isEmpty(), r.warnings());
-
-        CreateOrderRequest back = graphs.read(n, CreateOrderRequest.class);
-        assertEquals("Ada Lovelace", back.getCustomer().getName());
-        assertEquals("NL", back.getCustomer().getAddress().getCountry());
     }
 
     @Test
-    void listsAndStringKeyedMaps() throws Exception {
-        CreateOrderRequest request = sampleRequest(null);
-        JsonNode n = graphs.write(request).node;
-
+    void listsAndStringKeyedMaps() {
+        JsonNode n = graphs.write(sampleRequest(null)).node;
         assertTrue(n.get("lines").isArray());
+        assertEquals(2, n.get("lines").size());
         assertEquals("WIDGET-1", n.get("lines").get(0).get("sku").asText());
         assertEquals(3, n.get("lines").get(0).get("quantity").asInt());
+        assertEquals("io.capture.agent.fixtures.OrderLineRequest", n.get("lines").get(1).get("@type").asText());
         assertEquals("web", n.get("attributes").get("channel").asText(), "string-keyed map is a plain JSON object");
         assertFalse(n.get("attributes").has("@type"));
-
-        CreateOrderRequest back = graphs.roundTrip(request, CreateOrderRequest.class);
-        assertEquals(2, back.getLines().size());
-        assertEquals(OrderLineRequest.class, back.getLines().get(1).getClass());
-        assertEquals("autumn", back.getAttributes().get("campaign"));
-        assertEquals(LinkedHashMap.class, back.getAttributes().getClass());
+        assertTrue(n.get("paymentMethod").isNull());
     }
 
     @Test
-    void enumsByName() throws Exception {
-        TaxRequest request = new TaxRequest("NL", "NH", TaxCategory.SERVICES, new BigDecimal("10.00"));
-        JsonNode n = graphs.write(request).node;
+    void enumsByName() {
+        JsonNode n = graphs.write(new TaxRequest("NL", "NH", TaxCategory.SERVICES, new BigDecimal("10.00"))).node;
         assertEquals("SERVICES", n.get("category").asText());
-
-        TaxRequest back = graphs.roundTrip(request, TaxRequest.class);
-        assertSame(TaxCategory.SERVICES, back.getCategory());
-        assertSame(LoyaltyTier.GOLD, graphs.roundTrip(sampleRequest(null), CreateOrderRequest.class).getCustomer().getLoyaltyTier());
+        assertEquals("GOLD", graphs.write(sampleRequest(null)).node.get("customer").get("loyaltyTier").asText());
     }
 
     @Test
-    void javaTimeAndUtilDateAsIsoStrings() throws Exception {
-        Instant instant = Instant.parse("2026-10-23T18:01:12.345Z");
-        LocalDate date = LocalDate.of(2026, 10, 30);
-        LocalDateTime dateTime = LocalDateTime.of(2026, 10, 23, 14, 30, 15);
-        Date utilDate = new Date(1_800_000_000_000L);
-
+    void javaTimeAndUtilDateAsIsoStrings() {
         CreateOrderRequest request = sampleRequest(null);
-        request.setRequestedAt(instant);
-        request.setRequestedDeliveryDate(date);
+        request.setRequestedAt(Instant.parse("2026-10-23T18:01:12.345Z"));
+        request.setRequestedDeliveryDate(LocalDate.of(2026, 10, 30));
         JsonNode n = graphs.write(request).node;
         assertEquals("2026-10-23T18:01:12.345Z", n.get("requestedAt").asText());
         assertEquals("2026-10-30", n.get("requestedDeliveryDate").asText());
 
-        Reservation reservation = new Reservation("r1", "WIDGET-1", 2, "WH", dateTime);
+        Reservation reservation = new Reservation("r1", "WIDGET-1", 2, "WH", LocalDateTime.of(2026, 10, 23, 14, 30, 15));
         assertEquals("2026-10-23T14:30:15", graphs.write(reservation).node.get("reservedUntil").asText());
-        assertEquals(dateTime, graphs.roundTrip(reservation, Reservation.class).getReservedUntil());
 
-        ConfirmRequest confirm = new ConfirmRequest(42, "ada", utilDate, null);
-        assertEquals("2027-01-15T08:00:00Z", graphs.write(confirm).node.get("confirmedAt").asText());
-        ConfirmRequest back = graphs.roundTrip(confirm, ConfirmRequest.class);
-        assertEquals(utilDate, back.getConfirmedAt());
-        assertEquals(42L, back.getOrderId());
-        assertNull(back.getNotes());
-
-        CreateOrderRequest backRequest = graphs.roundTrip(request, CreateOrderRequest.class);
-        assertEquals(instant, backRequest.getRequestedAt());
-        assertEquals(date, backRequest.getRequestedDeliveryDate());
+        ConfirmRequest confirm = new ConfirmRequest(42, "ada", new Date(1_800_000_000_000L), null);
+        JsonNode c = graphs.write(confirm).node;
+        assertEquals("2027-01-15T08:00:00Z", c.get("confirmedAt").asText());
+        assertEquals(42, c.get("orderId").asLong());
+        assertTrue(c.get("notes").isNull());
     }
 
     @Test
-    void bigDecimalAsStringWithScalePreserved() throws Exception {
+    void bigDecimalAsStringWithScalePreserved() {
         Map<String, BigDecimal> lineTotals = new LinkedHashMap<>();
         lineTotals.put("WIDGET-1", new BigDecimal("37.50"));
         lineTotals.put("GADGET-2", new BigDecimal("99.99"));
@@ -137,34 +109,18 @@ class AwkwardTypesTest {
         assertTrue(n.get("subtotal").isTextual());
         assertEquals("123.74", n.get("subtotal").asText());
         assertEquals("0.21", n.get("tax").get("rate").asText());
-        assertEquals("37.50", n.get("lineTotals").get("WIDGET-1").asText());
-
-        PriceQuote back = graphs.roundTrip(quote, PriceQuote.class);
-        assertEquals(new BigDecimal("123.74"), back.getSubtotal());
-        assertEquals(2, back.getSubtotal().scale());
-        assertEquals(new BigDecimal("37.50"), back.getLineTotals().get("WIDGET-1"));
-        assertEquals(new BigDecimal("25.99"), back.getTax().getTax());
+        assertEquals("37.50", n.get("lineTotals").get("WIDGET-1").asText(), "the scale survives as text");
     }
 
     @Test
-    void polymorphicPaymentMethodsCarryTypeAndRebuildTheRightClass() throws Exception {
-        CreateOrderRequest card = sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6)));
-        JsonNode cardNode = graphs.write(card).node;
-        assertEquals("io.capture.agent.fixtures.CardPayment", cardNode.get("paymentMethod").get("@type").asText());
-        assertEquals("2028-06", cardNode.get("paymentMethod").get("expiry").asText());
+    void polymorphicPaymentMethodsCarryTheirRuntimeType() {
+        JsonNode card = graphs.write(sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6)))).node;
+        assertEquals("io.capture.agent.fixtures.CardPayment", card.get("paymentMethod").get("@type").asText());
+        assertEquals("2028-06", card.get("paymentMethod").get("expiry").asText());
 
-        CreateOrderRequest cardBack = graphs.read(cardNode, CreateOrderRequest.class);
-        assertEquals(CardPayment.class, cardBack.getPaymentMethod().getClass());
-        assertEquals(YearMonth.of(2028, 6), ((CardPayment) cardBack.getPaymentMethod()).getExpiry());
-        assertEquals("card ****4242 exp 2028-06", cardBack.getPaymentMethod().summary());
-
-        CreateOrderRequest invoice = sampleRequest(new InvoicePayment("PO-7781", 45));
-        JsonNode invoiceNode = graphs.write(invoice).node;
-        assertEquals("io.capture.agent.fixtures.InvoicePayment", invoiceNode.get("paymentMethod").get("@type").asText());
-
-        PaymentMethod viaInterface = graphs.read(invoiceNode.get("paymentMethod"), PaymentMethod.class);
-        assertEquals(InvoicePayment.class, viaInterface.getClass());
-        assertEquals(45, ((InvoicePayment) viaInterface).getNetDays());
+        JsonNode invoice = graphs.write(sampleRequest(new InvoicePayment("PO-7781", 45))).node;
+        assertEquals("io.capture.agent.fixtures.InvoicePayment", invoice.get("paymentMethod").get("@type").asText());
+        assertEquals(45, invoice.get("paymentMethod").get("netDays").asInt());
     }
 
     @Test
@@ -179,11 +135,6 @@ class AwkwardTypesTest {
         assertFalse(lines.get("loaded").asBoolean());
         assertEquals(0, loads.get(), "serializer must not instantiate the lazy collection");
         assertFalse(r.hasWarning("lines", ""), "an unloaded lazy collection is expected, not a warning: " + r.warnings());
-
-        Order back = graphs.read(r.node, Order.class);
-        assertEquals("Ada Lovelace", back.getCustomerName());
-        assertNotNull(back.getLines(), "a placeholder leaves the constructor default in place");
-        assertTrue(back.getLines().isEmpty());
     }
 
     @Test
@@ -199,7 +150,7 @@ class AwkwardTypesTest {
     }
 
     @Test
-    void orderLineBackReferenceTerminatesAsRef() throws Exception {
+    void orderLineBackReferenceTerminatesAsRef() {
         Order order = sampleOrder();
         order.addLine("WIDGET-1", 3, new BigDecimal("12.50"));
         order.addLine("GADGET-2", 1, new BigDecimal("99.99"));
@@ -210,18 +161,13 @@ class AwkwardTypesTest {
         assertEquals(1, n.get("lines").get(0).get("order").get("@ref").asInt());
         assertEquals(1, n.get("lines").get(1).get("order").get("@ref").asInt());
         assertEquals("12.50", n.get("lines").get(0).get("unitPrice").asText());
-
-        Order back = graphs.read(n, Order.class);
-        assertEquals(2, back.getLines().size());
-        assertSame(back, back.getLines().get(0).getOrder());
-        assertSame(back, back.getLines().get(1).getOrder());
-        assertEquals(new BigDecimal("99.99"), back.getLines().get(1).getUnitPrice());
+        assertTrue(r.warnings.isEmpty(), r.warnings());
     }
 
     @Test
-    void nonSerializableAuditTrailIsCapturedAndFlaggedWithoutWarning() throws Exception {
+    void nonSerializableAuditTrailIsCapturedAndFlaggedWithoutWarning() {
         Order order = sampleOrder();
-        order.setStatus(OrderStatus.CONFIRMED);   // records one audit entry
+        order.setStatus(OrderStatus.CONFIRMED);
 
         Graphs.Result r = graphs.write(order);
         JsonNode audit = r.node.get("audit");
@@ -233,23 +179,17 @@ class AwkwardTypesTest {
         assertEquals("java.lang.Object", audit.get("lock").get("@type").asText(), "a bare monitor object is captured as an empty object");
         assertTrue(r.warnings.isEmpty(), r.warnings());
         assertFalse(r.node.has("@serializable"), "Order itself is Serializable");
-
-        Order back = graphs.read(r.node, Order.class);
-        assertEquals(OrderStatus.CONFIRMED, back.getStatus());
-        assertEquals(1, back.getAudit().getEntryCount(), "rebuilt through the serialization constructor");
-        assertEquals(order.getAudit().getOpenedAt(), back.getAudit().getOpenedAt());
     }
 
     @Test
-    void confirmResultWithListOfStrings() throws Exception {
+    void confirmResultWithListOfStrings() {
         ConfirmResult result = new ConfirmResult(11, OrderStatus.CONFIRMED, Instant.parse("2026-10-23T19:31:32.806Z"),
                 Arrays.asList("Confirmed by ada", "Notes: gift-wrap"));
-        ConfirmResult back = graphs.roundTrip(result, ConfirmResult.class);
-        assertEquals(11, back.getOrderId());
-        assertEquals(Arrays.asList("Confirmed by ada", "Notes: gift-wrap"), back.getMessages());
+        JsonNode n = graphs.write(result).node;
+        assertEquals(11, n.get("orderId").asLong());
+        assertEquals("CONFIRMED", n.get("status").asText());
+        assertEquals("Notes: gift-wrap", n.get("messages").get(1).asText());
     }
-
-    // ---- fixtures -----------------------------------------------------------------------
 
     static CreateOrderRequest sampleRequest(PaymentMethod payment) {
         CreateOrderRequest request = new CreateOrderRequest();
@@ -288,7 +228,6 @@ class AwkwardTypesTest {
     /** A real EclipseLink IndirectList whose value holder counts, and fails, any attempt to load. */
     static IndirectList<OrderLine> unloadedIndirectList(final AtomicInteger loads) {
         IndirectList<OrderLine> list = new IndirectList<>();
-        // EclipseLink 2.7 (as bundled with WebLogic 14.1.2): ValueHolderInterface is not generic.
         list.setValueHolder(new ValueHolderInterface() {
             @Override
             public Object getValue() {

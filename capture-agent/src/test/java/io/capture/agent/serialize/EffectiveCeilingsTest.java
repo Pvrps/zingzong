@@ -9,12 +9,7 @@ import java.io.File;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * The ceilings the agent actually runs with are the documented ones. Until the plugin
- * release, AgentConfig's own defaults (depth 12, 500 elements) silently overrode
- * SerializerConfig's 64 / 100 000 through Recorder.configure; this fails if that ever
- * happens again, through whatever path.
- */
+/** Proves that the recorder runs with the documented ceilings and that those are out of reach of real payloads. */
 class EffectiveCeilingsTest {
 
     @Test
@@ -25,7 +20,6 @@ class EffectiveCeilingsTest {
         assertEquals(SerializerConfig.DEFAULT_MAX_ELEMENTS, effective.maxElements);
         assertEquals(SerializerConfig.DEFAULT_MAX_STRING_LENGTH, effective.maxStringLength);
         assertEquals(SerializerConfig.DEFAULT_MAX_BYTES, effective.maxBytes);
-        assertTrue(effective.typeAllowList.allows("com.acme.Anything"), "no type allow-list in production");
     }
 
     @Test

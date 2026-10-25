@@ -1,16 +1,6 @@
 package io.capture.agent.serialize;
 
-import io.capture.agent.fixtures.AuditTrail;
-import io.capture.agent.fixtures.CardPayment;
-import io.capture.agent.fixtures.ConfirmRequest;
-import io.capture.agent.fixtures.ConfirmResult;
-import io.capture.agent.fixtures.CreateOrderRequest;
-import io.capture.agent.fixtures.LoyaltyTier;
-import io.capture.agent.fixtures.Order;
-import io.capture.agent.fixtures.OrderStatus;
-import io.capture.agent.fixtures.TaxCategory;
-import io.capture.agent.fixtures.TaxRequest;
-import io.capture.agent.fixtures.TaxResult;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.capture.trace.EjbInfo;
 import io.capture.trace.Span;
 import io.capture.trace.Trace;
@@ -18,11 +8,14 @@ import io.capture.trace.TraceJson;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -31,116 +24,179 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Traces captured on the real WebLogic server (recording rec-20261023-174243, annotation hook:
- * one Create order, one Confirm order), deserialized against the fixtures in
- * {@code io.capture.agent.fixtures}: the lab's common-dto types with their package renamed, and
- * the recordings' type names and deployment paths rewritten to match. The acceptance check that a
- * captured trace round-trips, and that every EJB span carries its Phase 6 metadata.
+ * Proves that recordings captured on WebLogic 14.1.2 carry the format's markers where the
+ * raw-capture rule puts them: {@code @type} on every object, {@code @ref} for a repeated object,
+ * {@code @lazy} for an unloaded JPA collection, {@code @serializable: false} for a non-Serializable
+ * value, {@code @skipped} for weaver- and JVM-injected fields, {@code @handle} for runtime
+ * handles, {@code @jms} for a message, and no {@code @truncated} under the production ceilings.
  */
 class CapturedSpanFixtureTest {
 
-    private final JacksonGraphSerializer serializer = new JacksonGraphSerializer();
-    private final ClassLoader loader = CapturedSpanFixtureTest.class.getClassLoader();
+    private static final Set<String> KNOWN_MARKERS = new HashSet<>(Arrays.asList(
+            "@type", "@id", "@ref", "@lazy", "@handle", "@skipped", "@serializable", "@entries", "@jms",
+            "@truncated", "@text", "@bytes", "@unserializable"));
 
     @Test
-    void createOrderTraceHasTheExpectedTree() throws Exception {
+    void createOrderTraceHasTheExpectedTreeAndMarkers() throws Exception {
         Trace trace = load("captures/create-order-trace.json");
         assertEquals("AdminServer", trace.trace.serverName);
         assertNull(trace.trace.principal, "anonymous REST call");
         assertEquals("ear", trace.trace.deployments.get(0).moduleType);
-        assertTrue(trace.trace.deployments.get(1).sourcePath.endsWith("/orders-ear.ear"), "SourcePath from the domain config");
         List<Span> spans = trace.spans;
-        assertEquals(11, spans.size());
+        assertEquals(17, spans.size());
         assertEquals("POST", spans.get(0).http.method);
         assertEquals("create", spans.get(1).http.resourceMethod);
-        List<Span> ejb = spans.subList(2, spans.size());
-        assertEquals(Arrays.asList("createOrder", "reserve", "reserve", "price", "unitPrice", "unitPrice", "computeTax", "unitPrice", "unitPrice"), methods(ejb));
-        assertEquals("s2", ejb.get(0).parentId);
-        assertEquals("s3", ejb.get(3).parentId);
-        assertEquals("s6", ejb.get(6).parentId, "computeTax is a child of price despite living in tax-ear");
-        assertEquals(4, ejb.get(6).depth);
-        for (Span span : ejb) {
-            assertNull(span.serializationWarnings, "no warnings expected in " + span.id);
-            assertEquals("REQUIRED", span.ejb.transactionAttribute);
-            assertNotNull(span.ejb.app, span.id);
-            assertNotNull(span.ejb.module, span.id);
-            assertNotNull(span.ejb.beanName, span.id);
-            assertTrue(span.ejb.jndiNames.size() >= 2, span.id);
+        assertEquals(Arrays.asList("createOrder", "reserve", "reserve", "price", "computeTax", "rateFor", "unitPrice", "unitPrice"),
+                methods(spans.subList(2, 10)));
+        assertEquals("s2", spans.get(2).parentId);
+        assertEquals("s6", spans.get(6).parentId, "computeTax is a child of price despite living in tax-ear");
+        assertEquals(EjbInfo.INVOCATION_REMOTE, spans.get(6).ejb.invocation);
+        assertEquals(Boolean.TRUE, spans.get(7).ejb.ejb2x, "rateFor is an EJB 2.x component-interface call");
+        for (Span span : spans) {
+            if (span == spans.get(1)) {
+                assertEquals(12, span.serializationWarnings.size(), "one warning per runtime handle inside the JAX-RS Response");
+                assertTrue(span.serializationWarnings.get(0).reason.startsWith("runtime handle"), span.serializationWarnings.get(0).reason);
+            } else {
+                assertNull(span.serializationWarnings, "no warnings expected in " + span.id);
+            }
         }
-        Span root = ejb.get(0);
-        assertEquals("orders-ear", root.ejb.app);
-        assertEquals("orders-ejb", root.ejb.module);
-        assertEquals("OrderService", root.ejb.beanName);
-        assertEquals("com.acme.orders.api.OrderServiceLocal", root.ejb.interfaceName);
-        assertEquals(EjbInfo.INVOCATION_LOCAL, root.ejb.invocation);
-        assertEquals("java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", root.ejb.jndiNames.get(0), "the invoked view first");
-        assertTrue(root.ejb.jndiNames.contains("orders/OrderService"), "weblogic-ejb-jar.xml mapping");
-        Span tax = ejb.get(6);
-        assertEquals("tax-ear", tax.ejb.app);
-        assertEquals(EjbInfo.INVOCATION_REMOTE, tax.ejb.invocation);
-        assertTrue(tax.ejb.jndiNames.contains("tax/TaxService"));
+
+        Span createOrder = spans.get(2);
+        assertEquals("com.acme.orders.OrderServiceBean", createOrder.ejb.beanClass);
+        assertEquals("orders-ear", createOrder.ejb.app);
+        assertEquals("java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", createOrder.ejb.jndiNames.get(0), "the invoked view first");
+        JsonNode request = createOrder.args.get(0).value;
+        assertEquals("com.acme.common.dto.CreateOrderRequest", request.get("@type").asText());
+        assertEquals("com.acme.common.dto.CardPayment", request.get("paymentMethod").get("@type").asText(), "the runtime type of a polymorphic field");
+        JsonNode order = createOrder.result.value;
+        assertEquals("com.acme.common.model.Order", order.get("@type").asText());
+        assertTrue(order.get("lines").get("@lazy").asBoolean(), "an unloaded JPA collection is marked, not loaded");
+        assertFalse(order.get("lines").get("loaded").asBoolean());
+        assertFalse(order.get("audit").get("@serializable").asBoolean(), "a non-Serializable value is walked and flagged");
+        assertEquals("CREATED", order.get("status").asText());
+        assertTrue(fieldsSkipped(order).contains("_persistence_fetchGroup"), "weaver-injected fields are listed as skipped: " + fieldsSkipped(order));
+
+        JsonNode response = spans.get(1).result.value;
+        assertEquals("javax.ws.rs.core.Response", spans.get(1).result.declaredType);
+        Set<String> kinds = new TreeSet<>();
+        for (JsonNode handle : nodesWith(response, "@handle")) {
+            kinds.add(handle.get("kind").asText());
+        }
+        assertEquals(new TreeSet<>(Arrays.asList("class reference", "stream")), kinds, "JAX-RS runtime handles inside the Response");
+        List<JsonNode> refs = nodesWith(response, "@ref");
+        assertFalse(refs.isEmpty(), "shared objects inside the Response become @ref");
+        for (JsonNode ref : refs) {
+            assertTrue(idsIn(response).contains(ref.get("@ref").asInt()), "every @ref points at an @id in the same value");
+        }
+
+        List<Span> sql = new ArrayList<>();
+        for (Span span : spans) {
+            if (Span.KIND_SQL.equals(span.kind)) {
+                sql.add(span);
+            }
+        }
+        assertEquals(7, sql.size());
+        assertEquals("OrdersDS", sql.get(0).sql.dataSource);
+        assertTrue(sql.get(0).sql.sql.startsWith("INSERT INTO ORDERS"), sql.get(0).sql.sql);
+        assertEquals(Integer.valueOf(1), sql.get(0).sql.updateCount);
+        assertEquals("EUR", sql.get(0).sql.parameters.get(1).asText());
+        assertEquals(Long.valueOf(1), sql.get(1).sql.rows, "CALL IDENTITY() yields one row");
+
+        assertMarkersKnownAndUntruncated(trace);
     }
 
     @Test
-    void createOrderRootSpanDeserializesArgumentAndResult() throws Exception {
-        Span span = load("captures/create-order-trace.json").spans.get(2);
-        assertEquals("com.acme.orders.OrderServiceBean", span.ejb.beanClass);
-        assertEquals("io.capture.agent.fixtures.Order createOrder(io.capture.agent.fixtures.CreateOrderRequest)", span.ejb.signature);
-
-        CreateOrderRequest request = (CreateOrderRequest) serializer.deserialize(
-                span.args.get(0).value, loader.loadClass(span.args.get(0).declaredType), loader);
-        assertEquals("Ada Lovelace", request.getCustomer().getName());
-        assertEquals(LoyaltyTier.GOLD, request.getCustomer().getLoyaltyTier());
-        assertEquals("NL", request.getCustomer().getAddress().getCountry());
-        assertEquals(2, request.getLines().size());
-        assertEquals("GADGET-2", request.getLines().get(1).getSku());
-        assertEquals("autumn-2026", request.getAttributes().get("campaign"));
-        assertEquals(LocalDate.of(2026, 10, 30), request.getRequestedDeliveryDate());
-        assertEquals(CardPayment.class, request.getPaymentMethod().getClass());
-        assertEquals(YearMonth.of(2028, 6), ((CardPayment) request.getPaymentMethod()).getExpiry());
-
-        Order order = (Order) serializer.deserialize(span.result.value, loader.loadClass(span.result.declaredType), loader);
-        assertEquals(OrderStatus.CREATED, order.getStatus());
-        assertEquals(new BigDecimal("149.73"), order.getTotal());
-        assertEquals(2, order.getTotal().scale());
-        assertEquals("card ****4242 exp 2028-06", order.getPaymentSummary());
-        assertTrue(order.getLines().isEmpty(), "lazy placeholder leaves the constructor's empty list");
-
-        assertTrue(span.result.value.get("lines").get("@lazy").asBoolean());
-        assertFalse(span.result.value.get("audit").get("@serializable").asBoolean());
-        AuditTrail audit = order.getAudit();
-        assertNotNull(audit);
-        assertEquals(0, audit.getEntryCount());
-        assertEquals(span.result.value.get("audit").get("openedAt").asText(), audit.getOpenedAt().toString());
+    void failedConfirmTraceCarriesTheExceptionWithJvmFieldsSkipped() throws Exception {
+        Trace trace = load("captures/confirm-unknown-order-trace.json");
+        assertEquals(Arrays.asList("confirmOrder"), methods(trace.spans.subList(2, 3)));
+        Span confirm = trace.spans.get(2);
+        assertEquals("com.acme.orders.api.OrderNotFoundException", confirm.exception.className);
+        assertNull(confirm.result, "a call that threw has no result");
+        JsonNode exception = confirm.exception.value;
+        assertEquals("com.acme.orders.api.OrderNotFoundException", exception.get("@type").asText());
+        assertEquals(999999, exception.get("orderId").asLong(), "the exception's own fields are data");
+        assertTrue(exception.get("stackTrace").size() > 10, "the full stack");
+        assertEquals(new TreeSet<>(Arrays.asList("backtrace", "depth")), new TreeSet<>(fieldsSkipped(exception)));
+        assertEquals(Integer.valueOf(404), trace.spans.get(0).http.status);
+        assertMarkersKnownAndUntruncated(trace);
     }
 
     @Test
-    void computeTaxSpanDeserializesAcrossTheEarBoundary() throws Exception {
-        Span span = load("captures/create-order-trace.json").spans.get(8);
-        assertEquals("com.acme.tax.TaxServiceBean", span.ejb.beanClass);
-
-        TaxRequest request = (TaxRequest) serializer.deserialize(span.args.get(0).value, TaxRequest.class, loader);
-        assertEquals(TaxCategory.GOODS, request.getCategory());
-        assertEquals(new BigDecimal("123.74"), request.getAmount());
-
-        TaxResult result = (TaxResult) serializer.deserialize(span.result.value, TaxResult.class, loader);
-        assertEquals("NL-NH", result.getJurisdiction());
-        assertEquals(new BigDecimal("0.21"), result.getRate());
-        assertEquals(new BigDecimal("25.99"), result.getTax());
+    void messageDrivenTraceRecordsTheMessageAsItsApiView() throws Exception {
+        Trace trace = load("captures/order-event-message-trace.json");
+        assertNotNull(trace.trace.parentTraceId, "caused by the request that sent the message");
+        Span onMessage = trace.spans.get(0);
+        assertEquals(EjbInfo.INVOCATION_MESSAGE, onMessage.ejb.invocation);
+        assertEquals("MESSAGE_DRIVEN", onMessage.ejb.beanType);
+        JsonNode message = onMessage.args.get(0).value;
+        assertEquals("TextMessage", message.get("@jms").asText());
+        assertTrue(message.get("headers").has("JMSMessageID"));
+        assertTrue(message.get("text").asText().contains("orderId"), message.get("text").asText());
+        assertEquals("record", trace.spans.get(1).ejb.method);
+        assertMarkersKnownAndUntruncated(trace);
     }
 
-    @Test
-    void confirmOrderTraceLinksToTheCreatedOrderId() throws Exception {
-        Trace create = load("captures/create-order-trace.json");
-        Trace confirm = load("captures/confirm-order-trace.json");
-        assertEquals(Arrays.asList("confirmOrder", "findOrder"), methods(confirm.spans.subList(2, 4)));
+    private static void assertMarkersKnownAndUntruncated(Trace trace) throws Exception {
+        JsonNode root = TraceJson.mapper().readTree(TraceJson.toJson(trace));
+        Set<String> markers = new TreeSet<>();
+        collectMarkers(root, markers);
+        for (String marker : markers) {
+            assertTrue(KNOWN_MARKERS.contains(marker), "unknown marker " + marker);
+        }
+        assertFalse(markers.contains("@truncated"), "production ceilings are never hit by the sample payloads");
+        assertFalse(markers.contains("@unserializable"));
+        assertTrue(markers.contains("@type"));
+    }
 
-        long createdId = create.spans.get(2).result.value.get("id").asLong();
-        ConfirmRequest request = (ConfirmRequest) serializer.deserialize(confirm.spans.get(2).args.get(0).value, ConfirmRequest.class, loader);
-        assertEquals(createdId, request.getOrderId(), "the id typed into Confirm came from Create: Phase 4 lineage material");
-        ConfirmResult result = (ConfirmResult) serializer.deserialize(confirm.spans.get(2).result.value, ConfirmResult.class, loader);
-        assertEquals(OrderStatus.CONFIRMED, result.getStatus());
-        assertEquals(2, result.getMessages().size());
+    private static void collectMarkers(JsonNode node, Set<String> into) {
+        if (node.isObject()) {
+            for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext(); ) {
+                Map.Entry<String, JsonNode> e = it.next();
+                if (e.getKey().startsWith("@")) {
+                    into.add(e.getKey());
+                }
+                collectMarkers(e.getValue(), into);
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                collectMarkers(child, into);
+            }
+        }
+    }
+
+    private static List<JsonNode> nodesWith(JsonNode node, String marker) {
+        List<JsonNode> found = new ArrayList<>();
+        if (node.isObject()) {
+            if (node.has(marker)) {
+                found.add(node);
+            }
+            for (JsonNode child : node) {
+                found.addAll(nodesWith(child, marker));
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                found.addAll(nodesWith(child, marker));
+            }
+        }
+        return found;
+    }
+
+    private static Set<Integer> idsIn(JsonNode node) {
+        Set<Integer> ids = new HashSet<>();
+        for (JsonNode n : nodesWith(node, "@id")) {
+            ids.add(n.get("@id").asInt());
+        }
+        return ids;
+    }
+
+    private static List<String> fieldsSkipped(JsonNode object) {
+        List<String> names = new ArrayList<>();
+        if (object.has("@skipped")) {
+            for (JsonNode s : object.get("@skipped")) {
+                names.add(s.get("field").asText());
+            }
+        }
+        return names;
     }
 
     private static Trace load(String resource) throws Exception {
@@ -153,10 +209,10 @@ class CapturedSpanFixtureTest {
     }
 
     private static List<String> methods(List<Span> spans) {
-        String[] names = new String[spans.size()];
-        for (int i = 0; i < names.length; i++) {
-            names[i] = spans.get(i).ejb.method;
+        List<String> names = new ArrayList<>();
+        for (Span span : spans) {
+            names.add(span.ejb.method);
         }
-        return Arrays.asList(names);
+        return names;
     }
 }

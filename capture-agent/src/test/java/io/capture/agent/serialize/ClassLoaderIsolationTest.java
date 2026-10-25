@@ -16,13 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * WebLogic loads each application class in more than one loader (analysis, then runtime)
- * and again on every redeploy. Per-type state must therefore follow the Class object, not
- * the class name: two loaders, same name, different shapes, no confusion in either direction.
- */
+/** Proves that per-type state follows the Class object, not the class name: two loaders, same name, different fields, no confusion. */
 class ClassLoaderIsolationTest {
 
     private static final String NAME = "com.acme.dyn.Thing";
@@ -44,7 +39,7 @@ class ClassLoaderIsolationTest {
         set(instanceB, "name", "from-B");
         set(instanceB, "extra", "only-in-B");
 
-        // Prime the per-type cache with A, then serialize B, then A again.
+        // A primes the per-type cache, B must not reuse it, A must still be intact afterwards.
         JsonNode nodeA = graphs.write(instanceA).node;
         JsonNode nodeB = graphs.write(instanceB).node;
         JsonNode nodeA2 = graphs.write(instanceA).node;
@@ -58,27 +53,6 @@ class ClassLoaderIsolationTest {
         assertFalse(nodeB.has("version"), nodeB.toString());
 
         assertEquals(nodeA, nodeA2);
-    }
-
-    @Test
-    void deserializationResolvesTypeThroughTheGivenLoaderOnly() throws Exception {
-        Class<?> a = define(Collections.singletonMap("name", String.class), Collections.singletonMap("version", int.class));
-        Class<?> b = define(Collections.singletonMap("name", String.class), Collections.singletonMap("extra", String.class));
-
-        Object instanceA = a.getDeclaredConstructor().newInstance();
-        set(instanceA, "name", "from-A");
-        set(instanceA, "version", 7);
-        JsonNode nodeA = graphs.write(instanceA).node;
-
-        Object backInA = graphs.read(nodeA, Object.class, a.getClassLoader());
-        assertSame(a, backInA.getClass());
-        assertEquals(7, get(backInA, "version"));
-
-        // The same JSON read through loader B yields B's class: "version" is unknown there and skipped.
-        Object backInB = graphs.read(nodeA, Object.class, b.getClassLoader());
-        assertSame(b, backInB.getClass());
-        assertEquals("from-A", get(backInB, "name"));
-        assertTrue(hasField(b, "extra") && !hasField(b, "version"));
     }
 
     @Test
@@ -115,20 +89,5 @@ class ClassLoaderIsolationTest {
         Field f = target.getClass().getDeclaredField(field);
         f.setAccessible(true);
         f.set(target, value);
-    }
-
-    private static Object get(Object target, String field) throws Exception {
-        Field f = target.getClass().getDeclaredField(field);
-        f.setAccessible(true);
-        return f.get(target);
-    }
-
-    private static boolean hasField(Class<?> type, String name) {
-        try {
-            type.getDeclaredField(name);
-            return true;
-        } catch (NoSuchFieldException e) {
-            return false;
-        }
     }
 }

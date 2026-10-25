@@ -4,10 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.capture.trace.SerializationWarning;
 import io.capture.trace.TraceJson;
 
-import java.lang.reflect.Type;
 import java.util.List;
 
-/** Test helper: serialize with a fresh context, keep the warnings next to the result. */
+/** Serializes a value with a fresh context and keeps the warnings next to the result. */
 final class Graphs {
 
     final JacksonGraphSerializer serializer;
@@ -24,23 +23,6 @@ final class Graphs {
         SerializationContext ctx = new SerializationContext(serializer.config(), "$");
         JsonNode node = serializer.serialize(value, value == null ? Object.class : value.getClass(), ctx);
         return new Result(node, ctx.warnings());
-    }
-
-    <T> T read(JsonNode node, Type type) throws GraphException {
-        return read(node, type, Graphs.class.getClassLoader());
-    }
-
-    @SuppressWarnings("unchecked")
-    <T> T read(JsonNode node, Type type, ClassLoader loader) throws GraphException {
-        return (T) serializer.deserialize(node, type, loader);
-    }
-
-    <T> T roundTrip(T value, Type type) throws GraphException {
-        Result result = write(value);
-        if (!result.warnings.isEmpty()) {
-            throw new AssertionError("unexpected warnings: " + result.warnings());
-        }
-        return read(result.node, type);
     }
 
     static final class Result {

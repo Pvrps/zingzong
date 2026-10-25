@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.lang.reflect.Array;
-import java.lang.reflect.Type;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Iterator;
@@ -36,7 +35,6 @@ public final class JacksonGraphSerializer implements GraphSerializer {
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
 
     private final SerializerConfig config;
-    private final GraphReader reader;
 
     public JacksonGraphSerializer() {
         this(new SerializerConfig());
@@ -44,7 +42,6 @@ public final class JacksonGraphSerializer implements GraphSerializer {
 
     public JacksonGraphSerializer(SerializerConfig config) {
         this.config = config;
-        this.reader = new GraphReader(config);
     }
 
     public SerializerConfig config() {
@@ -60,11 +57,6 @@ public final class JacksonGraphSerializer implements GraphSerializer {
             safeWarn(ctx, "serializer failure: " + t, value);
             return Placeholders.unserializable(value, "serializer failure: " + t, null);
         }
-    }
-
-    @Override
-    public Object deserialize(JsonNode node, Type declaredType, ClassLoader loader) throws GraphException {
-        return reader.read(node, declaredType, loader);
     }
 
     // ---- writing -------------------------------------------------------------------------

@@ -13,11 +13,12 @@ and shows them: three Maven goals and one web page.
 The agent is a `-javaagent` with no compile dependency on WebLogic; the plugin runs inside
 your Maven's JDK (8 or later). Verified on WebLogic 12.2.1.4 / JDK 8 and 14.1.2 / JDK 21, with
 the plugin under both a JDK 8 and a JDK 21 Maven; what differs between the two is in
-`docs/weblogic-12-vs-14.md`.
+`docs/weblogic-12-vs-14.md` of the lab repository (see [Repository](#repository)).
 
 ## Install
 
-Build and install the plugin and the agent into your local repository:
+Build and install the plugin and the agent into your local repository. A JDK (8 or later) and
+Maven are all it needs; the unit tests run offline, without a server:
 
 ```
 mvn -q install
@@ -139,18 +140,19 @@ hit leaves a `@truncated` marker with counts. The page highlights all of these.
 | `capture-agent` | the `-javaagent`; `--release 8`, shaded, no `javax`/`weblogic` compile dependency |
 | `trace-reader` | library: loads recordings, groups sessions, detects lineage, builds the page's index |
 | `capture-maven-plugin` | the three goals, the page and its server |
-| `sample-apps` | the lab's EARs: REST → EJB → EJB, a remote EJB hop, a SOAP endpoint |
 
-`docs/container-hook.md` records every WebLogic internal the agent touches, with the version
-it was verified on. `docs/history/` holds the plan and status of the prototype this grew from;
-everything that was removed in the move to the plugin (CLI, exporter, replay check, lab
-scripts) is recoverable from the tag `v0.1-prototype`.
+Every module compiles with `--release 8`. `docs/container-hook.md` records every WebLogic
+internal the agent touches, with the version it was verified on; `docs/trace-propagation.md`
+how a trace follows a call across threads and servers. The agent's serializer tests run against
+fixtures in `capture-agent/src/test/java/io/capture/agent/fixtures/` and recordings checked in
+under `capture-agent/src/test/resources/captures/`.
 
-The home lab runs inside `devenv shell`: `wls-install`, `wls-domain`, `wls-start [-b]`,
-`wls-stop`, `wls-deploy` set up and run a plain domain; `capture enable|disable|start` runs
-the plugin against it with `capture.out` under `.local/captures`. There are two labs: the
-default is 14.1.2 / JDK 21 on port 7001; `WLS_VERSION=12` in front of any of those commands
-selects 12.2.1.4 / JDK 8 on port 7101 (its own install, domain, H2 and `capture.out`), and both
-can run at once. `JAVA_HOME=$JDK8_HOME capture …` runs the plugin under a Java 8 Maven.
-`WLS_VERSION=12` is a verification lab, not a daily driver: it exists to prove the plugin on the
-production version, and it runs on the JDK 8 `tools.jar` attach path; day to day, use the 14 lab.
+Everything used to develop and verify the product (the WebLogic installs and domains for 12.2.1.4
+and 14.1.2, the sample applications, load and check scripts, the findings) lives in a separate
+repository, **ejb-capture-lab**, which drives the plugin from the local Maven repository by its
+coordinates after `mvn install` here. It is not needed to use the product. The two were one
+repository up to the tag `v0.2-pre-split`; the prototype this grew from is at `v0.1-prototype`.
+
+`devenv.nix` and `.envrc` are optional: they only put a JDK 21 and Maven on the path and set
+`JDK8_HOME` to a Temurin 8, so `JAVA_HOME=$JDK8_HOME mvn -q install` proves the build and tests
+under a Java 8 Maven. Without them the repository builds identically with any JDK 8+ and Maven.

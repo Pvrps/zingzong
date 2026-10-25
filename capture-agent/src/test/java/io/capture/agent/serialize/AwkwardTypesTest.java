@@ -1,25 +1,25 @@
 package io.capture.agent.serialize;
 
-import com.acme.common.dto.Address;
-import com.acme.common.dto.CardPayment;
-import com.acme.common.dto.ConfirmRequest;
-import com.acme.common.dto.ConfirmResult;
-import com.acme.common.dto.CreateOrderRequest;
-import com.acme.common.dto.Customer;
-import com.acme.common.dto.InvoicePayment;
-import com.acme.common.dto.LoyaltyTier;
-import com.acme.common.dto.OrderLineRequest;
-import com.acme.common.dto.PaymentMethod;
-import com.acme.common.dto.PriceQuote;
-import com.acme.common.dto.Reservation;
-import com.acme.common.dto.TaxCategory;
-import com.acme.common.dto.TaxRequest;
-import com.acme.common.dto.TaxResult;
-import com.acme.common.model.AuditTrail;
-import com.acme.common.model.Order;
-import com.acme.common.model.OrderLine;
-import com.acme.common.model.OrderStatus;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.capture.agent.fixtures.Address;
+import io.capture.agent.fixtures.AuditTrail;
+import io.capture.agent.fixtures.CardPayment;
+import io.capture.agent.fixtures.ConfirmRequest;
+import io.capture.agent.fixtures.ConfirmResult;
+import io.capture.agent.fixtures.CreateOrderRequest;
+import io.capture.agent.fixtures.Customer;
+import io.capture.agent.fixtures.InvoicePayment;
+import io.capture.agent.fixtures.LoyaltyTier;
+import io.capture.agent.fixtures.Order;
+import io.capture.agent.fixtures.OrderLine;
+import io.capture.agent.fixtures.OrderLineRequest;
+import io.capture.agent.fixtures.OrderStatus;
+import io.capture.agent.fixtures.PaymentMethod;
+import io.capture.agent.fixtures.PriceQuote;
+import io.capture.agent.fixtures.Reservation;
+import io.capture.agent.fixtures.TaxCategory;
+import io.capture.agent.fixtures.TaxRequest;
+import io.capture.agent.fixtures.TaxResult;
 import org.eclipse.persistence.indirection.IndirectList;
 import org.eclipse.persistence.indirection.ValueHolder;
 import org.eclipse.persistence.indirection.ValueHolderInterface;
@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** One test per awkward type in common-dto: round-trips, or the expected placeholder plus warning. */
+/** One test per awkward type in the fixtures package: round-trips, or the expected placeholder plus warning. */
 class AwkwardTypesTest {
 
     private final Graphs graphs = new Graphs();
@@ -56,8 +56,8 @@ class AwkwardTypesTest {
 
         Graphs.Result r = graphs.write(request);
         JsonNode n = r.node;
-        assertEquals("com.acme.common.dto.CreateOrderRequest", n.get("@type").asText());
-        assertEquals("com.acme.common.dto.Customer", n.get("customer").get("@type").asText());
+        assertEquals("io.capture.agent.fixtures.CreateOrderRequest", n.get("@type").asText());
+        assertEquals("io.capture.agent.fixtures.Customer", n.get("customer").get("@type").asText());
         assertEquals("Amsterdam", n.get("customer").get("address").get("city").asText());
         assertTrue(r.warnings.isEmpty(), r.warnings());
 
@@ -150,7 +150,7 @@ class AwkwardTypesTest {
     void polymorphicPaymentMethodsCarryTypeAndRebuildTheRightClass() throws Exception {
         CreateOrderRequest card = sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6)));
         JsonNode cardNode = graphs.write(card).node;
-        assertEquals("com.acme.common.dto.CardPayment", cardNode.get("paymentMethod").get("@type").asText());
+        assertEquals("io.capture.agent.fixtures.CardPayment", cardNode.get("paymentMethod").get("@type").asText());
         assertEquals("2028-06", cardNode.get("paymentMethod").get("expiry").asText());
 
         CreateOrderRequest cardBack = graphs.read(cardNode, CreateOrderRequest.class);
@@ -160,7 +160,7 @@ class AwkwardTypesTest {
 
         CreateOrderRequest invoice = sampleRequest(new InvoicePayment("PO-7781", 45));
         JsonNode invoiceNode = graphs.write(invoice).node;
-        assertEquals("com.acme.common.dto.InvoicePayment", invoiceNode.get("paymentMethod").get("@type").asText());
+        assertEquals("io.capture.agent.fixtures.InvoicePayment", invoiceNode.get("paymentMethod").get("@type").asText());
 
         PaymentMethod viaInterface = graphs.read(invoiceNode.get("paymentMethod"), PaymentMethod.class);
         assertEquals(InvoicePayment.class, viaInterface.getClass());

@@ -16,8 +16,6 @@
   <description>The -javaagent. No javax.* or weblogic.* compile dependencies; ByteBuddy and Jackson shaded.</description>
 
   <properties>
-    <!-- One jar for WebLogic 14.1.2 / JDK 21 and 12.2.1 / JDK 8. -->
-    <maven.compiler.release>${agent.compiler.release}</maven.compiler.release>
     <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
     <!-- JDK 8 (what a 12.2.1.4 domain and its Maven run on): no module system, no add-opens; see the jdk9plus profile. -->
     <agent.test.argLine>-Djdk.attach.allowAttachSelf=true</agent.test.argLine>
@@ -43,16 +41,11 @@
       <artifactId>byte-buddy-agent</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- Test scope only: a fake @Stateless bean to instrument. The agent itself never links to javax. -->
+    <!-- Test scope only: the fake @Stateless beans to instrument and the JPA annotations on the
+         Order fixture. The agent itself never links to javax. -->
     <dependency>
       <groupId>javax</groupId>
       <artifactId>javaee-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <!-- Test scope only: the awkward types are the serializer's fixtures. -->
-    <dependency>
-      <groupId>io.capture.samples</groupId>
-      <artifactId>common-dto</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- Test scope only: real IndirectList/ValueHolder for the lazy-detection tests. -->

@@ -10,42 +10,35 @@
   <packaging>pom</packaging>
 
   <name>ejb-capture</name>
-  <description>Java agent that records EJB and HTTP invocations on WebLogic as JSON traces, plus tooling.</description>
+  <description>Java agent that records EJB and HTTP invocations on WebLogic as JSON traces, packaged as a Maven plugin.</description>
 
-  <!-- trace-model, capture-agent, trace-reader and capture-maven-plugin compile for Java 8 (release 8); sample-apps for 21. -->
   <modules>
     <module>trace-model</module>
     <module>capture-agent</module>
     <module>trace-reader</module>
     <module>capture-maven-plugin</module>
-    <module>sample-apps</module>
   </modules>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-    <!-- Server, sample apps and tooling. capture-agent and trace-model (shaded into it) override this with 8. -->
-    <maven.compiler.release>21</maven.compiler.release>
-    <agent.compiler.release>8</agent.compiler.release>
+    <!-- One build for WebLogic 14.1.2 / JDK 21 and 12.2.1 / JDK 8: the agent runs on both servers,
+         the plugin inside whatever JDK the developer's Maven uses. Builds under JDK 8 or later. -->
+    <maven.compiler.release>8</maven.compiler.release>
 
-    <!-- Java EE 8 / Jakarta EE 8: javax.* namespace on both WebLogic 12.2.1 and 14.1.2. -->
+    <!-- Test scope only (capture-agent fixtures): Java EE 8 javax.* API and the EclipseLink bundled with WebLogic 14.1.2. -->
     <javaee-api.version>8.0.1</javaee-api.version>
+    <eclipselink.version>2.7.15</eclipselink.version>
     <bytebuddy.version>1.17.5</bytebuddy.version>
     <jackson.version>2.19.0</jackson.version>
     <junit.version>5.12.2</junit.version>
-    <h2.version>2.3.232</h2.version>
-    <!-- Same EclipseLink as bundled with WebLogic 14.1.2; test scope only, for lazy-collection fixtures. -->
-    <eclipselink.version>2.7.15</eclipselink.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
 
     <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
     <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
     <maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
-    <maven-ejb-plugin.version>3.2.1</maven-ejb-plugin.version>
-    <maven-war-plugin.version>3.4.0</maven-war-plugin.version>
-    <maven-ear-plugin.version>3.3.0</maven-ear-plugin.version>
   </properties>
 
   <dependencyManagement>
@@ -69,7 +62,13 @@
         <groupId>javax</groupId>
         <artifactId>javaee-api</artifactId>
         <version>${javaee-api.version}</version>
-        <scope>provided</scope>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.persistence</groupId>
+        <artifactId>eclipselink</artifactId>
+        <version>${eclipselink.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>net.bytebuddy</groupId>
@@ -81,61 +80,12 @@
         <artifactId>byte-buddy-agent</artifactId>
         <version>${bytebuddy.version}</version>
       </dependency>
-      <dependency>
-        <groupId>com.h2database</groupId>
-        <artifactId>h2</artifactId>
-        <version>${h2.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.eclipse.persistence</groupId>
-        <artifactId>eclipselink</artifactId>
-        <version>${eclipselink.version}</version>
-      </dependency>
 
       <!-- In-repo modules -->
       <dependency>
         <groupId>io.capture</groupId>
         <artifactId>trace-model</artifactId>
         <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>common-dto</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>orders-api</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>tax-api</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>orders-ejb</artifactId>
-        <version>${project.version}</version>
-        <type>ejb</type>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>orders-web</artifactId>
-        <version>${project.version}</version>
-        <type>war</type>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>tax-ejb</artifactId>
-        <version>${project.version}</version>
-        <type>ejb</type>
-      </dependency>
-      <dependency>
-        <groupId>io.capture.samples</groupId>
-        <artifactId>tax-web</artifactId>
-        <version>${project.version}</version>
-        <type>war</type>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -165,34 +115,6 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-shade-plugin</artifactId>
           <version>${maven-shade-plugin.version}</version>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-ejb-plugin</artifactId>
-          <version>${maven-ejb-plugin.version}</version>
-          <configuration>
-            <ejbVersion>3.2</ejbVersion>
-          </configuration>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-war-plugin</artifactId>
-          <version>${maven-war-plugin.version}</version>
-          <configuration>
-            <failOnMissingWebXml>false</failOnMissingWebXml>
-          </configuration>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-ear-plugin</artifactId>
-          <version>${maven-ear-plugin.version}</version>
-          <configuration>
-            <!-- Java EE 7 descriptor: accepted by both 12.2.1 and 14.1.2. -->
-            <version>7</version>
-            <defaultLibBundleDir>lib</defaultLibBundleDir>
-            <!-- Module file names become java:global module names, keep them version-free. -->
-            <outputFileNameMapping>@{artifactId}@.@{extension}@</outputFileNameMapping>
-          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>

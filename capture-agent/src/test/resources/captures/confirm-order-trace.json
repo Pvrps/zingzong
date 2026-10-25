@@ -12,11 +12,11 @@
     "serverName" : "AdminServer",
     "deployments" : [ {
       "name" : "tax-ear",
-      "sourcePath" : "/home/purps/Development/ejb/sample-apps/tax-ear/tax-ear/target/tax-ear.ear",
+      "sourcePath" : "/opt/apps/tax-ear.ear",
       "moduleType" : "ear"
     }, {
       "name" : "orders-ear",
-      "sourcePath" : "/home/purps/Development/ejb/sample-apps/orders-ear/orders-ear/target/orders-ear.ear",
+      "sourcePath" : "/opt/apps/orders-ear.ear",
       "moduleType" : "ear"
     } ]
   },
@@ -343,7 +343,7 @@
       "invocation" : "LOCAL",
       "jndiNames" : [ "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:module/OrderService!com.acme.orders.api.OrderServiceLocal", "java:module/OrderService!com.acme.orders.api.OrderServiceRemote", "orders/OrderService" ],
       "method" : "confirmOrder",
-      "signature" : "com.acme.common.dto.ConfirmResult confirmOrder(com.acme.common.dto.ConfirmRequest)",
+      "signature" : "io.capture.agent.fixtures.ConfirmResult confirmOrder(io.capture.agent.fixtures.ConfirmRequest)",
       "transactionAttribute" : "REQUIRED",
       "interface" : "com.acme.orders.api.OrderServiceLocal"
     },
@@ -351,9 +351,9 @@
     "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
-      "declaredType" : "com.acme.common.dto.ConfirmRequest",
+      "declaredType" : "io.capture.agent.fixtures.ConfirmRequest",
       "value" : {
-        "@type" : "com.acme.common.dto.ConfirmRequest",
+        "@type" : "io.capture.agent.fixtures.ConfirmRequest",
         "orderId" : 98662,
         "confirmedBy" : "ada",
         "confirmedAt" : "2026-10-23T21:42:43.985Z",
@@ -361,9 +361,9 @@
       }
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.dto.ConfirmResult",
+      "declaredType" : "io.capture.agent.fixtures.ConfirmResult",
       "value" : {
-        "@type" : "com.acme.common.dto.ConfirmResult",
+        "@type" : "io.capture.agent.fixtures.ConfirmResult",
         "orderId" : 98662,
         "status" : "CONFIRMED",
         "confirmedAt" : "2026-10-23T21:42:43.991424577Z",
@@ -385,7 +385,7 @@
       "beanClass" : "com.acme.orders.OrderServiceBean",
       "jndiNames" : [ "java:global/orders-ear/orders-ejb/OrderService", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:module/OrderService!com.acme.orders.api.OrderServiceLocal", "java:module/OrderService!com.acme.orders.api.OrderServiceRemote", "orders/OrderService" ],
       "method" : "findOrder",
-      "signature" : "com.acme.common.model.Order findOrder(long)",
+      "signature" : "io.capture.agent.fixtures.Order findOrder(long)",
       "transactionAttribute" : "REQUIRED"
     },
     "app" : "orders-ear",
@@ -396,9 +396,9 @@
       "value" : 98662
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.model.Order",
+      "declaredType" : "io.capture.agent.fixtures.Order",
       "value" : {
-        "@type" : "com.acme.common.model.Order",
+        "@type" : "io.capture.agent.fixtures.Order",
         "id" : 98662,
         "customerName" : "Ada Lovelace",
         "customerEmail" : "ada@example.com",
@@ -415,7 +415,7 @@
           "loaded" : false
         },
         "audit" : {
-          "@type" : "com.acme.common.model.AuditTrail",
+          "@type" : "io.capture.agent.fixtures.AuditTrail",
           "@serializable" : false,
           "entries" : "",
           "lock" : {

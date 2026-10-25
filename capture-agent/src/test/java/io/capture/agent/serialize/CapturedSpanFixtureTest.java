@@ -1,16 +1,16 @@
 package io.capture.agent.serialize;
 
-import com.acme.common.dto.CardPayment;
-import com.acme.common.dto.ConfirmRequest;
-import com.acme.common.dto.ConfirmResult;
-import com.acme.common.dto.CreateOrderRequest;
-import com.acme.common.dto.LoyaltyTier;
-import com.acme.common.dto.TaxCategory;
-import com.acme.common.dto.TaxRequest;
-import com.acme.common.dto.TaxResult;
-import com.acme.common.model.AuditTrail;
-import com.acme.common.model.Order;
-import com.acme.common.model.OrderStatus;
+import io.capture.agent.fixtures.AuditTrail;
+import io.capture.agent.fixtures.CardPayment;
+import io.capture.agent.fixtures.ConfirmRequest;
+import io.capture.agent.fixtures.ConfirmResult;
+import io.capture.agent.fixtures.CreateOrderRequest;
+import io.capture.agent.fixtures.LoyaltyTier;
+import io.capture.agent.fixtures.Order;
+import io.capture.agent.fixtures.OrderStatus;
+import io.capture.agent.fixtures.TaxCategory;
+import io.capture.agent.fixtures.TaxRequest;
+import io.capture.agent.fixtures.TaxResult;
 import io.capture.trace.EjbInfo;
 import io.capture.trace.Span;
 import io.capture.trace.Trace;
@@ -32,8 +32,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Traces captured on the real WebLogic server (recording rec-20261023-174243, annotation hook:
- * one Create order, one Confirm order), deserialized against common-dto. The acceptance check
- * that a captured trace round-trips, and that every EJB span carries its Phase 6 metadata.
+ * one Create order, one Confirm order), deserialized against the fixtures in
+ * {@code io.capture.agent.fixtures}: the lab's common-dto types with their package renamed, and
+ * the recordings' type names and deployment paths rewritten to match. The acceptance check that a
+ * captured trace round-trips, and that every EJB span carries its Phase 6 metadata.
  */
 class CapturedSpanFixtureTest {
 
@@ -86,7 +88,7 @@ class CapturedSpanFixtureTest {
     void createOrderRootSpanDeserializesArgumentAndResult() throws Exception {
         Span span = load("captures/create-order-trace.json").spans.get(2);
         assertEquals("com.acme.orders.OrderServiceBean", span.ejb.beanClass);
-        assertEquals("com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)", span.ejb.signature);
+        assertEquals("io.capture.agent.fixtures.Order createOrder(io.capture.agent.fixtures.CreateOrderRequest)", span.ejb.signature);
 
         CreateOrderRequest request = (CreateOrderRequest) serializer.deserialize(
                 span.args.get(0).value, loader.loadClass(span.args.get(0).declaredType), loader);

@@ -12,11 +12,11 @@
     "serverName" : "AdminServer",
     "deployments" : [ {
       "name" : "tax-ear",
-      "sourcePath" : "/home/purps/Development/ejb/sample-apps/tax-ear/tax-ear/target/tax-ear.ear",
+      "sourcePath" : "/opt/apps/tax-ear.ear",
       "moduleType" : "ear"
     }, {
       "name" : "orders-ear",
-      "sourcePath" : "/home/purps/Development/ejb/sample-apps/orders-ear/orders-ear/target/orders-ear.ear",
+      "sourcePath" : "/opt/apps/orders-ear.ear",
       "moduleType" : "ear"
     } ]
   },
@@ -340,7 +340,7 @@
       "invocation" : "LOCAL",
       "jndiNames" : [ "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceLocal", "java:app/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:global/orders-ear/orders-ejb/OrderService!com.acme.orders.api.OrderServiceRemote", "java:module/OrderService!com.acme.orders.api.OrderServiceLocal", "java:module/OrderService!com.acme.orders.api.OrderServiceRemote", "orders/OrderService" ],
       "method" : "createOrder",
-      "signature" : "com.acme.common.model.Order createOrder(com.acme.common.dto.CreateOrderRequest)",
+      "signature" : "io.capture.agent.fixtures.Order createOrder(io.capture.agent.fixtures.CreateOrderRequest)",
       "transactionAttribute" : "REQUIRED",
       "interface" : "com.acme.orders.api.OrderServiceLocal"
     },
@@ -348,16 +348,16 @@
     "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
-      "declaredType" : "com.acme.common.dto.CreateOrderRequest",
+      "declaredType" : "io.capture.agent.fixtures.CreateOrderRequest",
       "value" : {
-        "@type" : "com.acme.common.dto.CreateOrderRequest",
+        "@type" : "io.capture.agent.fixtures.CreateOrderRequest",
         "customer" : {
-          "@type" : "com.acme.common.dto.Customer",
+          "@type" : "io.capture.agent.fixtures.Customer",
           "name" : "Ada Lovelace",
           "email" : "ada@example.com",
           "loyaltyTier" : "GOLD",
           "address" : {
-            "@type" : "com.acme.common.dto.Address",
+            "@type" : "io.capture.agent.fixtures.Address",
             "street" : "Keizersgracht 1",
             "city" : "Amsterdam",
             "region" : "NH",
@@ -366,11 +366,11 @@
           }
         },
         "lines" : [ {
-          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "@type" : "io.capture.agent.fixtures.OrderLineRequest",
           "sku" : "WIDGET-1",
           "quantity" : 3
         }, {
-          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "@type" : "io.capture.agent.fixtures.OrderLineRequest",
           "sku" : "GADGET-2",
           "quantity" : 1
         } ],
@@ -381,16 +381,16 @@
         "requestedDeliveryDate" : "2026-10-30",
         "requestedAt" : "2026-10-23T21:42:43.801076316Z",
         "paymentMethod" : {
-          "@type" : "com.acme.common.dto.CardPayment",
+          "@type" : "io.capture.agent.fixtures.CardPayment",
           "lastFourDigits" : "4242",
           "expiry" : "2028-06"
         }
       }
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.model.Order",
+      "declaredType" : "io.capture.agent.fixtures.Order",
       "value" : {
-        "@type" : "com.acme.common.model.Order",
+        "@type" : "io.capture.agent.fixtures.Order",
         "id" : 98662,
         "customerName" : "Ada Lovelace",
         "customerEmail" : "ada@example.com",
@@ -407,7 +407,7 @@
           "loaded" : false
         },
         "audit" : {
-          "@type" : "com.acme.common.model.AuditTrail",
+          "@type" : "io.capture.agent.fixtures.AuditTrail",
           "@serializable" : false,
           "entries" : "",
           "lock" : {
@@ -463,7 +463,7 @@
       "invocation" : "LOCAL",
       "jndiNames" : [ "java:global/orders-ear/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:app/orders-ejb/InventoryService", "java:app/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:global/orders-ear/orders-ejb/InventoryService", "java:module/InventoryService", "java:module/InventoryService!com.acme.orders.InventoryService" ],
       "method" : "reserve",
-      "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+      "signature" : "io.capture.agent.fixtures.Reservation reserve(java.lang.String, int)",
       "transactionAttribute" : "REQUIRED",
       "interface" : "com.acme.orders.InventoryService"
     },
@@ -478,9 +478,9 @@
       "value" : 3
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.dto.Reservation",
+      "declaredType" : "io.capture.agent.fixtures.Reservation",
       "value" : {
-        "@type" : "com.acme.common.dto.Reservation",
+        "@type" : "io.capture.agent.fixtures.Reservation",
         "reservationId" : "e39b8cc5-dfba-4208-8b97-e097a5f0ca9c",
         "sku" : "WIDGET-1",
         "quantity" : 3,
@@ -504,7 +504,7 @@
       "invocation" : "LOCAL",
       "jndiNames" : [ "java:global/orders-ear/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:app/orders-ejb/InventoryService", "java:app/orders-ejb/InventoryService!com.acme.orders.InventoryService", "java:global/orders-ear/orders-ejb/InventoryService", "java:module/InventoryService", "java:module/InventoryService!com.acme.orders.InventoryService" ],
       "method" : "reserve",
-      "signature" : "com.acme.common.dto.Reservation reserve(java.lang.String, int)",
+      "signature" : "io.capture.agent.fixtures.Reservation reserve(java.lang.String, int)",
       "transactionAttribute" : "REQUIRED",
       "interface" : "com.acme.orders.InventoryService"
     },
@@ -519,9 +519,9 @@
       "value" : 1
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.dto.Reservation",
+      "declaredType" : "io.capture.agent.fixtures.Reservation",
       "value" : {
-        "@type" : "com.acme.common.dto.Reservation",
+        "@type" : "io.capture.agent.fixtures.Reservation",
         "reservationId" : "546b3ebc-1be9-4fcc-ad31-02804db1e228",
         "sku" : "GADGET-2",
         "quantity" : 1,
@@ -545,7 +545,7 @@
       "invocation" : "LOCAL",
       "jndiNames" : [ "java:global/orders-ear/orders-ejb/PricingService!com.acme.orders.PricingService", "java:app/orders-ejb/PricingService", "java:app/orders-ejb/PricingService!com.acme.orders.PricingService", "java:global/orders-ear/orders-ejb/PricingService", "java:module/PricingService", "java:module/PricingService!com.acme.orders.PricingService" ],
       "method" : "price",
-      "signature" : "com.acme.common.dto.PriceQuote price(com.acme.common.dto.CreateOrderRequest)",
+      "signature" : "io.capture.agent.fixtures.PriceQuote price(io.capture.agent.fixtures.CreateOrderRequest)",
       "transactionAttribute" : "REQUIRED",
       "interface" : "com.acme.orders.PricingService"
     },
@@ -553,16 +553,16 @@
     "module" : "orders-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
-      "declaredType" : "com.acme.common.dto.CreateOrderRequest",
+      "declaredType" : "io.capture.agent.fixtures.CreateOrderRequest",
       "value" : {
-        "@type" : "com.acme.common.dto.CreateOrderRequest",
+        "@type" : "io.capture.agent.fixtures.CreateOrderRequest",
         "customer" : {
-          "@type" : "com.acme.common.dto.Customer",
+          "@type" : "io.capture.agent.fixtures.Customer",
           "name" : "Ada Lovelace",
           "email" : "ada@example.com",
           "loyaltyTier" : "GOLD",
           "address" : {
-            "@type" : "com.acme.common.dto.Address",
+            "@type" : "io.capture.agent.fixtures.Address",
             "street" : "Keizersgracht 1",
             "city" : "Amsterdam",
             "region" : "NH",
@@ -571,11 +571,11 @@
           }
         },
         "lines" : [ {
-          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "@type" : "io.capture.agent.fixtures.OrderLineRequest",
           "sku" : "WIDGET-1",
           "quantity" : 3
         }, {
-          "@type" : "com.acme.common.dto.OrderLineRequest",
+          "@type" : "io.capture.agent.fixtures.OrderLineRequest",
           "sku" : "GADGET-2",
           "quantity" : 1
         } ],
@@ -586,16 +586,16 @@
         "requestedDeliveryDate" : "2026-10-30",
         "requestedAt" : "2026-10-23T21:42:43.801076316Z",
         "paymentMethod" : {
-          "@type" : "com.acme.common.dto.CardPayment",
+          "@type" : "io.capture.agent.fixtures.CardPayment",
           "lastFourDigits" : "4242",
           "expiry" : "2028-06"
         }
       }
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.dto.PriceQuote",
+      "declaredType" : "io.capture.agent.fixtures.PriceQuote",
       "value" : {
-        "@type" : "com.acme.common.dto.PriceQuote",
+        "@type" : "io.capture.agent.fixtures.PriceQuote",
         "currency" : "EUR",
         "lineTotals" : {
           "WIDGET-1" : "37.50",
@@ -603,7 +603,7 @@
         },
         "subtotal" : "123.74",
         "tax" : {
-          "@type" : "com.acme.common.dto.TaxResult",
+          "@type" : "io.capture.agent.fixtures.TaxResult",
           "jurisdiction" : "NL-NH",
           "rate" : "0.21",
           "tax" : "25.99",
@@ -688,7 +688,7 @@
       "invocation" : "REMOTE",
       "jndiNames" : [ "java:global/tax-ear/tax-ejb/TaxService!com.acme.tax.api.TaxService", "java:app/tax-ejb/TaxService", "java:app/tax-ejb/TaxService!com.acme.tax.api.TaxService", "java:global/tax-ear/tax-ejb/TaxService", "java:module/TaxService", "java:module/TaxService!com.acme.tax.api.TaxService", "tax/TaxService" ],
       "method" : "computeTax",
-      "signature" : "com.acme.common.dto.TaxResult computeTax(com.acme.common.dto.TaxRequest)",
+      "signature" : "io.capture.agent.fixtures.TaxResult computeTax(io.capture.agent.fixtures.TaxRequest)",
       "transactionAttribute" : "REQUIRED",
       "interface" : "com.acme.tax.api.TaxService"
     },
@@ -696,9 +696,9 @@
     "module" : "tax-ejb",
     "thread" : "[ACTIVE] ExecuteThread: '0' for queue: 'weblogic.kernel.Default (self-tuning)'",
     "args" : [ {
-      "declaredType" : "com.acme.common.dto.TaxRequest",
+      "declaredType" : "io.capture.agent.fixtures.TaxRequest",
       "value" : {
-        "@type" : "com.acme.common.dto.TaxRequest",
+        "@type" : "io.capture.agent.fixtures.TaxRequest",
         "country" : "NL",
         "region" : "NH",
         "category" : "GOODS",
@@ -706,9 +706,9 @@
       }
     } ],
     "result" : {
-      "declaredType" : "com.acme.common.dto.TaxResult",
+      "declaredType" : "io.capture.agent.fixtures.TaxResult",
       "value" : {
-        "@type" : "com.acme.common.dto.TaxResult",
+        "@type" : "io.capture.agent.fixtures.TaxResult",
         "jurisdiction" : "NL-NH",
         "rate" : "0.21",
         "tax" : "25.99",

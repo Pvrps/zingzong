@@ -198,7 +198,7 @@ are the same, and `jndiNames` come out identical (including `java:app`, `java:mo
 
 ### Differences that are not the agent's
 
-See `docs/weblogic-12-vs-14.md`: Jersey version (fewer `@handle` markers in a JAX-RS `Response`),
+See `docs/weblogic-12-vs-14.md` in the lab repository (ejb-capture-lab): Jersey version (fewer `@handle` markers in a JAX-RS `Response`),
 Coherence's management REST resources being `@Path`-annotated classes on the server class path
 (now in the hook's ignored packages), JDK 8 reflection hiding `Throwable.backtrace`.
 

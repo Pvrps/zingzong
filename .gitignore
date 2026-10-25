@@ -1,6 +1,3 @@
-# WebLogic install, domain, H2 files, captures, Maven cache
-.local/
-
 # devenv / direnv
 .devenv/
 .devenv.flake.nix

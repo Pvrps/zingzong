@@ -15,11 +15,6 @@
   <name>trace-model</name>
   <description>The trace JSON format: POJOs, mapper and schema. Depends on Jackson only.</description>
 
-  <properties>
-    <!-- Shaded into capture-agent, which must run on JDK 8 servers. -->
-    <maven.compiler.release>${agent.compiler.release}</maven.compiler.release>
-  </properties>
-
   <dependencies>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

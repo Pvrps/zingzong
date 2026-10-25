@@ -1,40 +1,40 @@
 package ca.gc.cra.xz02.devops.wltrace.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 /** Proves that the trace model round-trips through the shared mapper with every field intact. */
-class TraceJsonTest {
+public class TraceJsonTest {
 
     @Test
-    void roundTripsTheExampleFromThePlan() throws Exception {
+    public void roundTripsTheExampleFromThePlan() throws Exception {
         Trace trace = sampleTrace();
 
         String json = TraceJson.toJson(trace);
         Trace back = TraceJson.fromJson(json);
 
-        assertEquals(1, back.formatVersion);
-        assertEquals("rec-20261023-1401", back.recording.id);
-        assertEquals(2, back.recording.seq);
-        assertEquals(2, back.spans.size());
+        assertEquals(back.formatVersion, 1);
+        assertEquals(back.recording.id, "rec-20261023-1401");
+        assertEquals(back.recording.seq, 2);
+        assertEquals(back.spans.size(), 2);
         Span ejb = back.spans.get(1);
-        assertEquals("s1", ejb.parentId);
-        assertEquals("com.acme.orders.api.OrderServiceRemote", ejb.ejb.interfaceName);
-        assertEquals(42, ejb.args.get(0).value.get("orderId").asInt());
+        assertEquals(ejb.parentId, "s1");
+        assertEquals(ejb.ejb.interfaceName, "com.acme.orders.api.OrderServiceRemote");
+        assertEquals(ejb.args.get(0).value.get("orderId").asInt(), 42);
         assertNull(back.lineage);
-        assertEquals(json, TraceJson.toJson(back));
+        assertEquals(TraceJson.toJson(back), json);
     }
 
     @Test
-    void usesThePlannedJsonKeysAndOmitsNulls() throws Exception {
+    public void usesThePlannedJsonKeysAndOmitsNulls() throws Exception {
         JsonNode node = TraceJson.mapper().readTree(TraceJson.toJson(sampleTrace()));
 
         assertTrue(node.get("spans").get(1).get("ejb").has("interface"));
@@ -45,9 +45,9 @@ class TraceJsonTest {
     }
 
     @Test
-    void readerToleratesUnknownFieldsFromNewerWriters() throws Exception {
+    public void readerToleratesUnknownFieldsFromNewerWriters() throws Exception {
         Trace back = TraceJson.fromJson("{\"formatVersion\":1,\"trace\":{\"id\":\"t\"},\"spans\":[],\"futureField\":true}");
-        assertEquals("t", back.trace.id);
+        assertEquals(back.trace.id, "t");
     }
 
     private static Trace sampleTrace() throws Exception {

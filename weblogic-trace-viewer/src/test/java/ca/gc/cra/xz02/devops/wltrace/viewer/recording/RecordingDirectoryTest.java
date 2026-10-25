@@ -4,19 +4,19 @@ import ca.gc.cra.xz02.devops.wltrace.viewer.recording.lineage.LineageDetector;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageEntry;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageFile;
 import ca.gc.cra.xz02.devops.wltrace.model.RecordingIndex;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
 /** Proves loading, ordering, lineage and indexing of a recording captured on the server: Create order then Confirm order. */
-class RecordingDirectoryTest {
+public class RecordingDirectoryTest {
 
     private static Path recording() throws Exception {
         URL url = RecordingDirectoryTest.class.getResource("/recordings/create-and-confirm/recording.json");
@@ -25,22 +25,22 @@ class RecordingDirectoryTest {
     }
 
     @Test
-    void loadsManifestAndTracesInSeqOrder() throws Exception {
+    public void loadsManifestAndTracesInSeqOrder() throws Exception {
         RecordingDirectory recording = RecordingDirectory.load(recording());
-        assertEquals("rec-20261023-162921", recording.manifest.id);
-        assertEquals("create-and-confirm", recording.manifest.name);
+        assertEquals(recording.manifest.id, "rec-20261023-162921");
+        assertEquals(recording.manifest.name, "create-and-confirm");
         assertNotNull(recording.manifest.startedAt);
         assertNotNull(recording.manifest.endedAt);
-        assertEquals("1.0.0-SNAPSHOT", recording.manifest.agent.version);
-        assertEquals(Long.valueOf(2), recording.manifest.traceCount);
-        assertEquals(2, recording.traces.size());
-        assertEquals(1, recording.traces.get(0).sequence());
-        assertEquals("OrderService.createOrder", SpanLabels.span(recording.traces.get(0).root()));
-        assertEquals("OrderService.confirmOrder", SpanLabels.span(recording.traces.get(1).root()));
+        assertEquals(recording.manifest.agent.version, "1.0.0-SNAPSHOT");
+        assertEquals(recording.manifest.traceCount, Long.valueOf(2));
+        assertEquals(recording.traces.size(), 2);
+        assertEquals(recording.traces.get(0).sequence(), 1);
+        assertEquals(SpanLabels.span(recording.traces.get(0).root()), "OrderService.createOrder");
+        assertEquals(SpanLabels.span(recording.traces.get(1).root()), "OrderService.confirmOrder");
     }
 
     @Test
-    void confirmOrderIdComesFromCreateOrderResult() throws Exception {
+    public void confirmOrderIdComesFromCreateOrderResult() throws Exception {
         RecordingDirectory recording = RecordingDirectory.load(recording());
         LineageFile lineage = new LineageDetector().detect(recording.manifest.id, recording.traces);
 
@@ -55,23 +55,23 @@ class RecordingDirectoryTest {
             }
         }
         assertNotNull(link);
-        assertEquals(recording.traces.get(1).id(), link.to.trace);
-        assertEquals("s1", link.to.span);
-        assertEquals(recording.traces.get(0).id(), link.from.trace);
-        assertEquals("s1", link.from.span);
-        assertEquals("result.id", link.from.path);
+        assertEquals(link.to.trace, recording.traces.get(1).id());
+        assertEquals(link.to.span, "s1");
+        assertEquals(link.from.trace, recording.traces.get(0).id());
+        assertEquals(link.from.span, "s1");
+        assertEquals(link.from.path, "result.id");
         assertNotNull(name);
-        assertEquals(LineageEntry.CLASS_USER_INPUT, name.classification);
-        assertEquals("args[0].customer.name", name.to.path);
+        assertEquals(name.classification, LineageEntry.CLASS_USER_INPUT);
+        assertEquals(name.to.path, "args[0].customer.name");
     }
 
     @Test
-    void indexSummarisesBothTraces() throws Exception {
+    public void indexSummarisesBothTraces() throws Exception {
         RecordingDirectory recording = RecordingDirectory.load(recording());
         RecordingIndex index = new RecordingIndexer(new LineageDetector()).index(recording);
-        assertEquals(2, index.traces.size());
-        assertEquals("OrderService.createOrder", index.traces.get(0).rootLabel);
-        assertEquals(9, index.traces.get(0).spanCount);
+        assertEquals(index.traces.size(), 2);
+        assertEquals(index.traces.get(0).rootLabel, "OrderService.createOrder");
+        assertEquals(index.traces.get(0).spanCount, 9);
         assertTrue(index.lineage.size() >= 2);
     }
 }

@@ -1,15 +1,15 @@
 package ca.gc.cra.xz02.devops.wltrace.viewer.recording;
 
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 /** Proves which file names count as a server manifest. */
-class ManifestFilesTest {
+public class ManifestFilesTest {
 
     @Test
-    void manifestNamesPerServerButNotTheIndex() {
+    public void manifestNamesPerServerButNotTheIndex() {
         assertTrue(RecordingDirectory.MANIFEST_FILE.matcher("recording.json").matches());
         assertTrue(RecordingDirectory.MANIFEST_FILE.matcher("recording-AdminServer.json").matches());
         assertTrue(RecordingDirectory.MANIFEST_FILE.matcher("recording-ms_1.json").matches());

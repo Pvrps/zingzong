@@ -1,19 +1,19 @@
 package ca.gc.cra.xz02.devops.wltrace.plugin.jvm;
 
 import ca.gc.cra.xz02.devops.wltrace.plugin.domain.Domain;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 /** Proves the five state sentences from the facts that produce them. */
-class DomainStateTest {
+public class DomainStateTest {
 
     private final Domain domain = new Domain(Paths.get("/domains/d1"));
 
@@ -22,45 +22,45 @@ class DomainStateTest {
     }
 
     @Test
-    void notEnabled() {
+    public void notEnabled() {
         DomainState state = new DomainState(false, false, false, Collections.emptyList(), domain);
-        assertEquals(DomainState.Kind.NOT_ENABLED, state.kind);
+        assertEquals(state.kind, DomainState.Kind.NOT_ENABLED);
         assertTrue(state.message.startsWith("not enabled: run wltrace:enable"), state.message);
         DomainState stale = new DomainState(true, true, false, Collections.emptyList(), domain);
-        assertEquals(DomainState.Kind.NOT_ENABLED, stale.kind);
+        assertEquals(stale.kind, DomainState.Kind.NOT_ENABLED);
         assertTrue(stale.message.contains("not the one this plugin ships"), stale.message);
     }
 
     @Test
-    void enabledServerNotRunning() {
+    public void enabledServerNotRunning() {
         DomainState state = new DomainState(true, true, true, Collections.emptyList(), domain);
-        assertEquals(DomainState.Kind.ENABLED_SERVER_DOWN, state.kind);
+        assertEquals(state.kind, DomainState.Kind.ENABLED_SERVER_DOWN);
         assertTrue(state.message.startsWith("enabled, server not running"), state.message);
         assertFalse(state.ready());
     }
 
     @Test
-    void enabledServerWithoutAgent() {
+    public void enabledServerWithoutAgent() {
         List<DomainState.Server> servers = Arrays.asList(server("AdminServer", true), server("ms1", false));
         DomainState state = new DomainState(true, true, true, servers, domain);
-        assertEquals(DomainState.Kind.ENABLED_SERVER_NO_AGENT, state.kind);
+        assertEquals(state.kind, DomainState.Kind.ENABLED_SERVER_NO_AGENT);
         assertTrue(state.message.startsWith("enabled, server running without the agent, restart it: ms1 (pid 4242)"), state.message);
         assertTrue(state.message.endsWith("nothing is recorded until then"), state.message);
     }
 
     @Test
-    void disabledButLoaded() {
+    public void disabledButLoaded() {
         DomainState state = new DomainState(false, false, false, Collections.singletonList(server("AdminServer", true)), domain);
-        assertEquals(DomainState.Kind.DISABLED_AGENT_LOADED, state.kind);
+        assertEquals(state.kind, DomainState.Kind.DISABLED_AGENT_LOADED);
         assertTrue(state.message.startsWith("disabled on disk, agent still loaded until restart: AdminServer"), state.message);
         assertTrue(state.anyAgentLoaded());
     }
 
     @Test
-    void ready() {
+    public void ready() {
         DomainState state = new DomainState(true, true, true, Collections.singletonList(server("AdminServer", true)), domain);
-        assertEquals(DomainState.Kind.READY, state.kind);
-        assertEquals("ready: AdminServer (pid 4242)", state.message);
+        assertEquals(state.kind, DomainState.Kind.READY);
+        assertEquals(state.message, "ready: AdminServer (pid 4242)");
         assertTrue(state.ready());
     }
 }

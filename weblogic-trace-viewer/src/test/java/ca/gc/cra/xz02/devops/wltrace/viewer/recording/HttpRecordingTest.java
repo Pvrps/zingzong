@@ -4,7 +4,7 @@ import ca.gc.cra.xz02.devops.wltrace.viewer.recording.lineage.LineageDetector;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageEntry;
 import ca.gc.cra.xz02.devops.wltrace.model.LineageFile;
 import ca.gc.cra.xz02.devops.wltrace.model.Span;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.net.URL;
 import java.nio.file.Path;
@@ -12,13 +12,13 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 /** Proves that HTTP roots carry the request and response raw, with the resource child and the EJB tree under them, and that lineage reads the bodies. */
-class HttpRecordingTest {
+public class HttpRecordingTest {
 
     private static Path recording() throws Exception {
         URL url = HttpRecordingTest.class.getResource("/recordings/create-confirm-soap/recording.json");
@@ -27,48 +27,48 @@ class HttpRecordingTest {
     }
 
     @Test
-    void hasHttpRootsWithResourceChildrenThenTheEjbTree() throws Exception {
+    public void hasHttpRootsWithResourceChildrenThenTheEjbTree() throws Exception {
         RecordingDirectory recording = RecordingDirectory.load(recording());
-        assertEquals(3, recording.traces.size());
+        assertEquals(recording.traces.size(), 3);
 
         Span confirmRoot = recording.traces.get(1).root();
-        assertEquals(Span.KIND_HTTP, confirmRoot.kind);
-        assertEquals("POST", confirmRoot.http.method);
+        assertEquals(confirmRoot.kind, Span.KIND_HTTP);
+        assertEquals(confirmRoot.http.method, "POST");
         assertTrue(confirmRoot.http.path.matches("/orders/api/orders/\\d+/confirm"), confirmRoot.http.path);
-        assertEquals(Integer.valueOf(200), confirmRoot.http.status);
-        assertEquals("{\"confirmedBy\":\"ada\",\"notes\":\"please gift-wrap\"}", confirmRoot.http.requestBody, "the exact body the client sent");
-        assertEquals(Collections.singletonList("Bearer test-token-123"), confirmRoot.http.requestHeaders.get("Authorization"), "nothing is redacted");
+        assertEquals(confirmRoot.http.status, Integer.valueOf(200));
+        assertEquals(confirmRoot.http.requestBody, "{\"confirmedBy\":\"ada\",\"notes\":\"please gift-wrap\"}", "the exact body the client sent");
+        assertEquals(confirmRoot.http.requestHeaders.get("Authorization"), Collections.singletonList("Bearer test-token-123"), "nothing is redacted");
         assertTrue(confirmRoot.http.requestHeaders.get("Cookie").get(0).startsWith("JSESSIONID="));
         assertTrue(confirmRoot.http.responseHeaders.containsKey("Content-Type"));
         assertTrue(confirmRoot.http.responseBody.contains("\"status\":\"CONFIRMED\""));
         assertNotNull(recording.traces.get(1).trace.trace.httpSessionId);
 
         List<Span> spans = recording.traces.get(1).trace.spans;
-        assertEquals("jaxrs", spans.get(1).layer);
-        assertEquals("OrdersResource.confirm [jaxrs]", SpanLabels.span(spans.get(1)));
-        assertEquals("s1", spans.get(1).parentId);
-        assertEquals("OrderService.confirmOrder", SpanLabels.span(spans.get(2)));
-        assertEquals("s2", spans.get(2).parentId);
+        assertEquals(spans.get(1).layer, "jaxrs");
+        assertEquals(SpanLabels.span(spans.get(1)), "OrdersResource.confirm [jaxrs]");
+        assertEquals(spans.get(1).parentId, "s1");
+        assertEquals(SpanLabels.span(spans.get(2)), "OrderService.confirmOrder");
+        assertEquals(spans.get(2).parentId, "s2");
 
         Span soapRoot = recording.traces.get(2).root();
-        assertEquals("/tax/TaxWebService", soapRoot.http.path);
+        assertEquals(soapRoot.http.path, "/tax/TaxWebService");
         assertTrue(soapRoot.http.requestBody.contains("<tax:computeTax>"), "the SOAP envelope as sent");
         assertTrue(soapRoot.http.responseBody.contains("<ns0:computeTaxResponse"));
-        assertEquals("jaxws", recording.traces.get(2).trace.spans.get(1).layer);
-        assertEquals("TaxService.computeTax", SpanLabels.span(recording.traces.get(2).trace.spans.get(2)));
+        assertEquals(recording.traces.get(2).trace.spans.get(1).layer, "jaxws");
+        assertEquals(SpanLabels.span(recording.traces.get(2).trace.spans.get(2)), "TaxService.computeTax");
     }
 
     @Test
-    void theRootRequestBodyIsTheUserInputSource() throws Exception {
+    public void theRootRequestBodyIsTheUserInputSource() throws Exception {
         RecordingDirectory recording = RecordingDirectory.load(recording());
         LineageFile lineage = new LineageDetector().detect(recording.manifest.id, recording.traces);
 
         LineageEntry name = entry(lineage, "Ada Lovelace");
-        assertEquals(LineageEntry.CLASS_USER_INPUT, name.classification);
-        assertEquals("http.requestBody.customer.name", name.to.path);
-        assertEquals("s1", name.to.span);
-        assertEquals(LineageEntry.CLASS_USER_INPUT, entry(lineage, "please gift-wrap").classification);
-        assertEquals("http.requestBody.notes", entry(lineage, "please gift-wrap").to.path);
+        assertEquals(name.classification, LineageEntry.CLASS_USER_INPUT);
+        assertEquals(name.to.path, "http.requestBody.customer.name");
+        assertEquals(name.to.span, "s1");
+        assertEquals(entry(lineage, "please gift-wrap").classification, LineageEntry.CLASS_USER_INPUT);
+        assertEquals(entry(lineage, "please gift-wrap").to.path, "http.requestBody.notes");
 
         // SOAP elements are flattened too: NL-NH and GOODS are short/dictionary-like, 123.74 is distinctive.
         boolean soapAmount = false;
@@ -86,7 +86,7 @@ class HttpRecordingTest {
             }
         }
         assertNotNull(orderId);
-        assertEquals("result.id", orderId.from.path);
+        assertEquals(orderId.from.path, "result.id");
         assertNull(entry(lineage, "GOLD"), "enum-like words are never indexed");
     }
 

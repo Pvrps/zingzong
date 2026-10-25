@@ -1,6 +1,6 @@
 package ca.gc.cra.xz02.devops.wltrace.agent.bootstrap;
 
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 /** Proves that no compiled agent class links against a platform-loader module, which the bootstrap loader cannot see. */
-class BootstrapVisibilityTest {
+public class BootstrapVisibilityTest {
 
     /** Packages of modules defined to the platform loader in JDK 9+ that the agent must not link to. */
     private static final String[] NON_BOOT_PACKAGES = {
@@ -24,7 +24,7 @@ class BootstrapVisibilityTest {
     };
 
     @Test
-    void agentClassesDoNotLinkAgainstPlatformLoaderModules() throws IOException {
+    public void agentClassesDoNotLinkAgainstPlatformLoaderModules() throws IOException {
         Path classes = Paths.get("target", "classes", "ca", "gc", "cra", "xz02", "devops", "wltrace", "agent");
         assertTrue(Files.isDirectory(classes), "run after compile: " + classes.toAbsolutePath());
         List<String> offenders = new ArrayList<>();
@@ -46,7 +46,7 @@ class BootstrapVisibilityTest {
     private static final int JAVA_8_MAJOR_VERSION = 52;
 
     @Test
-    void agentClassesAreJava8Bytecode() throws IOException {
+    public void agentClassesAreJava8Bytecode() throws IOException {
         Path classes = Paths.get("target", "classes");
         assertTrue(Files.isDirectory(classes), "run after compile: " + classes.toAbsolutePath());
         List<String> offenders = new ArrayList<>();

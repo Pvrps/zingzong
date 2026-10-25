@@ -23,7 +23,7 @@ import ca.gc.cra.xz02.devops.wltrace.agent.fixtures.TaxResult;
 import org.eclipse.persistence.indirection.IndirectList;
 import org.eclipse.persistence.indirection.ValueHolder;
 import org.eclipse.persistence.indirection.ValueHolderInterface;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -38,67 +38,67 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 /** Proves the JSON form of every awkward type in the fixtures package: nested objects, polymorphism, lazy JPA state, cycles, non-serializable data. */
-class AwkwardTypesTest {
+public class AwkwardTypesTest {
 
     private final Graphs graphs = new Graphs();
 
     @Test
-    void nestedObjectsWithTypeOnEveryObject() {
+    public void nestedObjectsWithTypeOnEveryObject() {
         Graphs.Result result = graphs.write(sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6))));
         JsonNode node = result.node;
-        assertEquals("ca.gc.cra.xz02.devops.wltrace.agent.fixtures.CreateOrderRequest", node.get("@type").asText());
-        assertEquals("ca.gc.cra.xz02.devops.wltrace.agent.fixtures.Customer", node.get("customer").get("@type").asText());
-        assertEquals("Amsterdam", node.get("customer").get("address").get("city").asText());
-        assertEquals("NL", node.get("customer").get("address").get("country").asText());
+        assertEquals(node.get("@type").asText(), "ca.gc.cra.xz02.devops.wltrace.agent.fixtures.CreateOrderRequest");
+        assertEquals(node.get("customer").get("@type").asText(), "ca.gc.cra.xz02.devops.wltrace.agent.fixtures.Customer");
+        assertEquals(node.get("customer").get("address").get("city").asText(), "Amsterdam");
+        assertEquals(node.get("customer").get("address").get("country").asText(), "NL");
         assertTrue(result.warnings.isEmpty(), result.warnings());
     }
 
     @Test
-    void listsAndStringKeyedMaps() {
+    public void listsAndStringKeyedMaps() {
         JsonNode node = graphs.write(sampleRequest(null)).node;
         assertTrue(node.get("lines").isArray());
-        assertEquals(2, node.get("lines").size());
-        assertEquals("WIDGET-1", node.get("lines").get(0).get("sku").asText());
-        assertEquals(3, node.get("lines").get(0).get("quantity").asInt());
-        assertEquals("ca.gc.cra.xz02.devops.wltrace.agent.fixtures.OrderLineRequest", node.get("lines").get(1).get("@type").asText());
-        assertEquals("web", node.get("attributes").get("channel").asText(), "string-keyed map is a plain JSON object");
+        assertEquals(node.get("lines").size(), 2);
+        assertEquals(node.get("lines").get(0).get("sku").asText(), "WIDGET-1");
+        assertEquals(node.get("lines").get(0).get("quantity").asInt(), 3);
+        assertEquals(node.get("lines").get(1).get("@type").asText(), "ca.gc.cra.xz02.devops.wltrace.agent.fixtures.OrderLineRequest");
+        assertEquals(node.get("attributes").get("channel").asText(), "web", "string-keyed map is a plain JSON object");
         assertFalse(node.get("attributes").has("@type"));
         assertTrue(node.get("paymentMethod").isNull());
     }
 
     @Test
-    void enumsByName() {
+    public void enumsByName() {
         JsonNode node = graphs.write(new TaxRequest("NL", "NH", TaxCategory.SERVICES, new BigDecimal("10.00"))).node;
-        assertEquals("SERVICES", node.get("category").asText());
-        assertEquals("GOLD", graphs.write(sampleRequest(null)).node.get("customer").get("loyaltyTier").asText());
+        assertEquals(node.get("category").asText(), "SERVICES");
+        assertEquals(graphs.write(sampleRequest(null)).node.get("customer").get("loyaltyTier").asText(), "GOLD");
     }
 
     @Test
-    void javaTimeAndUtilDateAsIsoStrings() {
+    public void javaTimeAndUtilDateAsIsoStrings() {
         CreateOrderRequest request = sampleRequest(null);
         request.setRequestedAt(Instant.parse("2026-10-23T18:01:12.345Z"));
         request.setRequestedDeliveryDate(LocalDate.of(2026, 10, 30));
         JsonNode node = graphs.write(request).node;
-        assertEquals("2026-10-23T18:01:12.345Z", node.get("requestedAt").asText());
-        assertEquals("2026-10-30", node.get("requestedDeliveryDate").asText());
+        assertEquals(node.get("requestedAt").asText(), "2026-10-23T18:01:12.345Z");
+        assertEquals(node.get("requestedDeliveryDate").asText(), "2026-10-30");
 
         Reservation reservation = new Reservation("r1", "WIDGET-1", 2, "WH", LocalDateTime.of(2026, 10, 23, 14, 30, 15));
-        assertEquals("2026-10-23T14:30:15", graphs.write(reservation).node.get("reservedUntil").asText());
+        assertEquals(graphs.write(reservation).node.get("reservedUntil").asText(), "2026-10-23T14:30:15");
 
         ConfirmRequest confirm = new ConfirmRequest(42, "ada", new Date(1_800_000_000_000L), null);
         JsonNode confirmNode = graphs.write(confirm).node;
-        assertEquals("2027-01-15T08:00:00Z", confirmNode.get("confirmedAt").asText());
-        assertEquals(42, confirmNode.get("orderId").asLong());
+        assertEquals(confirmNode.get("confirmedAt").asText(), "2027-01-15T08:00:00Z");
+        assertEquals(confirmNode.get("orderId").asLong(), 42);
         assertTrue(confirmNode.get("notes").isNull());
     }
 
     @Test
-    void bigDecimalAsStringWithScalePreserved() {
+    public void bigDecimalAsStringWithScalePreserved() {
         Map<String, BigDecimal> lineTotals = new LinkedHashMap<>();
         lineTotals.put("WIDGET-1", new BigDecimal("37.50"));
         lineTotals.put("GADGET-2", new BigDecimal("99.99"));
@@ -107,24 +107,24 @@ class AwkwardTypesTest {
 
         JsonNode node = graphs.write(quote).node;
         assertTrue(node.get("subtotal").isTextual());
-        assertEquals("123.74", node.get("subtotal").asText());
-        assertEquals("0.21", node.get("tax").get("rate").asText());
-        assertEquals("37.50", node.get("lineTotals").get("WIDGET-1").asText(), "the scale survives as text");
+        assertEquals(node.get("subtotal").asText(), "123.74");
+        assertEquals(node.get("tax").get("rate").asText(), "0.21");
+        assertEquals(node.get("lineTotals").get("WIDGET-1").asText(), "37.50", "the scale survives as text");
     }
 
     @Test
-    void polymorphicPaymentMethodsCarryTheirRuntimeType() {
+    public void polymorphicPaymentMethodsCarryTheirRuntimeType() {
         JsonNode card = graphs.write(sampleRequest(new CardPayment("4242", YearMonth.of(2028, 6)))).node;
-        assertEquals("ca.gc.cra.xz02.devops.wltrace.agent.fixtures.CardPayment", card.get("paymentMethod").get("@type").asText());
-        assertEquals("2028-06", card.get("paymentMethod").get("expiry").asText());
+        assertEquals(card.get("paymentMethod").get("@type").asText(), "ca.gc.cra.xz02.devops.wltrace.agent.fixtures.CardPayment");
+        assertEquals(card.get("paymentMethod").get("expiry").asText(), "2028-06");
 
         JsonNode invoice = graphs.write(sampleRequest(new InvoicePayment("PO-7781", 45))).node;
-        assertEquals("ca.gc.cra.xz02.devops.wltrace.agent.fixtures.InvoicePayment", invoice.get("paymentMethod").get("@type").asText());
-        assertEquals(45, invoice.get("paymentMethod").get("netDays").asInt());
+        assertEquals(invoice.get("paymentMethod").get("@type").asText(), "ca.gc.cra.xz02.devops.wltrace.agent.fixtures.InvoicePayment");
+        assertEquals(invoice.get("paymentMethod").get("netDays").asInt(), 45);
     }
 
     @Test
-    void unloadedIndirectListIsMarkedLazyAndNeverInstantiated() throws Exception {
+    public void unloadedIndirectListIsMarkedLazyAndNeverInstantiated() throws Exception {
         Order order = sampleOrder();
         AtomicInteger loads = new AtomicInteger();
         setLines(order, unloadedIndirectList(loads));
@@ -133,12 +133,12 @@ class AwkwardTypesTest {
         JsonNode lines = result.node.get("lines");
         assertTrue(lines.get("@lazy").asBoolean(), result.json());
         assertFalse(lines.get("loaded").asBoolean());
-        assertEquals(0, loads.get(), "serializer must not instantiate the lazy collection");
+        assertEquals(loads.get(), 0, "serializer must not instantiate the lazy collection");
         assertFalse(result.hasWarning("lines", ""), "an unloaded lazy collection is expected, not a warning: " + result.warnings());
     }
 
     @Test
-    void loadedIndirectListSerializesItsContents() throws Exception {
+    public void loadedIndirectListSerializesItsContents() throws Exception {
         Order order = sampleOrder();
         IndirectList<OrderLine> loaded = new IndirectList<>();
         loaded.setValueHolder(new ValueHolder(new java.util.Vector<>(Arrays.asList(new OrderLine(order, "GIZMO-3", 1, new BigDecimal("1499.00"))))));
@@ -146,49 +146,49 @@ class AwkwardTypesTest {
 
         Graphs.Result result = graphs.write(order);
         assertTrue(result.node.get("lines").isArray(), result.json());
-        assertEquals("GIZMO-3", result.node.get("lines").get(0).get("sku").asText());
+        assertEquals(result.node.get("lines").get(0).get("sku").asText(), "GIZMO-3");
     }
 
     @Test
-    void orderLineBackReferenceTerminatesAsRef() {
+    public void orderLineBackReferenceTerminatesAsRef() {
         Order order = sampleOrder();
         order.addLine("WIDGET-1", 3, new BigDecimal("12.50"));
         order.addLine("GADGET-2", 1, new BigDecimal("99.99"));
 
         Graphs.Result result = graphs.write(order);
         JsonNode node = result.node;
-        assertEquals(1, node.get("@id").asInt(), result.json());
-        assertEquals(1, node.get("lines").get(0).get("order").get("@ref").asInt());
-        assertEquals(1, node.get("lines").get(1).get("order").get("@ref").asInt());
-        assertEquals("12.50", node.get("lines").get(0).get("unitPrice").asText());
+        assertEquals(node.get("@id").asInt(), 1, result.json());
+        assertEquals(node.get("lines").get(0).get("order").get("@ref").asInt(), 1);
+        assertEquals(node.get("lines").get(1).get("order").get("@ref").asInt(), 1);
+        assertEquals(node.get("lines").get(0).get("unitPrice").asText(), "12.50");
         assertTrue(result.warnings.isEmpty(), result.warnings());
     }
 
     @Test
-    void nonSerializableAuditTrailIsCapturedAndFlaggedWithoutWarning() {
+    public void nonSerializableAuditTrailIsCapturedAndFlaggedWithoutWarning() {
         Order order = sampleOrder();
         order.setStatus(OrderStatus.CONFIRMED);
 
         Graphs.Result result = graphs.write(order);
         JsonNode audit = result.node.get("audit");
-        assertEquals(AuditTrail.class.getName(), audit.get("@type").asText(), result.json());
+        assertEquals(audit.get("@type").asText(), AuditTrail.class.getName(), result.json());
         assertFalse(audit.get("@serializable").asBoolean(), result.json());
-        assertEquals(1, audit.get("entryCount").asInt());
-        assertEquals(order.getAudit().getOpenedAt().toString(), audit.get("openedAt").asText());
+        assertEquals(audit.get("entryCount").asInt(), 1);
+        assertEquals(audit.get("openedAt").asText(), order.getAudit().getOpenedAt().toString());
         assertTrue(audit.get("entries").asText().endsWith("status -> CONFIRMED\n"));
-        assertEquals("java.lang.Object", audit.get("lock").get("@type").asText(), "a bare monitor object is captured as an empty object");
+        assertEquals(audit.get("lock").get("@type").asText(), "java.lang.Object", "a bare monitor object is captured as an empty object");
         assertTrue(result.warnings.isEmpty(), result.warnings());
         assertFalse(result.node.has("@serializable"), "Order itself is Serializable");
     }
 
     @Test
-    void confirmResultWithListOfStrings() {
+    public void confirmResultWithListOfStrings() {
         ConfirmResult result = new ConfirmResult(11, OrderStatus.CONFIRMED, Instant.parse("2026-10-23T19:31:32.806Z"),
                 Arrays.asList("Confirmed by ada", "Notes: gift-wrap"));
         JsonNode node = graphs.write(result).node;
-        assertEquals(11, node.get("orderId").asLong());
-        assertEquals("CONFIRMED", node.get("status").asText());
-        assertEquals("Notes: gift-wrap", node.get("messages").get(1).asText());
+        assertEquals(node.get("orderId").asLong(), 11);
+        assertEquals(node.get("status").asText(), "CONFIRMED");
+        assertEquals(node.get("messages").get(1).asText(), "Notes: gift-wrap");
     }
 
     static CreateOrderRequest sampleRequest(PaymentMethod payment) {

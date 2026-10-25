@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.loading.ByteArrayClassLoader;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.io.Serializable;
 import java.lang.reflect.Field;
@@ -12,25 +12,25 @@ import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotSame;
+import static org.testng.Assert.assertSame;
 
 /** Proves that per-type state follows the Class object, not the class name: two loaders, same name, different fields, no confusion. */
-class ClassLoaderIsolationTest {
+public class ClassLoaderIsolationTest {
 
     private static final String NAME = "com.acme.dyn.Thing";
 
     private final Graphs graphs = new Graphs();
 
     @Test
-    void sameClassNameInTwoLoadersSerializesWithEachLoadersOwnFields() throws Exception {
+    public void sameClassNameInTwoLoadersSerializesWithEachLoadersOwnFields() throws Exception {
         Class<?> a = define(Collections.singletonMap("name", String.class), Collections.singletonMap("version", int.class));
         Class<?> b = define(Collections.singletonMap("name", String.class), Collections.singletonMap("extra", String.class));
-        assertEquals(a.getName(), b.getName());
-        assertNotSame(a, b);
-        assertNotSame(a.getClassLoader(), b.getClassLoader());
+        assertEquals(b.getName(), a.getName());
+        assertNotSame(b, a);
+        assertNotSame(b.getClassLoader(), a.getClassLoader());
 
         Object instanceA = a.getDeclaredConstructor().newInstance();
         set(instanceA, "name", "from-A");
@@ -44,30 +44,30 @@ class ClassLoaderIsolationTest {
         JsonNode nodeB = graphs.write(instanceB).node;
         JsonNode nodeA2 = graphs.write(instanceA).node;
 
-        assertEquals(NAME, nodeA.get("@type").asText());
-        assertEquals(7, nodeA.get("version").asInt());
+        assertEquals(nodeA.get("@type").asText(), NAME);
+        assertEquals(nodeA.get("version").asInt(), 7);
         assertFalse(nodeA.has("extra"), nodeA.toString());
 
-        assertEquals(NAME, nodeB.get("@type").asText());
-        assertEquals("only-in-B", nodeB.get("extra").asText());
+        assertEquals(nodeB.get("@type").asText(), NAME);
+        assertEquals(nodeB.get("extra").asText(), "only-in-B");
         assertFalse(nodeB.has("version"), nodeB.toString());
 
-        assertEquals(nodeA, nodeA2);
+        assertEquals(nodeA2, nodeA);
     }
 
     @Test
-    void typeInfoIsKeyedByClassObject() throws Exception {
+    public void typeInfoIsKeyedByClassObject() throws Exception {
         Class<?> a = define(Collections.singletonMap("name", String.class), Collections.<String, Class<?>>emptyMap());
         Class<?> b = define(Collections.singletonMap("name", String.class), Collections.singletonMap("extra", String.class));
         TypeInfoCache typeInfos = new TypeInfoCache();
         TypeInfo infoA = typeInfos.of(a);
         TypeInfo infoB = typeInfos.of(b);
-        assertNotSame(infoA, infoB);
-        assertSame(a, infoA.type());
-        assertSame(b, infoB.type());
-        assertEquals(1, infoA.fieldCount());
-        assertEquals(2, infoB.fieldCount());
-        assertSame(infoA, typeInfos.of(a), "stable per Class object");
+        assertNotSame(infoB, infoA);
+        assertSame(infoA.type(), a);
+        assertSame(infoB.type(), b);
+        assertEquals(infoA.fieldCount(), 1);
+        assertEquals(infoB.fieldCount(), 2);
+        assertSame(typeInfos.of(a), infoA, "stable per Class object");
     }
 
     private static Class<?> define(Map<String, Class<?>> fields1, Map<String, Class<?>> fields2) {

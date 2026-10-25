@@ -2,43 +2,43 @@ package ca.gc.cra.xz02.devops.wltrace.agent.bootstrap;
 
 import ca.gc.cra.xz02.devops.wltrace.agent.instrument.AdviceBinding;
 import ca.gc.cra.xz02.devops.wltrace.agent.instrument.Hook;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 /** Proves that the agent stays inert outside WebLogic and when a required hook's targets are missing, and records when they are all present. */
-class InertnessCheckTest {
+public class InertnessCheckTest {
 
     private static final Hook PRESENT = hook("present", false, "java.lang.String");
     private static final Hook MISSING = hook("missing", false, "weblogic.nowhere.Absent");
     private static final Hook MISSING_OPTIONAL = hook("missing optional", true, "weblogic.nowhere.Absent");
 
     @Test
-    void inertOutsideWebLogic() {
+    public void inertOutsideWebLogic() {
         Optional<String> reason = InertnessCheck.reason(Collections.singletonList(PRESENT));
         assertTrue(reason.isPresent());
         assertTrue(reason.get().startsWith("not a WebLogic server"), reason.get());
     }
 
     @Test
-    void activeOnWebLogicWithEveryRequiredTargetPresent() {
+    public void activeOnWebLogicWithEveryRequiredTargetPresent() {
         withWebLogicHome(() -> assertFalse(InertnessCheck.reason(Arrays.asList(PRESENT, MISSING_OPTIONAL)).isPresent(),
                 "an optional hook's missing targets do not make the agent inert"));
     }
 
     @Test
-    void inertOnWebLogicWhenARequiredTargetIsMissing() {
+    public void inertOnWebLogicWhenARequiredTargetIsMissing() {
         withWebLogicHome(() -> {
             Optional<String> reason = InertnessCheck.reason(Arrays.asList(PRESENT, MISSING));
             assertTrue(reason.isPresent());
-            assertEquals("WebLogic without the expected container classes [weblogic.nowhere.Absent]", reason.get());
+            assertEquals(reason.get(), "WebLogic without the expected container classes [weblogic.nowhere.Absent]");
         });
     }
 

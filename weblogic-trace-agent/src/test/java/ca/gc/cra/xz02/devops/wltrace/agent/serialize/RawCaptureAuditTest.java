@@ -3,7 +3,7 @@ package ca.gc.cra.xz02.devops.wltrace.agent.serialize;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.eclipse.persistence.indirection.IndirectList;
 import org.eclipse.persistence.indirection.ValueHolderInterface;
-import org.junit.jupiter.api.Test;
+import org.testng.annotations.Test;
 
 import java.io.Serializable;
 import java.lang.reflect.Field;
@@ -29,12 +29,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 /** Proves the raw-capture rule mechanically: every instance field of every walked object is in the output or listed under {@code @skipped} with a reason, and every transformed value carries its marker. */
-class RawCaptureAuditTest {
+public class RawCaptureAuditTest {
 
     enum Color { RED, GREEN }
 
@@ -100,7 +100,7 @@ class RawCaptureAuditTest {
             .withMaxStringLength(40).withMaxBytes(8).withMaxElements(5).withMaxDepth(6);
 
     @Test
-    void everyFieldIsPresentOrListedAsSkippedAndEveryTransformationIsMarked() throws Exception {
+    public void everyFieldIsPresentOrListedAsSkippedAndEveryTransformationIsMarked() throws Exception {
         Everything everything = build();
         try {
             Graphs graphs = new Graphs(ceilings);
@@ -111,28 +111,28 @@ class RawCaptureAuditTest {
             audit(everything, root, "$", new IdentityHashMap<>());
 
             // Each category produced its marker.
-            assertEquals(root.get("cycle").get("@id").asInt(), root.get("cycle").get("other").get("@ref").asInt(), "cycle -> @ref");
-            assertEquals(root.get("cycle").get("@id").asInt(), root.get("repeated").get("@ref").asInt(), "repeated -> @ref");
+            assertEquals(root.get("cycle").get("other").get("@ref").asInt(), root.get("cycle").get("@id").asInt(), "cycle -> @ref");
+            assertEquals(root.get("repeated").get("@ref").asInt(), root.get("cycle").get("@id").asInt(), "repeated -> @ref");
             assertTrue(root.get("lazy").get("lines").get("@lazy").asBoolean(), "lazy collection");
             assertTrue(root.get("lazy").get("city").get("@lazy").asBoolean(), "lazy weaving holder");
             for (String handle : new String[]{"thread", "loader", "stream", "connection", "lock", "executor"}) {
                 assertTrue(root.get(handle).has("@handle"), handle + " is a handle: " + root.get(handle));
                 assertTrue(root.get(handle).has("identity"), handle);
             }
-            assertEquals("java.util.logging.Logger", root.get("logger").get("@type").asText(), "loggers are walked");
-            assertEquals("hunter2", root.get("password").asText(), "no masking");
-            assertEquals("Bearer abc.def.ghi", root.get("authorizationHeader").asText(), "no redaction");
-            assertEquals("kept, not masked", root.get("notSerializable").get("secret").asText());
+            assertEquals(root.get("logger").get("@type").asText(), "java.util.logging.Logger", "loggers are walked");
+            assertEquals(root.get("password").asText(), "hunter2", "no masking");
+            assertEquals(root.get("authorizationHeader").asText(), "Bearer abc.def.ghi", "no redaction");
+            assertEquals(root.get("notSerializable").get("secret").asText(), "kept, not masked");
             assertFalse(root.get("notSerializable").get("@serializable").asBoolean());
-            assertEquals("transient fields are walked too", root.get("notSerializable").get("cache").asText());
+            assertEquals(root.get("notSerializable").get("cache").asText(), "transient fields are walked too");
             assertSkipped(root.get("inner"), "this$0", "compiler-injected");
             assertSkipped(root.get("lazy"), "_persistence_city_vh", "weaver-injected");
             assertSkipped(root.get("lazy"), "_persistence_fetchGroup", "weaver-injected");
-            assertEquals(24, root.get("longText").get("@truncated").asInt(), "string ceiling counted");
-            assertEquals(64, root.get("longText").get("length").asInt());
-            assertEquals(8, root.get("bigBytes").get("@truncated").asInt(), "byte ceiling counted");
-            assertEquals(16, root.get("bigBytes").get("length").asInt());
-            assertEquals(15, root.get("bigList").get(5).get("@truncated").asInt(), "element ceiling counted");
+            assertEquals(root.get("longText").get("@truncated").asInt(), 24, "string ceiling counted");
+            assertEquals(root.get("longText").get("length").asInt(), 64);
+            assertEquals(root.get("bigBytes").get("@truncated").asInt(), 8, "byte ceiling counted");
+            assertEquals(root.get("bigBytes").get("length").asInt(), 16);
+            assertEquals(root.get("bigList").get(5).get("@truncated").asInt(), 15, "element ceiling counted");
             JsonNode deepest = root.get("deep");
             int depth = 0;
             while (deepest.has("other") && deepest.get("other").isObject() && !deepest.get("other").has("@unserializable")) {
@@ -142,16 +142,16 @@ class RawCaptureAuditTest {
             assertTrue(deepest.get("other").get("reason").asText().startsWith("depth ceiling"), "depth ceiling marked at " + depth + ": " + deepest);
             assertTrue(root.get("maybe").get("present").asBoolean());
             assertFalse(root.get("none").get("present").asBoolean());
-            assertEquals("boom", root.get("failure").get("detailMessage").asText());
-            assertEquals("root", root.get("failure").get("cause").get("detailMessage").asText());
+            assertEquals(root.get("failure").get("detailMessage").asText(), "boom");
+            assertEquals(root.get("failure").get("cause").get("detailMessage").asText(), "root");
             assertTrue(root.get("failure").get("stackTrace").size() > 0);
-            assertEquals("GREEN", root.get("color").asText());
-            assertEquals("12.500", root.get("amount").asText(), "scale kept");
-            assertEquals("2026-10-23T18:00:00.123456789Z", root.get("timestamp").asText(), "nanoseconds kept");
+            assertEquals(root.get("color").asText(), "GREEN");
+            assertEquals(root.get("amount").asText(), "12.500", "scale kept");
+            assertEquals(root.get("timestamp").asText(), "2026-10-23T18:00:00.123456789Z", "nanoseconds kept");
             assertTrue(root.get("calendar").asText().endsWith("[Europe/Amsterdam]"), "zone kept: " + root.get("calendar"));
-            assertEquals("java.util.HashMap", root.get("objectKeys").get("@type").asText());
-            assertEquals(3, root.get("ints").size());
-            assertEquals("java.lang.Object", root.get("monitor").get("@type").asText());
+            assertEquals(root.get("objectKeys").get("@type").asText(), "java.util.HashMap");
+            assertEquals(root.get("ints").size(), 3);
+            assertEquals(root.get("monitor").get("@type").asText(), "java.lang.Object");
 
             // Every warning corresponds to a marker in the output, i.e. nothing was dropped quietly.
             for (ca.gc.cra.xz02.devops.wltrace.model.SerializationWarning warning : result.warnings) {

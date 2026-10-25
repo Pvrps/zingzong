@@ -41,19 +41,6 @@
       <artifactId>byte-buddy-agent</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- Test scope only: the fake @Stateless beans to instrument and the JPA annotations on the
-         Order fixture. The agent itself never links to javax. -->
-    <dependency>
-      <groupId>javax</groupId>
-      <artifactId>javaee-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <!-- Test scope only: real IndirectList/ValueHolder for the lazy-detection tests. -->
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>eclipselink</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 
   <build>

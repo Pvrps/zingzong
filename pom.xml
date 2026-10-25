@@ -27,9 +27,6 @@
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
 
-    <!-- Test scope only (agent test fixtures): Java EE 8 javax.* API and the EclipseLink bundled with WebLogic 14.1.2. -->
-    <javaee-api.version>8.0.1</javaee-api.version>
-    <eclipselink.version>2.7.15</eclipselink.version>
     <bytebuddy.version>1.17.5</bytebuddy.version>
     <jackson.version>2.19.0</jackson.version>
     <testng.version>7.5.1</testng.version>
@@ -58,18 +55,6 @@
         <scope>test</scope>
       </dependency>
 
-      <dependency>
-        <groupId>javax</groupId>
-        <artifactId>javaee-api</artifactId>
-        <version>${javaee-api.version}</version>
-        <scope>test</scope>
-      </dependency>
-      <dependency>
-        <groupId>org.eclipse.persistence</groupId>
-        <artifactId>eclipselink</artifactId>
-        <version>${eclipselink.version}</version>
-        <scope>test</scope>
-      </dependency>
       <dependency>
         <groupId>net.bytebuddy</groupId>
         <artifactId>byte-buddy</artifactId>

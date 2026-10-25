@@ -30,9 +30,9 @@ public final class Recorder {
     }
 
     /** The hook to install while recording, and the propagation that links traces across this server's threads. */
-    public static void hook(CaptureHook captureHook, WorkContextPropagation tracePropagation) {
+    public static void hook(CaptureHook captureHook, WorkContextPropagation workContext) {
         hook = captureHook;
-        propagation = tracePropagation;
+        propagation = workContext;
     }
 
     /** Marks the agent as inert: no recording can start, and {@link #state()} says why. */

@@ -19,8 +19,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
  * {@link JdbcStatementAdvice.Execute} around the statement wrappers' {@code execute*},
  * {@link JdbcStatementAdvice.Bind} at the start of their {@code set*(index, value)},
  * {@code addBatch} and {@code clearParameters}, and {@link JdbcStatementAdvice.RowRead} after each
- * call the result-set wrapper routes through its handler. Optional: a server without the
- * wrappers records no SQL and everything else.
+ * call the result-set wrapper routes through its handler.
  */
 public final class JdbcStatementHook extends Hook {
 
@@ -36,11 +35,6 @@ public final class JdbcStatementHook extends Hook {
     @Override
     public List<String> targetClassNames() {
         return Arrays.asList(STATEMENT, PREPARED_STATEMENT, CALLABLE_STATEMENT, RESULT_SET);
-    }
-
-    @Override
-    public boolean optional() {
-        return true;
     }
 
     @Override

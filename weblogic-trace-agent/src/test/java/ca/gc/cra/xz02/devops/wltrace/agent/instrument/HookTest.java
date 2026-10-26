@@ -11,7 +11,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-/** Proves what the hook base knows from its named targets alone, through a stub subclass: which classes it targets, which are missing, and that it is required unless it says otherwise. */
+/** Proves what the hook base knows from its named targets alone, through a stub subclass: which classes it targets, which are missing, and its name. */
 public class HookTest {
 
     private final Hook stub = new Hook("stub", null) {
@@ -38,8 +38,7 @@ public class HookTest {
     }
 
     @Test
-    public void isRequiredUnlessItSaysOtherwise() {
-        assertFalse(stub.optional());
+    public void isKnownByItsName() {
         assertEquals(stub.name(), "stub");
         assertEquals(stub.toString(), "stub");
     }
@@ -60,7 +59,6 @@ public class HookTest {
         assertEquals(new ServletPipelineHook(null).targetClassNames(),
                 Arrays.asList("weblogic.servlet.internal.FilterChainImpl", "weblogic.servlet.internal.ServletStubImpl"));
         assertEquals(new JdbcStatementHook(null).targetClassNames().size(), 4);
-        assertTrue(new JdbcStatementHook(null).optional(), "a server without the JDBC wrappers still records everything else");
         assertTrue(new ResourceHook(null, null).targetClassNames().isEmpty(), "resource classes are matched by annotation and loader, not by name");
     }
 }

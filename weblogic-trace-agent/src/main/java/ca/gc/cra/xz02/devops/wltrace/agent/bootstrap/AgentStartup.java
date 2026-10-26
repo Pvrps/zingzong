@@ -39,7 +39,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Builds the agent once the jar is on the bootstrap path: every collaborator with its
@@ -97,24 +96,12 @@ public final class AgentStartup {
                 new ResourceHook(resource, log),
                 new JdbcStatementHook(jdbc));
         Optional<String> inert = InertnessCheck.reason(hooks);
-        List<Hook> installable = inert.isPresent() ? Collections.<Hook>emptyList() : availableHooks(hooks, log);
+        List<Hook> installable = inert.isPresent() ? Collections.<Hook>emptyList() : hooks;
         HookInstaller installer = new HookInstaller(instrumentation, installable, log);
         ManifestWriter manifests = new ManifestWriter(server, log);
         RecordingLifecycle lifecycle = new RecordingLifecycle(active, installer, writer, manifests, runtimeMBeans, inert, log);
         RecordingControl control = new RecordingControl(lifecycle, writer, server, log);
         return new TraceAgent(lifecycle, control, ejb, message, resource, servlet, jdbc);
-    }
-
-    /** Every hook whose targets are present; an optional hook with absent targets is left out with a log line. */
-    private static List<Hook> availableHooks(List<Hook> hooks, AgentLog log) {
-        return hooks.stream().filter(hook -> {
-            List<String> missing = hook.missingTargetClasses();
-            if (missing.isEmpty()) {
-                return true;
-            }
-            log.info("hook " + hook.name() + " not installed: " + missing + " not on the system class path");
-            return false;
-        }).collect(Collectors.toList());
     }
 
     private static String describe(ClassLoader loader) {

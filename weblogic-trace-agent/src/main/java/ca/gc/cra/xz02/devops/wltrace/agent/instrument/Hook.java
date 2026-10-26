@@ -7,9 +7,9 @@ import java.util.stream.Collectors;
 
 /**
  * One instrumentation point of the agent: the WebLogic classes it advises, the advice bound to
- * their methods, and the recorder that advice reports to through {@code TraceRuntime}. A hook
- * with named target classes needs them on the system class path; one that is not
- * {@link #optional()} makes the whole agent inert when they are missing.
+ * their methods, and the recorder that advice reports to through {@code TraceRuntime}. Every hook
+ * is required: when any named target class is missing from the system class path, the whole
+ * agent is inert and reports which.
  */
 public abstract class Hook {
 
@@ -34,11 +34,6 @@ public abstract class Hook {
 
     /** The advice to inline, each binding with its own type and method matchers. */
     public abstract List<AdviceBinding> bindings();
-
-    /** Whether the agent may record without this hook when its target classes are absent. */
-    public boolean optional() {
-        return false;
-    }
 
     /** True when the class is one of this hook's named targets. */
     public final boolean targets(String className) {

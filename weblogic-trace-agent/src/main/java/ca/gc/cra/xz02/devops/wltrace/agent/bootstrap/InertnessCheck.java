@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 /**
  * Decides whether this JVM is a WebLogic server the agent can work in. It is one when the
  * {@code weblogic.home} property or the {@code weblogic.Server} class is present and every
- * non-optional hook finds its target classes on the system class path. Anywhere else the agent
+ * hook finds its target classes on the system class path. Anywhere else the agent
  * stays inert: it installs nothing and the control MBean reports the reason.
  */
 public final class InertnessCheck {
@@ -25,7 +25,6 @@ public final class InertnessCheck {
             return Optional.of("not a WebLogic server (no weblogic.home property, no weblogic.Server class)");
         }
         List<String> missing = hooks.stream()
-                .filter(hook -> !hook.optional())
                 .flatMap(hook -> hook.missingTargetClasses().stream())
                 .collect(Collectors.toList());
         return missing.isEmpty() ? Optional.empty() : Optional.of("WebLogic without the expected container classes " + missing);

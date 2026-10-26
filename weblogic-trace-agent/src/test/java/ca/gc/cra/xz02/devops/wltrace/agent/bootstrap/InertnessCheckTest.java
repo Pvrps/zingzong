@@ -13,12 +13,11 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-/** Proves that the agent stays inert outside WebLogic and when a required hook's targets are missing, and records when they are all present. */
+/** Proves that the agent stays inert outside WebLogic and when any hook's targets are missing, and records when they are all present. */
 public class InertnessCheckTest {
 
-    private static final Hook PRESENT = hook("present", false, "java.lang.String");
-    private static final Hook MISSING = hook("missing", false, "weblogic.nowhere.Absent");
-    private static final Hook MISSING_OPTIONAL = hook("missing optional", true, "weblogic.nowhere.Absent");
+    private static final Hook PRESENT = hook("present", "java.lang.String");
+    private static final Hook MISSING = hook("missing", "weblogic.nowhere.Absent");
 
     @Test
     public void inertOutsideWebLogic() {
@@ -28,13 +27,12 @@ public class InertnessCheckTest {
     }
 
     @Test
-    public void activeOnWebLogicWithEveryRequiredTargetPresent() {
-        withWebLogicHome(() -> assertFalse(InertnessCheck.reason(Arrays.asList(PRESENT, MISSING_OPTIONAL)).isPresent(),
-                "an optional hook's missing targets do not make the agent inert"));
+    public void activeOnWebLogicWithEveryTargetPresent() {
+        withWebLogicHome(() -> assertFalse(InertnessCheck.reason(Collections.singletonList(PRESENT)).isPresent()));
     }
 
     @Test
-    public void inertOnWebLogicWhenARequiredTargetIsMissing() {
+    public void inertOnWebLogicWhenAnyTargetIsMissing() {
         withWebLogicHome(() -> {
             Optional<String> reason = InertnessCheck.reason(Arrays.asList(PRESENT, MISSING));
             assertTrue(reason.isPresent());
@@ -51,7 +49,7 @@ public class InertnessCheckTest {
         }
     }
 
-    private static Hook hook(String name, boolean optional, String... targets) {
+    private static Hook hook(String name, String... targets) {
         return new Hook(name, null) {
             @Override
             public List<String> targetClassNames() {
@@ -61,11 +59,6 @@ public class InertnessCheckTest {
             @Override
             public List<AdviceBinding> bindings() {
                 return Collections.emptyList();
-            }
-
-            @Override
-            public boolean optional() {
-                return optional;
             }
         };
     }

@@ -1,91 +1,163 @@
 # Using weblogic-trace
 
-For the person who wants recordings of a WebLogic domain and nothing else: install, the three commands, the page, the parameters, the two platforms, where the recordings are, and the limits.
+This guide shows how to record what happens inside a WebLogic domain while you use an application, and how to read the result. You need three commands and a browser.
 
-## Install
+## Before you start
 
-The plugin is `ca.gc.cra.xz02.devops:weblogic-trace-maven-plugin:1.0.0-SNAPSHOT`; the agent it installs, `ca.gc.cra.xz02.devops:weblogic-trace-agent`, comes with it and is never given as a path. The short form `mvn wltrace:<goal>` needs the plugin group in `~/.m2/settings.xml`:
+- **WebLogic Server 12.2.1.4 on JDK 8, or 14.1.2 on JDK 21**, running `javax.*` applications. On any other JVM the agent loads but does nothing.
+- **A domain you can restart.** The agent is loaded when a server starts.
+- **A JDK (8 or later) and Maven 3.6+** on the machine where the servers run, as the **same OS user** that runs them. The plugin finds the servers through the JDK's attach API, which only sees that user's JVMs.
+
+## Install the plugin
+
+Build and install it once, from a clone of this repository:
+
+```sh
+mvn -q install
+```
+
+To use the short `wltrace:` prefix from any directory, add the plugin group to `~/.m2/settings.xml`:
 
 ```xml
-<pluginGroups>
-  <pluginGroup>ca.gc.cra.xz02.devops</pluginGroup>
-</pluginGroups>
+<settings>
+  <pluginGroups>
+    <pluginGroup>ca.gc.cra.xz02.devops</pluginGroup>
+  </pluginGroups>
+</settings>
 ```
 
-Without it, the full form is `mvn ca.gc.cra.xz02.devops:weblogic-trace-maven-plugin:1.0.0-SNAPSHOT:<goal>`. The goals need no project; run them from any directory, with a JDK (8 or later) and Maven.
+Without it, write the full name instead of `wltrace:`, for example `mvn ca.gc.cra.xz02.devops:weblogic-trace-maven-plugin:1.0.0-SNAPSHOT:enable`. Inside this repository the short form already works.
 
-## Enable, restart, start
+## Record
 
+```sh
+mvn wltrace:enable -Dwltrace.domain=/path/to/domain    # 1. install the agent
+# 2. restart the domain's servers
+mvn wltrace:start  -Dwltrace.domain=/path/to/domain    # 3. open the page
 ```
-mvn wltrace:enable -Dwltrace.domain=/path/to/domain
-# restart the domain's servers
-mvn wltrace:start  -Dwltrace.domain=/path/to/domain
-```
 
-**`wltrace:enable`** copies the agent to `<domain>/weblogic-trace/weblogic-trace-agent.jar` and writes a delimited block into the domain's overrides file (`bin/setUserOverrides.sh` or `bin\setUserOverrides.cmd`) that adds the `-javaagent` option and, on a JDK 9 or later domain, the `--add-opens` flags the agent needs. It creates the file when the domain has none and says so in the block; running it again updates the block in place. It then prints the domain's state. If the domain's JDK cannot be read from `bin/setDomainEnv.sh` (or `.cmd`) and no server is running, it says so and writes no `--add-opens` flags; run it again while a server is up. If `nodemanager/nodemanager.properties` has `StartScriptEnabled=false`, servers started by Node Manager do not read the overrides file, and `enable` prints the `Arguments=` line to add to each server's `startup.properties` instead.
+1. **`wltrace:enable`** copies the agent into `<domain>/weblogic-trace/` and adds one block to `<domain>/bin/setUserOverrides.sh` (`.cmd` on Windows), creating the file if needed. Nothing else in the domain changes. It ends by printing the domain's state.
+2. **Restart the servers**, however you normally start them. The agent loads with the JVM; a server that was already running doesn't have it until it restarts.
+3. **`wltrace:start`** serves the page at <http://127.0.0.1:8077/> and opens your browser if it can. Then:
+   1. Type a name for the recording (optional) and press **Start**.
+   2. Use the application.
+   3. Press **Stop**.
 
-**Restart** the servers. The agent loads at JVM start and never into a running server. A server that keeps running without it is reported as *enabled, server running without the agent, restart it*; nothing is recorded there until it restarts.
+   The recording appears in the list. Press Ctrl-C in the terminal to close the page.
 
-**`wltrace:start`** serves the page at `http://127.0.0.1:8077/` (`-Dwltrace.port` to change it), opens it in the browser when the desktop allows and otherwise prints the URL, and blocks until Ctrl-C. It refuses when the domain is not enabled on disk.
+Until **Start** is pressed, the agent changes nothing in the server. After **Stop**, every class is restored.
 
 ## The page
 
-**State bar.** One sentence about the domain, and each server JVM of the domain with its pid and whether the agent is loaded, idle or recording (with the count of traces so far). The sentence is one of: *not enabled*; *enabled, server not running*; *enabled, server running without the agent, restart it*; *disabled on disk, agent still loaded until restart*; *ready*. **Start**, with an optional recording name, begins a recording on every server of the domain under one id; **Stop** ends it. Both are disabled, with the reason shown, unless the state is *ready*. A **REC** link leads to the active recording. The bar refreshes once a second.
+### State bar
 
-**Recordings.** Every recording under the output directory, newest first: name, id, start, duration, trace count, servers, a REC marker on the active one, and **Delete** on a finished one (confirmed inline; it removes the directory). Click a name to open it.
+The top bar shows the domain's state and one chip per server, with its process id and whether the agent is idle or recording (and how many traces so far). **Start** and **Stop** only work when the state is *ready*.
 
-**The sequence diagram.** A recording is one continuous diagram. Lanes are the components that took part: the caller, REST resources and SOAP endpoints, session beans with their type, message-driven beans, JMS queues, data sources, grouped under their application; time runs down. Each entry point (a request, or any work nothing else in the recording caused) is a heading with its time, duration, HTTP status and principal. Under it every call is a solid arrow from caller to callee and a dashed arrow back when it returns; the bar between them is how long the callee is busy, and the duration is on the right. The HTTP status rides on the return to the caller; a failure is a red return with the exception. Work that continued on another thread (`@Asynchronous`, JMS) is drawn right under the call that started it, marked *continues on another thread*, so a message-driven bean's `onMessage` sits under the request that produced the message. SQL through a data source is a call into the data source's lane captioned with the statement, returning the rows read or the update count. Four or more consecutive identical calls that called nothing further and did not fail are one `×N` row until drawn one by one; nothing is dropped. The diagram fits the window width; arrow keys move between entry points. While a recording is active, new work appears as it completes.
+| state | what to do |
+| --- | --- |
+| *not enabled* | Run `wltrace:enable`. The message says what's missing, or that the installed agent is from another build. |
+| *enabled, server not running* | Start the domain. |
+| *enabled, server running without the agent, restart it* | Restart the servers it names. |
+| *disabled on disk, agent still loaded until restart* | Nothing; the agent is idle. Restart to unload it, or run `enable` again. |
+| *ready* | Press **Start**. |
 
-**The details window.** Clicking a call opens a draggable, resizable window (**Details** toggles it): the path to the call, the facts (duration, thread, signature, interface, bean, JNDI names, data source, request), then **Input** and **Output** (arguments and result; request and response body; SQL statement with its parameters and its count), the exception, the HTTP headers, the data source, the notes from the agent, and everything else on the span. Values are shown as recorded; every marker (`@type`, `@ref`, `@lazy`, `@handle`, `@skipped`, `@truncated`, `@serializable`, `@jms`) is highlighted with a tooltip saying what it means, and red means data is missing at that point. A value that came from an earlier output carries a badge `← #n span / path` linking to where it is produced; an output that a later input used carries `→`; a value with no source is marked *userInput* or *environment*.
+### Recordings
 
-## Disable
+The home view lists every recording, newest first: name, start, duration, number of traces, servers. Click one to open it, or **Delete** to remove its files.
 
-```
-mvn wltrace:disable -Dwltrace.domain=/path/to/domain
-```
+### The diagram
 
-Stops an active recording first (and says so), removes the block from the overrides file, or the whole file when `enable` created it, deletes `<domain>/weblogic-trace/`, and prints the state. Recordings are never touched; the goal prints where they are. A running server keeps the agent loaded, idle, until it restarts; after that the domain is exactly as before `enable`.
+A recording is drawn as one sequence diagram:
+
+- **Columns** are the components that took part: the client, REST and SOAP resources, each bean, JMS queues, data sources. They're grouped by application.
+- **Each entry point** (an HTTP request, a remote EJB call, a message delivery with no recorded cause) starts a numbered section with its time, duration and status.
+- **Arrows** are calls and returns, in time order. A failed call is red. Return arrows show the HTTP status, the exception, or the rows an SQL statement read or changed.
+- **Work on another thread** is drawn under the call that caused it: a JMS message as a send to the queue followed by the delivery to the MDB, an `@Asynchronous` call with a tag.
+- **Repeated calls** (four or more identical ones in a row) are folded into one `×N` row; click it to expand.
+
+The up and down arrow keys move between entry points.
+
+### Details
+
+Click any row to open its details:
+
+- **How we got here:** the chain of calls that led to this one.
+- **Facts:** bean, interface, signature, JNDI names, transaction attribute, data source, timing, thread.
+- **Input, Output, Exception:** the arguments, the result and the exception, exactly as they were, as foldable JSON.
+- **HTTP:** headers and both bodies.
+- **Notes from the capture:** anything that was left out of the values, and why.
+
+Keys starting with `@` are markers the recorder added, such as `@type` for the class of an object, or `@lazy` for a JPA collection that wasn't loaded. Hover over one for its meaning. The full list is in [TRACE-FORMAT.md](TRACE-FORMAT.md#markers).
+
+**Lineage badges** show where a value came from: an order id a confirm call received, for example, carries a badge pointing to the earlier call that returned it. Values with no earlier source are marked *user input* or *environment*. Click a badge to jump to the other end.
 
 ## Parameters
 
-All three are `-D` properties.
-
-| parameter | default | meaning |
+| parameter | default | |
 | --- | --- | --- |
-| `wltrace.domain` | required | the domain home: the directory with `config/config.xml` |
-| `wltrace.port` | `8077` | the page's port, on 127.0.0.1 |
-| `wltrace.out` | `~/.weblogic-trace/<domain directory name>` | where recordings and `agent.log` go |
+| `wltrace.domain` | (required) | the domain directory, the one containing `config/config.xml` |
+| `wltrace.port` | `8077` | the page's port; it listens on `127.0.0.1` only |
+| `wltrace.out` | `~/.weblogic-trace/<domain directory name>` | where the agent writes recordings and `agent.log` |
 
-There are no others. Nothing is configured per application, type or field.
+`enable` writes `wltrace.out` into the domain, so the servers use the value from the last `enable`. Pass the same value to `start`, or leave it at the default for both.
 
-## Linux and Windows
+## Where the recordings are
 
-The plugin reads the domain's platform from `bin/`: `setDomainEnv.sh` means a Linux (Unix) domain, `setDomainEnv.cmd` a Windows domain; with both present, the platform of the machine running the plugin.
+```
+~/.weblogic-trace/<domain>/
+├── agent.log
+└── rec-20261025-142233/
+    ├── recording-AdminServer.json
+    ├── 000001-t-3fa2c1d0.json
+    └── ...
+```
 
-| | Linux | Windows |
-| --- | --- | --- |
-| overrides file | `bin/setUserOverrides.sh` | `bin\setUserOverrides.cmd` |
-| block markers | `# >>> weblogic-trace >>>` … `# <<< weblogic-trace <<<` | `rem >>> weblogic-trace >>>` … `rem <<< weblogic-trace <<<` |
-| option lines | `JAVA_OPTIONS="${JAVA_OPTIONS} -javaagent:…"` and `export JAVA_OPTIONS` | `set JAVA_OPTIONS=%JAVA_OPTIONS% -javaagent:…` |
-| JDK read from | `bin/setDomainEnv.sh` (`JAVA_HOME=`, `SUN_JAVA_HOME=`, `BEA_JAVA_HOME=`) | `bin\setDomainEnv.cmd` (`set JAVA_HOME=`, …) |
+One directory per recording, one manifest per server, one JSON file per trace. Recordings stay until you delete them; `disable` doesn't touch them. The format is described in [TRACE-FORMAT.md](TRACE-FORMAT.md).
 
-The plugin runs on the same machine as the servers, so a Windows domain is handled by a plugin running on Windows: paths keep their backslashes, an option containing a space is quoted for `cmd`, the `.cmd` file is written with CRLF, and server JVMs are matched to the domain case-insensitively.
+## Remove the agent
 
-## Recordings
+```sh
+mvn wltrace:disable -Dwltrace.domain=/path/to/domain
+```
 
-One directory per recording under `wltrace.out`, named `rec-<yyyyMMdd-HHmmss>`:
+This stops an active recording, removes the block from the overrides script (or deletes the script, if `enable` created it), and deletes `<domain>/weblogic-trace/`. A running server keeps the agent loaded, idle, until it restarts; after that, the domain is exactly as it was before `enable`.
 
-- `NNNNNN-t-<id>.json`: one file per trace, written when the trace's root call completes. A trace is the work one thread did for one entry point, as a flat list of spans with parent ids. Each span records what crossed its boundary: for a request the method, URI, every header, status and both bodies; for a resource method and an EJB call the arguments and the result or exception, with the bean, interface, view, transaction attribute and JNDI names; for an SQL statement the data source, the statement, the bound parameters, and the update count or the rows read.
-- `recording-<serverName>.json`: one manifest per server, with start and end, agent version and build, trace count and dropped count.
-- `agent.log`, directly under `wltrace.out`: the agent's own log, with one line per written trace and every degraded lookup warned once.
+## Special cases
 
-Recording is raw: no masking, no allow-lists. The only transformations are the markers, each saying what stands in the value's place. Every field is described in [architecture/TRACE-FORMAT.md](architecture/TRACE-FORMAT.md).
+- **Several servers.** Every server of the domain that runs as your user is found. **Start** records on all of them under one recording, and the diagram shows them together.
+- **Windows domains.** Detected from `bin/setDomainEnv.cmd`; the block goes into `bin\setUserOverrides.cmd`. Run the plugin on the Windows machine itself.
+- **Node Manager with `StartScriptEnabled=false`.** Servers started this way don't read the overrides script. `enable` warns and prints an `Arguments=` line to add to each server's `servers/<name>/data/nodemanager/startup.properties`.
+- **JDK not detected.** On JDK 9+ the agent needs a few `--add-opens` flags, which `enable` adds after reading the domain's JDK from `bin/setDomainEnv.sh`. If it can't tell and no server is running, it warns and adds none; run `enable` again while a server is up.
+- **Another build of the plugin.** If the installed agent jar isn't the one this plugin ships, the state is *not enabled*. Run `enable` again and restart.
+- **Closing the page.** Ctrl-C closes the page but doesn't stop a running recording. Run `start` again and press **Stop**, or run `disable`.
 
-## Limitations
+## What's recorded, and what isn't
 
-- **Local domains only.** Server JVMs are found through the JDK's attach API, so the plugin runs on the same machine, as the same OS user, as the servers.
-- **Enabling and disabling take effect at the next server start.** A running server is reported as such; nothing changes inside it until it restarts.
-- **In-flight spans are not shown.** A trace appears when its root call completes; a request still running is not on the page.
-- **Recordings are raw and therefore sensitive.** Credentials in headers, bodies and SQL parameters are recorded as they were; treat the output directory accordingly.
-- **No cross-server propagation.** A call that leaves the server for another JVM (T3, JMS consumed elsewhere) starts an unrelated trace there.
-- **SQL is seen through WebLogic data sources only.** A driver used directly, not through a data source, is not recorded.
+Recorded: HTTP requests with headers and bodies, REST and SOAP resource methods, EJB calls (local, remote, EJB 2.x), message-driven bean deliveries, and SQL through WebLogic data sources, each with its arguments, results and exceptions.
+
+> **Recordings contain raw data.** Passwords, tokens, cookies and personal data are recorded exactly as they crossed each call. Nothing is masked. Treat the output directory accordingly.
+
+Not recorded, or not completely:
+
+- `jakarta.*` applications.
+- Container error pages written after the application returns. The span notes that the body is missing.
+- The body of a JMS `BytesMessage` or `StreamMessage`: reading it would consume it. Its length is recorded.
+- Values past the size limits: 64 MiB per HTTP body and per `byte[]`, 16 Mi characters per string, 100,000 elements per collection, 64 levels of nesting. What's cut is marked `@truncated` or `@unserializable`.
+- JPA collections that weren't loaded. They're marked `@lazy` and never loaded by the agent.
+- Traces dropped under heavy load. If the agent can't write fast enough, it drops traces rather than slow the server; the manifest's `droppedTraces` and the server chip show how many.
+
+## Troubleshooting
+
+Look in `agent.log` in the output directory:
+
+| line | means |
+| --- | --- |
+| `weblogic-trace-agent ready, recording off` | the agent loaded; the server is ready |
+| `weblogic-trace-agent inert: ...` | this JVM isn't a supported WebLogic server; nothing will be recorded |
+| `RECORDING START` / `RECORDING STOP` | a recording started or stopped on this server, with its trace count |
+| `instrumented <class>` | a hook was put in place when the recording started |
+| `hook targets loaded but not instrumented` | this WebLogic build differs from the supported ones |
+| `TRACE t-... -> 000001-t-....json` | one trace written |
+| `WARN` or `ERROR` | something wasn't recorded; the line says what |
+
+If no `agent.log` exists after a restart, the server didn't get the `-javaagent` option. Check the overrides script and the Node Manager case above.

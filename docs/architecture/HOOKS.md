@@ -1,298 +1,211 @@
-# WebLogic internals the agent touches
+# Hooks
 
-Every WebLogic class, method, field and MBean the agent reaches, for an engineer touching those internals: what each is, why the agent uses that point, what it reads and how it degrades. The agent has no compile dependency on any of them (ARCHITECTURE.md, constraint 1); each is reached by name and reflection, and each use degrades to null and warns once when a name is missing. How hooks fit into the agent is in [ARCHITECTURE.md](ARCHITECTURE.md#5-hooks); this document says what each one is.
+This document lists the hooks the agent installs: which WebLogic method each one intercepts, why that method, what gets recorded, and what the agent reads from WebLogic to describe the call. How hooks are installed is in [FRAMEWORK.md](FRAMEWORK.md); how the recorded calls become traces is in [TRACING.md](TRACING.md).
 
-## Contents
+## Why WebLogic's internals
 
-1. [Session invokers](#1-session-invokers)
-2. [MDListener](#2-mdlistener)
-3. [FilterChainImpl and ServletStubImpl](#3-filterchainimpl-and-servletstubimpl)
-4. [JDBC wrappers](#4-jdbc-wrappers)
-5. [Class-loader ownership](#5-class-loader-ownership)
-6. [WorkContext](#6-workcontext)
-7. [Runtime MBeanServer and BeanInfo](#7-runtime-mbeanserver-and-beaninfo)
-8. [Principal and session](#8-principal-and-session)
-9. [Finding a hook on a new build](#finding-a-hook-on-a-new-build)
+The agent hooks the container, not the applications. Every EJB call, message delivery and HTTP request passes through a handful of WebLogic methods before any application code runs. Hooking those few methods records every bean of every application without knowing their classes, and without changing a single deployed file.
 
-Verified builds, referred to below as 12 and 14:
+The cost is that these are internal classes: not a public API, and free to change between WebLogic releases. So the agent names them in one place (the `*Hook` classes), reads them only through reflection (the [`agent/weblogic`][weblogic] classes), and degrades to "not recorded" instead of failing when they change.
 
-| | WebLogic Server | build | JDK |
-| --- | --- | --- | --- |
-| 14 | 14.1.2.0.0 | Tue Nov 26 2024, 2171472, no patches | Temurin 21.0.12 |
-| 12 | 12.2.1.4.0 | Thu Sep 12 2019, 1974621, no patches | Temurin 1.8.0_504 |
+## Summary
 
-Every name below resolves identically on both. Stack frames are from `jcmd <pid> Thread.print` on 14 while the call slept inside the application code; where 12 differs in a frame it is noted. Application frames are shown as `com.example...`; WebLogic generates the `<Bean>_<hash>_<Interface>Impl` classes per deployment.
+| hook | intercepts | advice | recorder | span |
+| --- | --- | --- | --- | --- |
+| [Session invokers](#session-invokers) | `SessionLocalMethodInvoker.invoke`, `SessionRemoteMethodInvoker.invoke` | [`SessionInvokerAdvice`][SessionInvokerAdvice] | [`EjbRecorder`][EjbRecorder] | `EJB`, invocation `LOCAL`/`REMOTE` |
+| [Message-driven listener](#message-driven-listener) | `MDListener.onMessage` | [`MessageListenerAdvice`][MessageListenerAdvice] | [`MessageRecorder`][MessageRecorder] | `EJB`, invocation `MESSAGE` |
+| [Servlet pipeline](#servlet-pipeline) | `FilterChainImpl.doFilter`, `ServletStubImpl.execute` | [`ServletPipelineAdvice`][ServletPipelineAdvice] | [`ServletRecorder`][ServletRecorder] | `HTTP` |
+| [Resource classes](#resource-classes) | public methods of application classes annotated `@Path` or `@WebService` | [`ResourceAdvice`][ResourceAdvice] | [`ResourceRecorder`][ResourceRecorder] | `HTTP`, layer `jaxrs`/`jaxws` |
+| [JDBC wrappers](#jdbc-wrappers) | `execute*` and `set*` of WebLogic's statement wrappers, its result-set wrapper | [`JdbcStatementAdvice`][JdbcStatementAdvice] | [`JdbcRecorder`][JdbcRecorder] | `SQL` |
 
-## 1. Session invokers
+The WebLogic classes are in `weblogic.ejb.container.internal`, `weblogic.servlet.internal` and `weblogic.jdbc.wrapper`. All hooks except JDBC are required: if a required target class is missing, the agent goes inert ([FRAMEWORK.md](FRAMEWORK.md#inert-agents)).
 
-Code: `SessionInvokerHook`, `SessionInvokerAdvice`, `EjbRecorder`, `SessionInvocation`.
+### Verified builds
 
-**What it is.** The two static methods in `com.oracle.weblogic.ejb.jar` through which every business-interface call into a session bean passes: stateless, stateful, singleton and EJB 2.x alike, local and remote views.
+Every class, method and field below has been checked on:
 
-**Why this point.** Above them the generated client object (`<Bean>_<hash>_<Interface>Impl`) is per deployment and per interface; below them the container's interceptor chain and the bean are application-specific. The invokers are the one place with a fixed signature that sees the client object, the container's bean object, the method descriptor and the arguments together.
-
-**Class and method.**
-
-| view | `weblogic.ejb.container.internal.` |
-| --- | --- |
-| local | `public static Object SessionLocalMethodInvoker.invoke(Invokable, BaseLocalObject, InvocationWrapper, Object[], int) throws Throwable` |
-| remote | `public static Object SessionRemoteMethodInvoker.invoke(Invokable, BaseRemoteObject, InvocationWrapper, Object[], int) throws Throwable` |
-
-The advice matches `invoke`, static, five arguments. Frames, innermost first, with interceptor frames (`com.bea.core.repackaged.springframework.aop`, `com.oracle.pitchfork`, `org.jboss.weld`) elided:
-
-```
-local view (a resource calling an @EJB)
-com.example.orders.OrderServiceBean.createOrder
-jdk.proxy8.$Proxy325.createOrder                                                        12: com.sun.proxy.$ProxyN
-com.example.orders.OrderService_wdu466_OrderServiceLocalImpl.__WL_invoke
-weblogic.ejb.container.internal.SessionLocalMethodInvoker.invoke(SessionLocalMethodInvoker.java:33)   <- advised
-com.example.orders.OrderService_wdu466_OrderServiceLocalImpl.createOrder
-com.example.orders.web.OrdersResource.create
-
-remote view (a T3 call)
-com.example.orders.OrderServiceBean.createOrder
-jdk.proxy8.$Proxy325.createOrder
-com.example.orders.OrderService_wdu466_OrderServiceRemoteImpl.__WL_invoke
-weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invokeInternal(SessionRemoteMethodInvoker.java:54)
-weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invoke(SessionRemoteMethodInvoker.java:21)  <- advised
-com.example.orders.OrderService_wdu466_OrderServiceRemoteImpl.createOrder
-com.example.orders.OrderService_wdu466_OrderServiceRemoteImpl_WLSkel.invoke
-weblogic.rmi.internal.BasicServerRef.invoke(BasicServerRef.java:694)                    12: :645
-
-EJB 2.x (home, then EJBObject): the same remote invoker
-com.example.tax.RateLookupBean.rateFor
-jdk.proxy12.$Proxy352.rateFor
-com.example.tax.RateLookup_j2unwk_EOImpl.__WL_invoke
-weblogic.ejb.container.internal.SessionRemoteMethodInvoker.invoke(SessionRemoteMethodInvoker.java:21)  <- advised
-com.example.tax.RateLookup_j2unwk_EOImpl.rateFor
-com.example.tax.RateLookup_j2unwk_EOImpl_WLSkel.invoke
-```
-
-`home.create()` and `EJBObject.remove()` do not pass the invokers and are not spans.
-
-**What is read and how.** `SessionInvocation.read` reads the first three arguments:
-
-| argument | member | gives |
+| WebLogic Server | build | JDK |
 | --- | --- | --- |
-| 0 `Invokable`, the generated `<pkg>.<Bean>_<hash>_<Interface>Impl` | its interfaces | the business interface: implemented directly by a local view; a remote view implements a generated `<pkg>.<Bean>_<hash>_<Interface>RIntf extends java.rmi.Remote`, whose simple name `SessionInvocation.businessInterface` resolves against the bean's interfaces |
-| 1 `BaseLocalObject` / `BaseRemoteObject` | protected field `beanInfo` | the container's `BeanInfo` (section 7) |
-| 2 `InvocationWrapper` | `getMethodDescriptor()`, then `MethodDescriptor.getApplicationName()`, `getModuleId()`, `getEjbName()`, `getMethod()`, `getTransactionPolicy().getTxAttribute()`; `isLocal()` | application, module, EJB name, the interface `Method`, the effective `javax.ejb.TransactionAttributeType`, local or remote |
-| 3 `Object[]` | | the call arguments, serialized at exit |
+| 14.1.2.0.0 | 2171472, no patches | Temurin 21 |
+| 12.2.1.4.0 | 1974621, no patches | Temurin 8 |
 
-The bean class is loaded by name from `BeanInfo.getBeanClassName()` through the invokable's class loader.
+## Session invokers
 
-**What the span records.** Kind `EJB`: `beanClass`, `method`, `signature`, `interface`, `invocation` LOCAL or REMOTE, `transactionAttribute` (`BEAN` for a bean-managed bean without one), and from the metadata of section 7 `app`, `module`, `beanName`, `jndiNames` (the invoked view's `java:global` name first), `beanType`, `ejb2x`; `args` and `result` or `exception`.
+[`SessionInvokerHook`][SessionInvokerHook]
 
-**Verified on.** 12 and 14, the frames above. A class loaded during installation is skipped by Byte Buddy's circularity lock, because describing a loaded target resolves the types its methods mention; `HookInstaller` retransforms such named targets explicitly afterwards.
+**Intercepts** the static five-argument `invoke` of `weblogic.ejb.container.internal.SessionLocalMethodInvoker` and `SessionRemoteMethodInvoker`.
 
-**When it fails.** A descriptor without `getMethodDescriptor` or a `BeanInfo` without `getBeanClassName` makes `SessionInvocation.read` return empty; `EjbRecorder` warns once, `session invoker hook: invocation objects not recognised`, and records nothing for that call.
+**Why there.** Every business-interface call into a session bean goes through one of these two methods: stateless, stateful, singleton, EJB 2.x, local view or remote view. One hook covers them all.
 
-## 2. MDListener
+**Records** one `EJB` span per call: the bean, method, signature, interface, local or remote, transaction attribute, the arguments, and the result or exception.
 
-Code: `MessageListenerHook`, `MessageListenerAdvice`, `MessageRecorder`, `MessageDelivery`.
+**Reads from WebLogic:**
+- [`SessionInvocation`][SessionInvocation]: the method descriptor (application, module, EJB name, `java.lang.reflect.Method`, transaction attribute) from the invocation wrapper; the bean class from the client object's `beanInfo`; whether the call is local; which business interface the call came through.
+- [`BeanMetadataResolver`][BeanMetadataResolver]: the application, module, bean type and JNDI names, once per bean class (see [Reading WebLogic](#reading-weblogic)).
 
-**What it is.** The container's JMS listener that receives a message for a message-driven bean, opens the transaction and calls the bean's `onMessage`.
+**If it changes:** if the descriptor or bean class can't be read, the call isn't recorded and `agent.log` gets one warning.
 
-**Why this point.** It is the first frame with the message as a plain argument and the bean's `MessageDrivenBeanInfo` at hand; the bean's own `onMessage` is application code.
+## Message-driven listener
 
-**Class and method.** `public void weblogic.ejb.container.internal.MDListener.onMessage(javax.jms.Message)`.
+[`MessageListenerHook`][MessageListenerHook]
 
+**Intercepts** `weblogic.ejb.container.internal.MDListener.onMessage(Message)`.
+
+**Why there.** Every JMS message WebLogic delivers to a message-driven bean goes through this method, on the delivery thread, before the bean's `onMessage`.
+
+**Records** one `EJB` span with invocation `MESSAGE`: the bean, its destination, the transaction attribute, and the message as the one argument. The message is recorded through the JMS API (headers, properties, body), not as the vendor object ([SERIALIZATION.md](SERIALIZATION.md#jms-messages)).
+
+The delivery usually starts a new trace on its own thread. That trace is linked to the call that sent the message through WorkContext ([TRACING.md](TRACING.md#work-that-continues-on-another-thread)).
+
+**Reads from WebLogic:** [`MessageDelivery`][MessageDelivery]: the listener's private `info` field (`MessageDrivenBeanInfo`), and from it the bean class, its loader, the destination name and the `onMessage` transaction attribute.
+
+**If it changes:** the delivery isn't recorded, with one warning.
+
+## Servlet pipeline
+
+[`ServletPipelineHook`][ServletPipelineHook]
+
+**Intercepts** `weblogic.servlet.internal.FilterChainImpl.doFilter(request, response)` and `weblogic.servlet.internal.ServletStubImpl.execute(request, response)`.
+
+**Why there.** These are the first points in WebLogic's request pipeline that receive the servlet API objects. A web application with filters enters through `FilterChainImpl`, one without enters through `ServletStubImpl`. Whatever request and response are passed on from here is what every filter and the servlet see.
+
+**Records** one `HTTP` span per request: method, URI parts, query, headers, status, both bodies, the remote address, and the exception if the chain threw. The span is usually the root of its trace.
+
+**Capturing bodies.** The application reads the request body and writes the response body through streams the agent never sees, so the advice swaps the request and response for wrappers on the way in:
+
+```mermaid
+flowchart LR
+    WL[WebLogic] -- request, response --> ADV[advice]
+    ADV -- tee request, tee response --> APP[filters and servlet]
+    APP -- reads/writes --> TEE[tee streams]
+    TEE --> ORIG[container streams]
+    TEE -. copy .-> BUF[BodyBuffer]
 ```
-com.example.notify.OrderEventListener.onMessage
-jdk.proxy9.$Proxy261.onMessage
-weblogic.ejb.container.internal.MDListener.execute(MDListener.java:459)
-weblogic.ejb.container.internal.MDListener.transactionalOnMessage(MDListener.java:370)
-weblogic.ejb.container.internal.MDListener.onMessage(MDListener.java:306)          <- advised
-weblogic.jms.client.JMSSession.onMessage(JMSSession.java:5172)
-weblogic.work.SelfTuningWorkManagerImpl$WorkAdapterImpl.run
-```
 
-**What is read and how.** `MessageDelivery.read` reads the listener's private final field `info`, a `weblogic.ejb.container.interfaces.MessageDrivenBeanInfo`: `getBeanClassName()` and `getClassLoader()` (the bean class in its own loader), `getDestinationName()`, `getOnMessageMethodDescriptor().getTransactionPolicy().getTxAttribute()`. The runtime MBean `com.bea:Type=MessageDrivenEJBRuntime,Name=<ejb>_<destination>,...` is named per destination, so `RuntimeMBeans.ejbRuntimes` matches on its `EJBName` attribute when the name key misses.
+- [`TeeClasses`][TeeClasses] generates, with ByteBuddy at runtime, subclasses of `HttpServletRequestWrapper`, `HttpServletResponseWrapper`, `ServletInputStream` and `ServletOutputStream`. They're generated rather than compiled because the agent can't compile against the servlet API, and each application's loader may have its own copy of it. [`TeeClassCache`][TeeClassCache] keeps one set per servlet API.
+- [`TeeSupport`][TeeSupport] is what the generated methods call. Every byte read or written is forwarded to the container's stream and copied into a [`BodyBuffer`][BodyBuffer], which keeps up to 64 MiB per body and counts the rest. A `getWriter()` response is copied as characters.
+- [`HttpCapture`][HttpCapture] holds one request's state. At exit, [`HttpInfoReader`][HttpInfoReader] reads the rest from the original request and response, drains a request body the application didn't read, and decides each body's encoding (text with a charset, or base64).
 
-**What the span records.** Kind `EJB` with `invocation` MESSAGE, `interface` `javax.jms.MessageListener`, `destination`, `beanType` MESSAGE_DRIVEN, no `jndiNames`; `args[0]` is the message as its API view (`@jms`).
+**Not recorded twice.** `FilterChainImpl.doFilter` runs again for every filter in the chain. [`ServletRecorder`][ServletRecorder] unwraps the incoming request ([`ServletApi`][ServletApi]); if it's the same container request an open HTTP span already holds, nothing new is opened.
 
-**Verified on.** 12 and 14, the frames above.
+**Limits.** A container error page written after the pipeline returns (`sendError`, an uncaught exception) isn't seen. The span says so in `responseBodyNote`. If the wrappers can't be generated, the request is still recorded, with headers and status but no bodies.
 
-**When it fails.** A listener without `info`, or an `info` without a loadable bean class, makes `MessageDelivery.read` return empty; `MessageRecorder` warns once, `message listener hook: listener not recognised`, and the delivery is not recorded.
+## Resource classes
 
-## 3. FilterChainImpl and ServletStubImpl
+[`ResourceHook`][ResourceHook]
 
-Code: `ServletPipelineHook`, `ServletPipelineAdvice`, `ServletRecorder`, `TeeClasses`, `TeeSupport`, `HttpInfoReader`, `ServletApi`.
+**Intercepts** every public instance method of a class that is annotated `javax.ws.rs.Path` (JAX-RS) or `javax.jws.WebService` (JAX-WS) and is defined by an application class loader.
 
-**What it is.** The two points of WebLogic's servlet pipeline that take the servlet API interfaces (`ServletRequest`, `ServletResponse`) rather than WebLogic's concrete request and response classes.
+**Why there.** The HTTP span shows the raw request; this span shows which resource method handled it and with which Java arguments. It's the one hook that rewrites application classes, so it has the strictest matching:
+- only classes loaded by a WebLogic application loader ([`ApplicationClassLoaders`][ApplicationClassLoaders]). A server class with the same annotations is skipped, and logged once;
+- not classes that are also EJBs (`@Stateless`, `@Stateful`, `@Singleton`, `@MessageDriven`), which the session invokers already record;
+- no constructors, static, synthetic or bridge methods.
 
-**Why this point.** A wrapper substituted here is what every filter and the servlet see, so both bodies can be copied as they stream. Above these, `WebAppServletContext.execute(ServletRequestImpl, ServletResponseImpl)` takes the concrete types and nothing can be substituted.
+**Records** one `HTTP` span with `layer` `jaxrs` or `jaxws`, under the request's span: resource class, method and signature, the arguments and the result.
 
-**Class and method.**
+**How the method is known.** The advice passes a constant `"<class>|<method>|<descriptor>"` string, built by ByteBuddy into each rewritten method. [`MethodResolver`][MethodResolver] turns it back into a method once per class, and [`ResourceLayers`][ResourceLayers] picks the layer from the annotation.
 
-| | class and method | role |
+WebLogic loads each application class in an analysis loader before the real one, so the same class can appear twice as `instrumented` in `agent.log`. That's expected.
+
+## JDBC wrappers
+
+[`JdbcStatementHook`][JdbcStatementHook]. Optional: a server without these classes records everything except SQL.
+
+**Intercepts** three things on WebLogic's JDBC wrappers in `weblogic.jdbc.wrapper`:
+
+| what | where | advice |
 | --- | --- | --- |
-| 1 | `weblogic.servlet.internal.FilterChainImpl.doFilter(javax.servlet.ServletRequest, javax.servlet.ServletResponse)` | a web application with filters; re-entered once per filter, and `ServletRecorder` recognises a request already being recorded (identity of the request behind any `ServletRequestWrapper`) and does nothing |
-| 2 | `weblogic.servlet.internal.ServletStubImpl.execute(javax.servlet.ServletRequest, javax.servlet.ServletResponse)` | a web application without filters, where the stub is called directly; a no-op when 1 opened the span |
+| statement execution | public `execute*` of `Statement`, `PreparedStatement`, `CallableStatement` | `JdbcStatementAdvice.Execute` |
+| parameter binding | `set*(int, ...)`, `addBatch`, `clearParameters` of the same | `JdbcStatementAdvice.Bind` |
+| rows read | `ResultSet.postInvocationHandler`. The wrapper has no `next()` of its own; the generated subclass routes every call through this handler. | `JdbcStatementAdvice.RowRead` |
 
-```
-com.example.orders.web.OrdersResource.get
-org.glassfish.jersey.servlet.ServletContainer.service
-weblogic.servlet.internal.StubSecurityHelper$ServletServiceAction.run
-weblogic.servlet.internal.StubSecurityHelper.invokeServlet
-weblogic.servlet.internal.ServletStubImpl.execute(ServletStubImpl.java:353)          <- advised (2)
-weblogic.servlet.internal.TailFilter.doFilter
-weblogic.servlet.internal.FilterChainImpl.doFilter(FilterChainImpl.java:87)
-weblogic.servlet.internal.RequestEventsFilter.doFilter
-weblogic.servlet.internal.FilterChainImpl.doFilter(FilterChainImpl.java:87)          <- advised (1)
-weblogic.servlet.internal.WebAppServletContext$ServletInvocationAction.wrapRun
-weblogic.servlet.internal.WebAppServletContext.execute
-weblogic.servlet.internal.ServletRequestImpl.run
-weblogic.servlet.provider.ContainerSupportProviderImpl$WlsRequestExecutor.run
-weblogic.work.ExecuteThread.execute
-```
+**Why there.** Every connection from a WebLogic data source hands out these wrappers, whatever the driver, so one hook sees all SQL from every application, including what JPA generates.
 
-**What is read and how.** The tee wrappers are Byte Buddy subclasses of `javax.servlet.http.HttpServletRequestWrapper`, `HttpServletResponseWrapper`, `ServletInputStream` and `ServletOutputStream`, generated by `TeeClasses` against the servlet API the server loaded and cached per API loader by `TeeClassCache`. `TeeSupport` intercepts `getInputStream`, `getReader`, `getOutputStream`, `getWriter` and `sendError`; every byte passes through unchanged and a copy lands in the `HttpCapture`. At exit `HttpInfoReader` reads, through the public servlet API by name: `getMethod`, `getRequestURI`, `getContextPath`, `getServletPath`, `getPathInfo`, `getQueryString`, `getProtocol`, `getScheme`, `getServerName`, `getServerPort`, `getRemoteAddr`, `getContentType`, `getCharacterEncoding`, `getHeaderNames` and `getHeaders` on the request; `getStatus`, `getContentType`, `getCharacterEncoding`, `getHeaderNames` and `getHeaders` on the response; `getUserPrincipal` and `getSession(false)` for the trace. One quirk: WebLogic's response `getHeaderNames()` lists the headers it sets itself as `"Date: "`, `"Content-Length: "`, `"Content-Type: "`, and `getHeaders()` answers only for the bare name; `HttpInfoReader` tries both and records the bare name.
+**Records** one `SQL` span per execution: data source, JNDI names, URL, database product, statement type, the SQL, its positional parameters (or every batch), and the update count, or whether a result set came back and how many rows the application read.
 
-**What the span records.** Kind `HTTP` without a layer: method, URI, every header, status, both bodies in full with their encoding and length, `sentError` when the application called it, and `responseBodyNote` when the container produced the error page through its own stream.
+**How parameters are kept.** `bind` runs on each `set*` and stores the value per statement in [`JdbcRecorder`][JdbcRecorder] (weakly held, so a forgotten statement isn't kept alive). `execute*` takes the stored values into the span. Rows are counted as the application calls `next()` on the result set.
 
-**Verified on.** 12 and 14, the frames above.
+**Reads from WebLogic:**
+- [`JdbcWrappers`][JdbcWrappers]: the pool name from the statement's connection, the SQL from its `sql` field.
+- [`DataSourceCatalog`][DataSourceCatalog]: JNDI names, URL and database product from the data source's MBeans, once per pool.
 
-**When it fails.** When the wrapper classes cannot be generated, `ServletRecorder` warns once, `servlet tee wrappers cannot be generated, bodies will not be recorded`, and records the exchange without bodies.
+## Reading WebLogic
 
-## 4. JDBC wrappers
+The recorders never touch a WebLogic class directly. These classes in [`agent/weblogic`][weblogic] do, all by reflection, and all return null or empty on failure:
 
-Code: `JdbcStatementHook`, `JdbcStatementAdvice`, `JdbcRecorder`, `JdbcWrappers`, `DataSourceCatalog`.
-
-**What it is.** WebLogic's own wrappers around the driver's statement and result set objects, in `com.bea.core.datasource6.jar`. Every statement a data source hands out is one of them; a driver used directly, not through a data source, never passes them and is not seen.
-
-**Why this point.** The base wrapper classes implement the JDBC methods themselves and the generated `PreparedStatement_<driver class>` subclasses add only vendor extras, so the base classes see every execution whatever the driver (`javap -c`):
-
-```
-weblogic.jdbc.wrapper.Statement.executeQuery(String):
-   ldc "executeQuery"; invokevirtual preInvocationHandler(String, Object[])
-   invokeinterface java/sql/Statement.executeQuery          <- the driver
-weblogic.jdbc.wrapper.PreparedStatement.executeQuery():     same shape
-```
-
-**Class and method.**
-
-| member | binding |
-| --- | --- |
-| `weblogic.jdbc.wrapper.Statement`, `PreparedStatement`, `CallableStatement`: public non-static `execute*` | `JdbcStatementAdvice.Execute`: one SQL span per execution, exceptions included |
-| the same classes: public non-static `set*(int, ...)` with two or more arguments, `addBatch`, `clearParameters` | `JdbcStatementAdvice.Bind`: the parameters and batches, kept per statement in a weak map until the execution |
-| `weblogic.jdbc.wrapper.ResultSet.postInvocationHandler(String, Object[], Object)` | `JdbcStatementAdvice.RowRead`: the wrapper defines `close()` and `getStatement()` but no `next()`; the generated `ResultSet_<driver class>` subclass routes every call through this handler, and a `next` that returned true is one more row the application read |
-
-**What is read and how.** `JdbcWrappers` reads the public field `sql` of a prepared statement (else the `String` argument of a plain `execute*(sql)`), the public field `conn` and its `getPoolName()`, the wrapper's superclass names for the statement type, and the result-set wrapper's private field `stmt`. `DataSourceCatalog` reads once per pool the config MBean `com.bea:Type=JDBCSystemResource,Name=<pool>` → `JDBCResource` → `JDBCDataSourceParams.JNDINames` and `JDBCDriverParams.Url`, and the runtime MBean `com.bea:Type=JDBCDataSourceRuntime,Name=<pool>` → `DatabaseProductName`, `DatabaseProductVersion`.
-
-**What the span records.** Kind `SQL`: `dataSource`, `jndiNames`, `url`, `database`, `statementType`, `operation`, `sql`, `parameters` by position or `batches`, and `updateCount`, `updateCounts`, or `resultSet` with `rows`; `exception` when the driver threw. The agent never moves the cursor.
-
-**Verified on.** 12 with H2 2.1 and 14 with H2 2.3; `javap -p` on both versions shows the members above.
-
-**When it fails.** A server without the wrapper classes on the system class path runs without this hook (it is optional) and records everything but SQL. An unreadable `conn` records `dataSource` as `?`; MBeans that cannot be read leave `jndiNames`, `url` and `database` absent, logged once per pool.
-
-## 5. Class-loader ownership
-
-Code: `ApplicationClassLoaders`, `ResourceHook`.
-
-**What it is.** The rule that decides whether a `@Path` or `@WebService` class belongs to a deployed application, by the loader that defined it, never by its package.
-
-**Why this point.** WebLogic's own `@Path` classes (Coherence management resources, for instance) sit on the server class path; a package rule would need a list that changes per build, a loader rule does not.
-
-**Class and method.** No advice; `ApplicationClassLoaders.isApplication(ClassLoader)` walks the loader's class hierarchy for a name starting with `weblogic.utils.classloaders.`.
-
-| loader class | defines | treated as |
+| class | reads | used for |
 | --- | --- | --- |
-| `weblogic.utils.classloaders.GenericClassLoader` | EAR and EJB module classes | application |
-| `weblogic.utils.classloaders.ChangeAwareClassLoader` | web module classes | application |
-| `com.oracle.classloader.PolicyClassLoader 'weblogic-launcher'` | the server and its class path | not application |
-| system, bootstrap | JDK, agent | not application |
+| [`Reflection`][Reflection] | public methods and fields by name, up the class hierarchy | everything below |
+| [`SessionInvocation`][SessionInvocation] | the invocation wrapper and client object of a session call | EJB spans |
+| [`MessageDelivery`][MessageDelivery] | `MDListener.info` | MDB spans |
+| [`BeanInfoReader`][BeanInfoReader] | WebLogic's `BeanInfo`: business interfaces, JNDI names, bean type | bean metadata |
+| [`BeanMetadataResolver`][BeanMetadataResolver] | the `*EJBRuntime` MBeans and a `java:global` JNDI lookup to confirm the bean | `app`, `module`, `beanType`, `jndiNames`, cached per class |
+| [`RuntimeMBeans`][RuntimeMBeans] | finding WebLogic's runtime MBean server; EJB runtimes; the domain's deployments | metadata, the deployments on every trace |
+| [`DataSourceCatalog`][DataSourceCatalog] | `JDBCSystemResource` and `JDBCDataSourceRuntime` MBeans | SQL spans, cached per pool |
+| [`JdbcWrappers`][JdbcWrappers] | statement and result-set wrapper fields | SQL spans |
+| [`ServerRuntime`][ServerRuntime] | `weblogic.Name`; the current subject; the HTTP session of the current request | `serverName`, `principal`, `httpSessionId` on each trace |
+| [`WorkContextPropagation`][WorkContextPropagation] | `weblogic.workarea.WorkContextMap` | linking traces across threads |
 
-**What is read and how.** The loader's class name chain only.
+**Principal and session.** Each trace records who made the call and their HTTP session. For an HTTP request they come from the request ([`ServletApi`][ServletApi]); for anything else, from WebLogic's current security subject and, on a request thread, the request's session ([`ServerRuntime`][ServerRuntime]).
 
-**What the span records.** Nothing directly; it decides whether `ResourceHook` advises the class at all. A class kept out is logged once: `not instrumented (resource annotation, but not an application class)`.
+## Checking a new WebLogic build
 
-**Verified on.** 12 and 14. WebLogic also loads each application class in an analysis loader of the same kind before the real one, which is why the same class is logged as instrumented twice per install on 14.
+1. Enable the agent on a domain of that build, restart, and start a recording.
+2. In `agent.log`, every named target shows `hook target discovered` and `instrumented <class>`. A line `hook targets loaded but not instrumented` means a method changed shape; `inert:` means a class is gone.
+3. Drive an HTTP request that calls an EJB and runs SQL, and send a JMS message to an MDB. Compare the spans' `ejb`, `http` and `sql` blocks with a recording from a verified build.
+4. Look for `WARN` lines naming a reader from the table above. Each names the internal that no longer matched.
+5. Add the build to [Verified builds](#verified-builds).
 
-**When it fails.** A loader class outside `weblogic.utils.classloaders.` defining application classes would keep those resources out of the recording; the EJB calls under them are still recorded.
+## Adding a hook
 
-## 6. WorkContext
+1. **Find the choke point.** One WebLogic method that every call of the kind passes through, with the objects you need as arguments. A thread dump taken while the application code is running shows the frames.
+2. **Write the reader** in [`agent/weblogic`][weblogic]: reflection only, null on failure, no WebLogic types in signatures.
+3. **Write the facts and the recorder** in [`agent/record`][record]: a [`SpanFacts`][SpanFacts] subclass and a [`SpanRecorder`][SpanRecorder] subclass. Add an accessor to [`TraceRuntime`][TraceRuntime] and a field to [`TraceAgent`][TraceAgent].
+4. **Write the advice**: two static methods, one call each into `TraceRuntime`, `suppress = Throwable.class` ([FRAMEWORK.md](FRAMEWORK.md#advice)).
+5. **Write the hook**: a [`Hook`][Hook] subclass naming the target classes and binding the advice. Register it in [`AgentStartup`][AgentStartup]. Decide whether it's optional.
+6. **Add stubs and tests**: a stub of the WebLogic class under `weblogic-trace-agent/src/test/java/weblogic/`, named like the real one, and a test that installs the hook on the test JVM ([DEVELOPMENT.md](../DEVELOPMENT.md#testing)).
+7. **Check it on each verified build** and add a section to this document.
 
-Code: `WorkContextPropagation`, `SpanStack`.
-
-**What it is.** WebLogic's WorkArea API in `com.bea.core.workarea.jar`, which carries key/value entries along with work across threads and inside JMS messages.
-
-**Why this point.** It is the only mechanism that follows both an `@Asynchronous` handoff (a work-manager thread) and a JMS delivery to an MDB in the same server without touching application code.
-
-**Class and method.** `weblogic.workarea.WorkContextHelper.getWorkContextHelper().getWorkContextMap()` → `WorkContextMap.put(String, WorkContext, int)`, `get(String)`, `remove(String)`; `PrimitiveContextFactory.create(String)`; `PrimitiveWorkContext.get()`; the named constants of `weblogic.workarea.PropagationMode`.
-
-**What is read and how.** The agent keeps one key, `ca.gc.cra.xz02.devops.wltrace`, with the value `<traceId>/<spanId>`, written at every span push and pop and removed when the trace ends. The propagation mode is `LOCAL | WORK | RMI | JMS_QUEUE | JMS_TOPIC | SOAP | MIME_HEADER`, composed from the constants by name: on both versions `GLOBAL == DEFAULT == 212`, which leaves out `WORK` (2), the flag that follows a work-manager handoff, and with `GLOBAL` the `@Asynchronous` worker sees nothing while the MDB does.
-
-**What the span records.** On the trace that a handoff caused, `parentTraceId` and `parentSpanId`.
-
-**Verified on.** 12 and 14: `@Asynchronous` (`AsyncExecutor.run` under `weblogic.work.WorkAreaContextWrap.run`) and JMS to an MDB in the same server. `RMI` is in the mode; a trace started on another server is not joined by any reader.
-
-**When it fails.** Without the API every method is a no-op and traces are not linked across threads, logged once at startup; a failing call is logged once and the trace in hand is unaffected.
-
-## 7. Runtime MBeanServer and BeanInfo
-
-Code: `RuntimeMBeans`, `BeanMetadataResolver`, `BeanInfoReader`, `BeanMetadata`.
-
-**What it is.** The MBeanServer that carries WebLogic's `com.bea` runtime tree, and the container's `BeanInfo` family that describes each deployed bean.
-
-**Why this point.** The invoker's arguments name the EJB and carry its `BeanInfo`, but not where the bean is deployed or what it is bound as; the runtime MBeans and a JNDI lookup inside the server complete that, once per bean class.
-
-**Class and method.** Which MBeanServer carries the tree, probed once in this order by `RuntimeMBeans.server`:
-
-1. the platform MBeanServer (holds none by default: `PlatformMBeanServerUsed` is off);
-2. `MBeanServerFactory.findMBeanServer(null)` (lists one server, without them either);
-3. JNDI `java:comp/env/jmx/runtime`, then `java:comp/jmx/runtime`: the runtime MBeanServer, reachable from any thread through the second name; the first needs a component context and fails on the agent's JMX control thread.
-
-WebLogic's MBeanServer wrapper asserts a context class loader, which control threads lack; `RuntimeMBeans.ensureContextLoader` sets one for the duration of its calls.
-
-**What is read and how.**
-
-| step | source | gives |
-| --- | --- | --- |
-| runtime MBeans `com.bea:Type=*EJBRuntime,Name=<ejbName>,ApplicationRuntime=<app>,EJBComponentRuntime=<moduleId>,*` | key properties | application, module id (`orders-ejb.jar`; the `java:global` module is the id without its extension); MDBs matched on the `EJBName` attribute (section 2) |
-| in-process `InitialContext().lookup("java:global/<app>/<module>/<ejb>[!<interface>]")` | the container's client object | a lookup inside the server needs no credentials |
-| that object → `BeanInfo` | `BeanInfoReader.findBeanInfo`: a bounded field search over WebLogic-typed fields, local view `Impl.__WL_localObject.beanInfo`, remote view `Proxy` → `RemoteBusinessIntfProxy.ejbObject` → `Impl_CBV` → `Impl.__WL_remoteObject.beanInfo` | the same `BeanInfo` the invoker's client object carries |
-| `weblogic.ejb.container.interfaces.BeanInfo`, a marker interface matched by name | `getBeanClassName()`, `getEJBName()`, `usesBeanManagedTx()` | bean class, EJB name, `BEAN` as transaction attribute when the descriptor has none |
-| `SessionBeanInfo` | `getBusinessLocals()`, `getBusinessRemotes()` (`Set<Class<?>>`), `getBusinessJNDINames()` (`Map<Class<?>, Set<String>>`), `isLocalClientView(Class<?>)`, `isStateless()`, `isStateful()`, `isSingleton()` | business interfaces with their view, every name bound per interface (`weblogic-ejb-jar.xml` mappings included), bean type |
-| `ClientDrivenBeanInfo` (EJB 2.x) | `getRemoteInterfaceClass()`, `getLocalInterfaceClass()`; `getHomeInterfaceClass()` / `getLocalHomeInterfaceClass()` then `getJNDINameAsString()` / `getLocalJNDINameAsString()` | component interfaces (`ejb2x`), the home's bound names; read only when the home interface exists, because WebLogic binds an internal home name for every bean |
-| `weblogic.ejb.container.interfaces.MessageDrivenBeanInfo`, by name | | `beanType` MESSAGE_DRIVEN |
-| `com.bea:Name=RuntimeService,Type=weblogic.management.mbeanservers.runtime.RuntimeServiceMBean` → `DomainConfiguration` → `AppDeployments` → `Name`, `SourcePath`, `ModuleType` | | `trace.deployments` |
-
-**What the span records.** `app`, `module`, `beanName`, `jndiNames`, `beanType`, `ejb2x` on EJB spans; `deployments` on the trace.
-
-**Verified on.** 12 and 14; `javap` on `com.oracle.weblogic.ejb.jar` and `com.oracle.weblogic.ejb.wlsapi.jar` of both shows identical signatures for every member above.
-
-**When it fails.** An unreachable MBeanServer or a missing runtime MBean leaves `app` and `module` null and `jndiNames` reduced to the deterministic `java:global` names; `BeanMetadataResolver` logs one `metadata` line per bean class with the problem in parentheses. A renamed `BeanInfo` member shows up as null fields in the recording.
-
-## 8. Principal and session
-
-Code: `ServerRuntime`, `HttpFacts`.
-
-**What it is.** Who made the call and which HTTP session it belongs to, for the trace.
-
-**Why this point.** An HTTP root reads both from its own request. A root that no servlet span opened, such as a T3 call or a timer, has only the thread.
-
-**Class and method.**
-
-| fact | path |
-| --- | --- |
-| principal | `weblogic.security.Security.getCurrentSubject()` → `javax.security.auth.Subject.getPrincipals()`; the `weblogic.security.principal.WLSUserImpl` entry is the user name, else the first principal |
-| HTTP session id of a root no servlet span opened | `weblogic.work.ExecuteThread.getCurrentWork()` → `weblogic.servlet.provider.ContainerSupportProviderImpl$WlsRequestExecutor`, private field `connectionHandler` → `weblogic.servlet.internal.AbstractHttpConnectionHandler.getServletRequest()` → `HttpServletRequest.getSession(false).getId()`; never creates a session |
-| server name | system property `weblogic.Name` |
-
-**What is read and how.** By reflection through the context class loader, once resolved and then cached (`getCurrentSubject`).
-
-**What the span records.** `principal`, `httpSessionId` and `serverName` on the trace.
-
-**Verified on.** 12 and 14.
-
-**When it fails.** A missing class or member marks the lookup as failed, warns once, and records null from then on; a server objection to one particular request (an `InvocationTargetException`) records null for that trace only.
-
-## Finding a hook on a new build
-
-1. Install the agent on the new build (`wltrace:enable`, restart, `wltrace:start`, Start) and read `agent.log`: it lists `hook target discovered` and `instrumented` for every class of sections 1 to 4, or `hook targets loaded but not instrumented` when a method shape changed.
-2. For each advised method, run `javap -p -cp <jar> <class>` on the module jar named in its section and compare the signature with the table.
-3. Locate a moved choke point with a thread dump: hold a call open inside the application code (a breakpoint, a sleep) and run `jcmd <pid> Thread.print`. Read the frames between the caller and the bean: the first `weblogic.*` frame above the application method whose parameters are generic (`Object[]`, the servlet API interfaces, an `InvocationWrapper`) rather than per-deployment generated types is the new target.
-4. Confirm the target with the agent: add its name to the hook's `targetClassNames` and the method shape to its `AdviceBinding`, rebuild, and look for `instrumented <class> (retransformed)` in `agent.log` at the next Start.
-5. For the reflective reads of section 7, `javap` the `BeanInfo` implementations in `com.oracle.weblogic.ejb.jar`; a renamed member shows up in `agent.log` as a `metadata ... (problem)` line and as null fields in the recording.
-6. Verify against the server: drive a request with an EJB call and an SQL statement, compare the EJB span's `ejb` block and the SQL span's `sql` block with a recording from a verified build, then add the build to the table at the top of this document.
+[weblogic]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic
+[record]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record
+[AgentStartup]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/bootstrap/AgentStartup.java
+[Hook]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/Hook.java
+[ApplicationClassLoaders]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/ApplicationClassLoaders.java
+[SessionInvokerHook]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/SessionInvokerHook.java
+[SessionInvokerAdvice]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/SessionInvokerAdvice.java
+[MessageListenerHook]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/MessageListenerHook.java
+[MessageListenerAdvice]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/MessageListenerAdvice.java
+[ServletPipelineHook]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/ServletPipelineHook.java
+[ServletPipelineAdvice]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/ServletPipelineAdvice.java
+[ResourceHook]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/ResourceHook.java
+[ResourceAdvice]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/ResourceAdvice.java
+[JdbcStatementHook]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/JdbcStatementHook.java
+[JdbcStatementAdvice]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/instrument/JdbcStatementAdvice.java
+[TraceRuntime]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/TraceRuntime.java
+[TraceAgent]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/TraceAgent.java
+[SpanRecorder]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/SpanRecorder.java
+[SpanFacts]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/SpanFacts.java
+[EjbRecorder]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/EjbRecorder.java
+[MessageRecorder]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/MessageRecorder.java
+[ServletRecorder]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/ServletRecorder.java
+[ResourceRecorder]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/ResourceRecorder.java
+[JdbcRecorder]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/JdbcRecorder.java
+[MethodResolver]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/MethodResolver.java
+[ResourceLayers]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record/ResourceLayers.java
+[Reflection]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/Reflection.java
+[SessionInvocation]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/SessionInvocation.java
+[MessageDelivery]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/MessageDelivery.java
+[BeanInfoReader]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/BeanInfoReader.java
+[BeanMetadataResolver]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/BeanMetadataResolver.java
+[RuntimeMBeans]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/RuntimeMBeans.java
+[DataSourceCatalog]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/DataSourceCatalog.java
+[JdbcWrappers]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/JdbcWrappers.java
+[ServerRuntime]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/ServerRuntime.java
+[WorkContextPropagation]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic/WorkContextPropagation.java
+[TeeClasses]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/TeeClasses.java
+[TeeClassCache]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/TeeClassCache.java
+[TeeSupport]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/TeeSupport.java
+[BodyBuffer]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/BodyBuffer.java
+[HttpCapture]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/HttpCapture.java
+[HttpInfoReader]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/HttpInfoReader.java
+[ServletApi]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/http/ServletApi.java

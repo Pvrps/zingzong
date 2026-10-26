@@ -1,10 +1,10 @@
 # Developing weblogic-trace
 
-This guide covers working on the code: building, testing, checking a change against a real server, keeping the documentation current, and releasing. How the code is organised is in [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md); the rules for editing it are in [CLAUDE.md](../CLAUDE.md).
+This guide covers working on the code: building, testing, checking a change against a real server, and keeping the documentation current. How the code is organised is in [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md).
 
 ## Prerequisites
 
-- **A JDK 8 and a JDK 21.** The build must pass on both: WebLogic 12.2.1.4 runs on JDK 8 and 14.1.2 on JDK 21, and the same agent jar runs on both.
+- **JDK 8.**
 - **Maven 3.6 or later.**
 
 Nothing else. The build and tests need no WebLogic installation, no database and, once dependencies are downloaded, no network.
@@ -12,11 +12,10 @@ Nothing else. The build and tests need no WebLogic installation, no database and
 ## Build
 
 ```sh
-mvn -q install                          # with the JDK on the path
-JAVA_HOME=/path/to/jdk8 mvn -q install  # the same with JDK 8
+mvn -q install
 ```
 
-Both compile Java 8 bytecode and run every test. `install` puts the four artifacts in the local Maven repository, which is where `mvn wltrace:<goal>` resolves the plugin from.
+This compiles Java 8 bytecode, runs every test, and puts the four `-SNAPSHOT` artifacts in the local Maven repository, which is where `mvn wltrace:<goal>` resolves the plugin from.
 
 | module | produces |
 | --- | --- |
@@ -39,7 +38,7 @@ All tests are TestNG, run offline, and start no server.
 | `ca/.../agent/fixtures/` | application-style DTOs and entities with awkward shapes: polymorphism, lazy collections, non-serializable members |
 | `ca/.../agent/instrument/stubs/` | beans and calls for the hook tests |
 
-**How hooks are tested.** The instrumentation tests use `byte-buddy-agent` to get an `Instrumentation` for the test JVM itself, install real hooks on the stub classes, call them, and check the spans. [`weblogic-trace-agent/pom.xml`][agent-pom] runs the tests with `-Djdk.attach.allowAttachSelf=true`. On JDK 9+ its `jdk9plus` profile adds the same `--add-opens` flags `wltrace:enable` writes into a domain, so the serializer sees the same JDK fields as on a server.
+**How hooks are tested.** The instrumentation tests use `byte-buddy-agent` to get an `Instrumentation` for the test JVM itself, install real hooks on the stub classes, call them, and check the spans. [`weblogic-trace-agent/pom.xml`][agent-pom] runs the tests with `-Djdk.attach.allowAttachSelf=true`. When the build runs on JDK 9 or later, its `jdk9plus` profile also adds the `--add-opens` flags `wltrace:enable` writes into a JDK 9+ domain.
 
 **Guards.** [`BootstrapVisibilityTest`][BootstrapVisibilityTest] fails the build if an agent class is above Java 8 bytecode, or links to a JDK module the bootstrap loader can't see (`java.sql`, `javax.sql`, ...). See [CONCEPTS.md](architecture/CONCEPTS.md#class-loaders) for why.
 
@@ -54,7 +53,6 @@ Unit tests prove the agent against stubs. A change to a hook, to how WebLogic ob
 3. `mvn wltrace:start -Dwltrace.domain=<domain>`, press **Start**, and drive the case: an HTTP request that calls EJBs and runs SQL, an exception from a bean, an `@Asynchronous` call, a JMS message to an MDB.
 4. Press **Stop**. Check the diagram and details, and that `agent.log` lists `instrumented <class>` for every target with no `ERROR`.
 5. `mvn wltrace:disable -Dwltrace.domain=<domain>` and check that the domain's `bin/` is as before step 1.
-6. Repeat on both supported versions, and with the plugin run on JDK 8 (`JAVA_HOME=/path/to/jdk8 mvn wltrace:...`).
 
 ## Keeping the documentation current
 
@@ -64,7 +62,7 @@ Each topic has one home. Update it in the same change:
 | --- | --- |
 | what a user types or sees | [USAGE.md](USAGE.md) |
 | a field, marker or limit in the files | the model class, `trace.schema.json`, [TRACE-FORMAT.md](TRACE-FORMAT.md) |
-| a module, package or design rule | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md), and [CLAUDE.md](../CLAUDE.md) for a rule |
+| a module, package or design rule | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
 | loading, startup, hook installation, advice, the MBean | [architecture/FRAMEWORK.md](architecture/FRAMEWORK.md) |
 | a hook or a WebLogic internal the agent reads | [architecture/HOOKS.md](architecture/HOOKS.md) |
 | spans, trace linking, writing files | [architecture/TRACING.md](architecture/TRACING.md) |
@@ -73,17 +71,6 @@ Each topic has one home. Update it in the same change:
 | the web server, lineage, the page | [architecture/VIEWER.md](architecture/VIEWER.md) |
 
 Documents describe the code as it is, in the present tense. Every class, method, file and goal name in backticks exists in the tree.
-
-## Releasing
-
-The version is in the root `pom.xml` and the four module poms (`1.0.0-SNAPSHOT`).
-
-1. Set the release version in every pom (`mvn versions:set -DnewVersion=1.0.0`), build and test on both JDKs, and check on a server.
-2. Commit and tag `v1.0.0`.
-3. Deploy to the organisation's Maven repository: `mvn -q deploy -DaltDeploymentRepository=releases::default::https://<repository host>/repository/releases/`, with credentials in `~/.m2/settings.xml`.
-4. Set the next `-SNAPSHOT` version in every pom and commit.
-
-Users then name that version in the full plugin coordinates, and `wltrace:enable` installs the matching agent.
 
 [agent-pom]: ../weblogic-trace-agent/pom.xml
 [BootstrapVisibilityTest]: ../weblogic-trace-agent/src/test/java/ca/gc/cra/xz02/devops/wltrace/agent/bootstrap/BootstrapVisibilityTest.java

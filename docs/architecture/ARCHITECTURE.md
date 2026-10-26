@@ -14,7 +14,7 @@ This document is the map of the repository: the parts of the system, the modules
 | how the Maven goals edit a domain and control the servers | [PLUGIN.md](PLUGIN.md) |
 | the web server, lineage and the diagram | [VIEWER.md](VIEWER.md) |
 | the files a recording is made of | [TRACE-FORMAT.md](../TRACE-FORMAT.md) |
-| building, testing, releasing | [DEVELOPMENT.md](../DEVELOPMENT.md) |
+| building and testing | [DEVELOPMENT.md](../DEVELOPMENT.md) |
 
 ## The system
 
@@ -61,7 +61,7 @@ The agent and the viewer never talk to each other. The files are the only interf
 | [`weblogic-trace-viewer`][viewer] | the recording reader, lineage detection, the web server and page | model |
 | [`weblogic-trace-maven-plugin`][plugin] | the goals `enable`, `start`, `disable` | viewer, and the agent jar as a file to install |
 
-Maven builds them in that order. Everything compiles to Java 8 bytecode, so the agent runs on JDK 8 and JDK 21 servers and the plugin runs on a JDK 8 Maven.
+Maven builds them in that order. Everything compiles to Java 8 bytecode, so the agent runs in a server on JDK 8 or any later JDK, and the plugin runs on a JDK 8 Maven.
 
 ## Packaging
 
@@ -134,7 +134,7 @@ flowchart TD
 
 ## Design rules
 
-These shape the code. [CLAUDE.md](../../CLAUDE.md) lists them as rules for editing; here is why each exists.
+These shape the code. Each comes with the reason it exists.
 
 1. **No WebLogic classes at compile time.** WebLogic's internals differ between releases and aren't a public API, and no WebLogic jar is available to the build. Every WebLogic type is matched by name and reached by reflection, only in [`agent.weblogic`][weblogic] and the hook definitions. Tests use stubs with the real names ([DEVELOPMENT.md](../DEVELOPMENT.md#testing)).
 2. **Link only to bootstrap-visible JDK modules.** The agent lives on the bootstrap class path, which can't see platform modules like `java.sql` ([CONCEPTS.md](CONCEPTS.md#class-loaders)). Such types are recognised by name and called reflectively. [`BootstrapVisibilityTest`][BootstrapVisibilityTest] enforces it.
@@ -142,7 +142,7 @@ These shape the code. [CLAUDE.md](../../CLAUDE.md) lists them as rules for editi
 4. **Respect class loaders.** Each application has its own loaders, and a redeploy creates new ones. Caches key on the `Class` object (`ClassValue`), never on the class name alone, and hold no class alive. Classes are resolved through the loader of the object at hand.
 5. **Advice is inlined.** Advice is copied into WebLogic's methods, so it's two static methods with one call each into [`TraceRuntime`][TraceRuntime]. That's the only static mutable state; everything else is an object built with its dependencies ([FRAMEWORK.md](FRAMEWORK.md#advice)).
 6. **Raw capture.** The point is to see exactly what crossed each call. Every field is recorded with no masking or filtering; the only changes are markers, and every limit leaves a trace of what it cut ([SERIALIZATION.md](SERIALIZATION.md#the-rules)).
-7. **Java 8 bytecode.** The same agent jar runs on JDK 8 (WebLogic 12.2.1.4) and JDK 21 (14.1.2), and the plugin runs on a JDK 8 Maven. `source`/`target` 1.8, build plugins that run on JDK 8, and the build passes on both JDKs.
+7. **Java 8 bytecode.** The agent jar runs inside the server's JVM, which can be JDK 8, and the plugin runs on a JDK 8 Maven. Java 8 bytecode runs on JDK 8 and every later JDK. The build uses `source`/`target` 1.8 and build plugins that run on JDK 8.
 
 The plugin also keeps a narrow footprint in the domain: it changes only the overrides script and `<domain>/weblogic-trace/`, and the agent instruments nothing while no recording is active.
 

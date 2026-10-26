@@ -4,7 +4,7 @@ This guide shows how to record what happens inside a WebLogic domain while you u
 
 ## Before you start
 
-- **WebLogic Server 12.2.1.4 on JDK 8, or 14.1.2 on JDK 21**, running `javax.*` applications. On any other JVM the agent loads but does nothing.
+- **A WebLogic domain** running `javax.*` applications. On any other JVM the agent loads but does nothing.
 - **A domain you can restart.** The agent is loaded when a server starts.
 - **A JDK (8 or later) and Maven 3.6+** on the machine where the servers run, as the **same OS user** that runs them. The plugin finds the servers through the JDK's attach API, which only sees that user's JVMs.
 
@@ -153,10 +153,10 @@ Look in `agent.log` in the output directory:
 | line | means |
 | --- | --- |
 | `weblogic-trace-agent ready, recording off` | the agent loaded; the server is ready |
-| `weblogic-trace-agent inert: ...` | this JVM isn't a supported WebLogic server; nothing will be recorded |
+| `weblogic-trace-agent inert: ...` | nothing will be recorded on this server: it isn't WebLogic, or WebLogic classes a hook needs are missing (listed in the line). **Start** fails with the same reason. |
 | `RECORDING START` / `RECORDING STOP` | a recording started or stopped on this server, with its trace count |
 | `instrumented <class>` | a hook was put in place when the recording started |
-| `hook targets loaded but not instrumented` | this WebLogic build differs from the supported ones |
+| `hook targets loaded but not instrumented` | a WebLogic method a hook needs has a different shape in this build; calls through it aren't recorded |
 | `TRACE t-... -> 000001-t-....json` | one trace written |
 | `WARN` or `ERROR` | something wasn't recorded; the line says what |
 

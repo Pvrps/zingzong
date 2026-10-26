@@ -24,7 +24,7 @@ mvn wltrace:start   -Dwltrace.domain=/path/to/domain     # open the page: Start,
 mvn wltrace:disable -Dwltrace.domain=/path/to/domain     # remove the agent; recordings are kept
 ```
 
-**Supported:** WebLogic Server 12.2.1.4 on JDK 8, and 14.1.2 on JDK 21, with `javax.*` applications, on Linux or Windows. The plugin runs on the same machine as the servers, with JDK 8 or later and Maven 3.6+.
+**Supported:** WebLogic Server with `javax.*` applications, on Linux or Windows. The plugin runs on the same machine as the servers, with JDK 8 or later and Maven 3.6+.
 
 > Recordings contain the raw data that crossed each call, including credentials and personal data. Nothing is masked.
 
@@ -34,7 +34,7 @@ mvn wltrace:disable -Dwltrace.domain=/path/to/domain     # remove the agent; rec
 | --- | --- |
 | [docs/USAGE.md](docs/USAGE.md) | Recording a domain: install, the three commands, the page, parameters, special cases, limits, troubleshooting |
 | [docs/TRACE-FORMAT.md](docs/TRACE-FORMAT.md) | The recording files: layout, every field, the markers |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, testing, checking on a server, releasing |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, testing, checking a change on a server |
 | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | How the code is organised, and where to read next |
 | [docs/architecture/CONCEPTS.md](docs/architecture/CONCEPTS.md) | Agents, bytecode, class loaders, WorkContext and JMX, explained from scratch |
 | [docs/architecture/FRAMEWORK.md](docs/architecture/FRAMEWORK.md) | How the agent loads, and how hooks, advice and recorders work |

@@ -62,9 +62,12 @@ flowchart TD
 [`InertnessCheck`][InertnessCheck] decides whether the JVM is a WebLogic server the hooks fit:
 
 - **Not WebLogic:** no `weblogic.home` property and no `weblogic/Server.class` on the class path.
-- **Missing container classes:** a required hook's target class isn't on the class path. The check looks the class file up as a resource and doesn't load it.
+- **Missing container classes:** any hook's target class isn't on the class path. The check looks the class file up as a resource and doesn't load it.
 
-An inert agent still registers its MBean, so the plugin can show why, but refuses to start a recording. A missing *optional* hook (only the JDBC hook is optional) is dropped with a log line, and everything else is still recorded.
+Every hook is required. An agent that can't install all of them installs none, so a recording is never silently missing part of what happened. An inert agent:
+- logs `weblogic-trace-agent inert: <reason>`, naming the missing classes;
+- still registers its MBean, whose `State` is `inert: <reason>`;
+- refuses to start a recording with the same reason, which the page shows when **Start** is pressed.
 
 ## The three layers: hook, advice, recorder
 
@@ -92,11 +95,10 @@ sequenceDiagram
 
 ### Hooks
 
-A hook extends [`Hook`][Hook] and answers three questions:
+A hook extends [`Hook`][Hook] and answers two questions:
 
 - **`targetClassNames()`**: the WebLogic classes it needs, by name. The inertness check looks for them, and `agent.log` reports on each one when the hooks are installed. Empty for a hook that matches by annotation instead.
 - **`bindings()`**: one or more [`AdviceBinding`][AdviceBinding]s, each a [`TypeMatcher`][TypeMatcher] (which classes, given the class *and* its loader), a ByteBuddy method matcher (which methods), and the advice class to inline.
-- **`optional()`**: whether the agent works without it.
 
 [`ApplicationClassLoaders`][ApplicationClassLoaders] tells a WebLogic application loader from the server's own, for hooks that match application classes. [HOOKS.md](HOOKS.md) lists every hook.
 

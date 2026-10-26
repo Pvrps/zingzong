@@ -6,7 +6,7 @@ This document lists the hooks the agent installs: which WebLogic method each one
 
 The agent hooks the container, not the applications. Every EJB call, message delivery and HTTP request passes through a handful of WebLogic methods before any application code runs. Hooking those few methods records every bean of every application without knowing their classes, and without changing a single deployed file.
 
-The cost is that these are internal classes: not a public API, and free to change between WebLogic releases. So the agent names them in one place (the `*Hook` classes), reads them only through reflection (the [`agent/weblogic`][weblogic] classes), and degrades to "not recorded" instead of failing when they change.
+The cost is that these are internal classes: not a public API, and free to change in a WebLogic patch or release. So the agent names them in one place (the `*Hook` classes), reads them only through reflection (the [`agent/weblogic`][weblogic] classes), and never breaks a call when they change: it goes inert, or records less, and says so in `agent.log`.
 
 ## Summary
 
@@ -18,16 +18,7 @@ The cost is that these are internal classes: not a public API, and free to chang
 | [Resource classes](#resource-classes) | public methods of application classes annotated `@Path` or `@WebService` | [`ResourceAdvice`][ResourceAdvice] | [`ResourceRecorder`][ResourceRecorder] | `HTTP`, layer `jaxrs`/`jaxws` |
 | [JDBC wrappers](#jdbc-wrappers) | `execute*` and `set*` of WebLogic's statement wrappers, its result-set wrapper | [`JdbcStatementAdvice`][JdbcStatementAdvice] | [`JdbcRecorder`][JdbcRecorder] | `SQL` |
 
-The WebLogic classes are in `weblogic.ejb.container.internal`, `weblogic.servlet.internal` and `weblogic.jdbc.wrapper`. All hooks except JDBC are required: if a required target class is missing, the agent goes inert ([FRAMEWORK.md](FRAMEWORK.md#inert-agents)).
-
-### Verified builds
-
-Every class, method and field below has been checked on:
-
-| WebLogic Server | build | JDK |
-| --- | --- | --- |
-| 14.1.2.0.0 | 2171472, no patches | Temurin 21 |
-| 12.2.1.4.0 | 1974621, no patches | Temurin 8 |
+The WebLogic classes are in `weblogic.ejb.container.internal`, `weblogic.servlet.internal` and `weblogic.jdbc.wrapper`. Every hook is required: if any target class is missing, the agent goes inert and names it ([FRAMEWORK.md](FRAMEWORK.md#inert-agents)).
 
 ## Session invokers
 
@@ -109,7 +100,7 @@ WebLogic loads each application class in an analysis loader before the real one,
 
 ## JDBC wrappers
 
-[`JdbcStatementHook`][JdbcStatementHook]. Optional: a server without these classes records everything except SQL.
+[`JdbcStatementHook`][JdbcStatementHook]
 
 **Intercepts** three things on WebLogic's JDBC wrappers in `weblogic.jdbc.wrapper`:
 
@@ -148,13 +139,17 @@ The recorders never touch a WebLogic class directly. These classes in [`agent/we
 
 **Principal and session.** Each trace records who made the call and their HTTP session. For an HTTP request they come from the request ([`ServletApi`][ServletApi]); for anything else, from WebLogic's current security subject and, on a request thread, the request's session ([`ServerRuntime`][ServerRuntime]).
 
-## Checking a new WebLogic build
+## When a hook stops working
 
-1. Enable the agent on a domain of that build, restart, and start a recording.
-2. In `agent.log`, every named target shows `hook target discovered` and `instrumented <class>`. A line `hook targets loaded but not instrumented` means a method changed shape; `inert:` means a class is gone.
-3. Drive an HTTP request that calls an EJB and runs SQL, and send a JMS message to an MDB. Compare the spans' `ejb`, `http` and `sql` blocks with a recording from a verified build.
-4. Look for `WARN` lines naming a reader from the table above. Each names the internal that no longer matched.
-5. Add the build to [Verified builds](#verified-builds).
+After a WebLogic patch or upgrade, `agent.log` tells you which internal moved:
+
+| line | means | look at |
+| --- | --- | --- |
+| `weblogic-trace-agent inert: WebLogic without the expected container classes [...]` | a target class is gone or renamed; nothing is recorded | the hook naming that class |
+| `hook targets loaded but not instrumented (no method of the expected shape)` | the class is there, but the method's name or arguments changed | the method matcher in that hook's `bindings()` |
+| a `WARN` such as `session invoker hook: invocation objects not recognised`, `runtime MBeans unreachable`, `WorkContext propagation failed` | a field, method or MBean a reader uses changed; those calls are recorded with less detail, or not at all | the reader in the table above |
+
+To find the new shape, take a thread dump (`jcmd <pid> Thread.print`) while a request is inside the application code, and look for the WebLogic frames below it.
 
 ## Adding a hook
 
@@ -162,9 +157,9 @@ The recorders never touch a WebLogic class directly. These classes in [`agent/we
 2. **Write the reader** in [`agent/weblogic`][weblogic]: reflection only, null on failure, no WebLogic types in signatures.
 3. **Write the facts and the recorder** in [`agent/record`][record]: a [`SpanFacts`][SpanFacts] subclass and a [`SpanRecorder`][SpanRecorder] subclass. Add an accessor to [`TraceRuntime`][TraceRuntime] and a field to [`TraceAgent`][TraceAgent].
 4. **Write the advice**: two static methods, one call each into `TraceRuntime`, `suppress = Throwable.class` ([FRAMEWORK.md](FRAMEWORK.md#advice)).
-5. **Write the hook**: a [`Hook`][Hook] subclass naming the target classes and binding the advice. Register it in [`AgentStartup`][AgentStartup]. Decide whether it's optional.
+5. **Write the hook**: a [`Hook`][Hook] subclass naming the target classes and binding the advice. Register it in [`AgentStartup`][AgentStartup]. Its target classes become required: if they're missing, the agent goes inert.
 6. **Add stubs and tests**: a stub of the WebLogic class under `weblogic-trace-agent/src/test/java/weblogic/`, named like the real one, and a test that installs the hook on the test JVM ([DEVELOPMENT.md](../DEVELOPMENT.md#testing)).
-7. **Check it on each verified build** and add a section to this document.
+7. **Check it on a real domain** ([DEVELOPMENT.md](../DEVELOPMENT.md#checking-a-change-on-a-server)) and add a section to this document.
 
 [weblogic]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/weblogic
 [record]: ../../weblogic-trace-agent/src/main/java/ca/gc/cra/xz02/devops/wltrace/agent/record

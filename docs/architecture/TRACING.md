@@ -101,7 +101,7 @@ sequenceDiagram
     Note over T2: new trace t-9b01e7aa<br/>parentTraceId t-3fa2c1d0, parentSpanId s3
 ```
 
-The entry is written with the propagation modes `LOCAL`, `WORK`, `RMI`, `JMS_QUEUE`, `JMS_TOPIC`, `SOAP` and `MIME_HEADER`. `WORK` is what carries it to the thread an `@Asynchronous` method runs on; WebLogic's `GLOBAL` mode doesn't include it. Linking is verified for `@Asynchronous` calls and JMS deliveries within one server.
+The entry is written with the propagation modes `LOCAL`, `WORK`, `RMI`, `JMS_QUEUE`, `JMS_TOPIC`, `SOAP` and `MIME_HEADER`. `WORK` is what carries it to the thread an `@Asynchronous` method runs on; WebLogic's `GLOBAL` mode doesn't include it. Linking covers `@Asynchronous` calls and JMS deliveries within one server.
 
 If the WorkContext API can't be found, the agent logs it once, and traces on other threads are recorded unlinked.
 

@@ -20,7 +20,7 @@ Used in: [`AgentMain`][AgentMain], the agent jar's manifest in [`weblogic-trace-
 
 Java source compiles to bytecode, the instructions in a `.class` file. The JVM runs bytecode, not source. An agent can rewrite a class's bytecode before the JVM uses it, for example to add a few instructions at the start and the end of a method.
 
-Bytecode has versions. Java 8 produces major version 52; a JDK 8 JVM refuses anything newer. The agent is compiled to Java 8 bytecode so the same jar runs on a JDK 8 and a JDK 21 server.
+Bytecode has versions. Java 8 produces major version 52; a JDK 8 JVM refuses anything newer. The agent is compiled to Java 8 bytecode, so it runs in a server on JDK 8 or any later JDK.
 
 Used in: every agent class; checked by [`BootstrapVisibilityTest`][BootstrapVisibilityTest].
 
